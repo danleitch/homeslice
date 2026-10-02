@@ -1,0 +1,800 @@
+/* ===========================================================================
+   The shell around the board: the activity bar down the left edge, the
+   Extensions view beside it, apps framed over the board, and the widgets
+   extensions add. Tokens come from dashboard.css.
+   ======================================================================== */
+
+/* --- Activity bar ---------------------------------------------------------- */
+
+.activity {
+  position: fixed;
+  z-index: 40;
+  top: 12px;
+  bottom: 12px;
+  left: 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  width: 56px;
+  padding: 8px;
+  border-radius: 18px;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  --glass-tint: 0.55;
+  transition:
+    transform 0.32s var(--ease),
+    opacity 0.22s ease;
+}
+
+/* Off screen entirely, so nothing needs to stop the pointer reaching it. */
+.activity[data-state='hidden'] {
+  transform: translateX(calc(-100% - 24px));
+  opacity: 0;
+}
+
+.activity-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.activity-extras {
+  display: contents;
+}
+
+.activity-btn,
+.activity .header-action {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  color: var(--ink-soft);
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    transform 0.15s var(--ease);
+}
+
+.activity-btn:hover,
+.activity .header-action:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
+.activity-btn:active {
+  transform: scale(0.94);
+}
+
+.activity-btn[data-active] {
+  color: var(--ink);
+  background: var(--accent-wash);
+}
+
+/* VS Code's marker for the open view, on the bar's own edge. */
+.activity-btn[data-active]::before {
+  content: '';
+  position: absolute;
+  top: 9px;
+  bottom: 9px;
+  left: -8px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+}
+
+.activity .market-action {
+  position: relative;
+  display: inline-flex;
+}
+
+/* Tooltips to the right, as the bar's buttons are icons alone. */
+.activity-btn::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 16px);
+  z-index: 1;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: rgba(14, 18, 28, 0.94);
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.7);
+  opacity: 0;
+  transform: translate(-4px, -50%);
+  pointer-events: none;
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease;
+}
+
+.activity-btn:hover::after,
+.activity-btn:focus-visible::after {
+  opacity: 1;
+  transform: translate(0, -50%);
+  transition-delay: 0.25s;
+}
+
+/* The strip along the edge that calls the bar out, and the tab that shows where it went. */
+.activity-edge {
+  position: fixed;
+  z-index: 39;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 6px;
+}
+
+.activity-tab {
+  position: fixed;
+  z-index: 39;
+  top: 50%;
+  left: 0;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 68px;
+  padding: 0;
+  border-left: 0;
+  border-radius: 0 12px 12px 0;
+  --glass-tint: 0.45;
+  transform: translateY(-50%);
+  transition:
+    width 0.18s var(--ease),
+    opacity 0.2s ease,
+    transform 0.3s var(--ease);
+}
+
+.activity-tab:hover {
+  width: 20px;
+}
+
+.activity-tab[data-hidden] {
+  opacity: 0;
+  transform: translate(-100%, -50%);
+}
+
+.activity-tab-grip {
+  width: 3px;
+  height: 26px;
+  border-radius: 3px;
+  background: var(--ink-faint);
+}
+
+/* Pinned, the bar has a column of its own and the board moves over for it. */
+.dash:has(.activity[data-pinned]) {
+  padding-left: calc(clamp(16px, 3.2vw, 44px) + 68px);
+}
+
+@media (max-width: 680px) {
+  .activity {
+    top: 8px;
+    bottom: 8px;
+    left: 6px;
+    width: 52px;
+    padding: 6px;
+  }
+
+  .dash:has(.activity[data-pinned]) {
+    padding-left: 70px;
+  }
+
+  .activity-btn::after {
+    display: none;
+  }
+}
+
+/* --- Extensions view -------------------------------------------------------- */
+
+/* Doubled, as dashboard.css loads after this file and its drawer opens on the right. */
+.drawer-backdrop.drawer-backdrop--left {
+  justify-content: flex-start;
+}
+
+.drawer-backdrop--left .drawer {
+  border-radius: 0 var(--radius-xl) var(--radius-xl) 0;
+  border-left: 0;
+  border-right: 1px solid var(--line);
+  animation-name: drawer-in-left;
+}
+
+@keyframes drawer-in-left {
+  from {
+    opacity: 0.4;
+    transform: translateX(-40px);
+  }
+}
+
+.ext-body {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+}
+
+.ext-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  color: var(--ink-faint);
+}
+
+.ext-search svg {
+  position: absolute;
+  left: 12px;
+  pointer-events: none;
+}
+
+:where(.dash, [data-dash]) .ext-search input {
+  width: 100%;
+  height: 38px;
+  padding-left: 36px;
+}
+
+.ext-section {
+  display: grid;
+  gap: 8px;
+}
+
+.ext-section h3 {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ext-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ext-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding: 10px;
+  border-radius: var(--radius);
+  transition:
+    background 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.ext-row:hover {
+  background: var(--surface);
+}
+
+.ext-row[data-disabled] .ext-icon,
+.ext-row[data-disabled] .ext-text {
+  opacity: 0.5;
+}
+
+.ext-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
+.ext-icon--tool {
+  background: linear-gradient(135deg, rgba(91, 134, 255, 0.32), rgba(63, 211, 160, 0.18));
+}
+
+.ext-icon--app {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.3), rgba(236, 72, 153, 0.2));
+}
+
+.ext-text {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.ext-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.ext-publisher {
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+}
+
+.ext-desc {
+  margin-top: 3px;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.ext-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Installing a suggested app asks where it runs, across the row. */
+.ext-row:has(.ext-install) {
+  grid-template-columns: 40px minmax(0, 1fr);
+}
+
+.ext-row:has(.ext-install) .ext-actions {
+  grid-column: 1 / -1;
+}
+
+.ext-install {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+}
+
+:where(.dash, [data-dash]) .ext-install input {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+}
+
+.ext-install .field-error {
+  flex-basis: 100%;
+}
+
+.ext-add {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 12px;
+  border-radius: var(--radius);
+  border: 1px dashed var(--line-strong);
+}
+
+.ext-add-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.4fr) auto;
+  gap: 6px;
+}
+
+:where(.dash, [data-dash]) .ext-add-fields input {
+  height: 32px;
+  min-width: 0;
+}
+
+.ext-empty {
+  color: var(--ink-faint);
+  font-size: 0.86rem;
+  text-align: center;
+}
+
+/* --- Apps over the board ----------------------------------------------------- */
+
+/* Over the page dots (19), under the activity bar, so another app is a click away.
+   Doubled to win over .tool-backdrop, which dashboard.css sets after this file. */
+.tool-backdrop.app-backdrop {
+  z-index: 20;
+  place-items: center;
+  padding: max(3vh, 12px) 16px;
+}
+
+.app-sheet {
+  display: flex;
+  flex-direction: column;
+  width: min(1200px, 100%);
+  height: min(880px, calc(100vh - max(6vh, 24px)));
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  --glass-tint: 0.82;
+  box-shadow: 0 40px 90px -30px rgba(0, 0, 0, 0.85);
+  animation: modal-in 0.3s var(--ease) both;
+}
+
+.app-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 10px 9px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.app-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.92rem;
+  font-weight: 620;
+}
+
+.app-url {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-faint);
+  font-size: 0.76rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.app-frame-wrap {
+  position: relative;
+  flex: 1;
+  background: #0d1117;
+}
+
+.app-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.app-frame[data-loaded] {
+  opacity: 1;
+}
+
+.app-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 14px;
+  padding: 24px;
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+  text-align: center;
+}
+
+.app-loading p {
+  max-width: 34rem;
+  margin: 0;
+}
+
+.app-loading a {
+  color: var(--accent);
+}
+
+.app-spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--line-strong);
+  border-top-color: var(--accent);
+  animation: app-spin 0.8s linear infinite;
+}
+
+@keyframes app-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* --- GitHub Trending widget -------------------------------------------------- */
+
+.gh {
+  display: grid;
+  gap: 6px;
+}
+
+.gh-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gh-item {
+  display: flex;
+  gap: 10px;
+  padding: 7px 0;
+}
+
+.gh-rank {
+  flex-shrink: 0;
+  width: 18px;
+  padding-top: 1px;
+  color: var(--ink-faint);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.gh-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.gh-title {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 0.86rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gh-title:hover {
+  color: var(--accent);
+}
+
+.gh-owner {
+  color: var(--ink-soft);
+  font-weight: 450;
+}
+
+.gh-desc {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.gh-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-top: 2px;
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+}
+
+.gh-meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.gh-lang {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--ink-faint);
+}
+
+.gh-gained {
+  color: var(--up);
+}
+
+.gh-foot {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+  text-align: right;
+}
+
+.gh-foot a {
+  color: inherit;
+}
+
+.gh-foot a:hover {
+  color: var(--accent);
+}
+
+.gh-stale {
+  color: #f4c46a;
+}
+
+/* --- Credits under a widget's list -------------------------------------------- */
+
+.wdg-foot {
+  margin: 6px 0 0;
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
+.wdg-foot a {
+  color: inherit;
+}
+
+.wdg-foot a:hover {
+  color: var(--accent);
+}
+
+/* --- AI Leaderboard widget --------------------------------------------------- */
+
+.bench-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bench-item {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  grid-template-areas:
+    'rank text score'
+    'rank bar bar';
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 5px;
+  padding: 7px 0;
+}
+
+.bench-rank {
+  grid-area: rank;
+  align-self: start;
+  padding-top: 2px;
+  color: var(--ink-faint);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.bench-text {
+  grid-area: text;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.bench-name {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bench-creator {
+  flex-shrink: 0;
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+}
+
+.bench-score {
+  grid-area: score;
+  color: var(--ink);
+  font-size: 0.84rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.bench-bar {
+  grid-area: bar;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--surface-hover);
+  overflow: hidden;
+}
+
+.bench-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent-strong), var(--accent));
+}
+
+.bench-item:first-child .bench-bar > span {
+  background: linear-gradient(90deg, #f59e0b, #fcd34d);
+}
+
+/* --- Popular TV widget -------------------------------------------------------- */
+
+.tv-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tv-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px;
+  margin: 0 -6px;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  text-decoration: none;
+  transition: background 0.15s ease;
+}
+
+.tv-item:hover {
+  background: var(--surface-hover);
+}
+
+.tv-poster {
+  flex-shrink: 0;
+  width: 34px;
+  height: 51px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--surface-hover);
+  box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.7);
+}
+
+.tv-poster--none {
+  display: grid;
+  place-items: center;
+  color: var(--ink-faint);
+}
+
+.tv-text {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.tv-name {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tv-item:hover .tv-name {
+  color: var(--accent);
+}
+
+.tv-meta {
+  display: flex;
+  gap: 10px;
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+}
+
+.tv-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* --- The Dreams swatch in Appearance ---------------------------------------- */
+
+.background-option--dreams .background-swatch {
+  background:
+    radial-gradient(9px 9px at 72% 34%, #fff2de 70%, transparent 74%),
+    linear-gradient(170deg, transparent 58%, #4c776a 59%),
+    linear-gradient(195deg, transparent 52%, #98b19f 53%),
+    linear-gradient(180deg, #d98a68, #eab38f 55%, #f4d9bc);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .activity,
+  .activity-tab,
+  .app-sheet,
+  .app-spinner {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

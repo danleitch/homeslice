@@ -4,6 +4,7 @@ import {
   SEARCH_ENGINES,
   countBookmarks,
   type DashboardConfig,
+  type DashboardSettings,
   type SearchEngine
 } from '../lib/model';
 import { configToYaml, yamlToConfig, type YamlProblem } from '../lib/yaml';
@@ -16,7 +17,7 @@ type SettingsDrawerProps = {
   initialTab?: SettingsTab;
   /** Background choices, owned by the app since the pond and particles live there. */
   appearance: ReactNode;
-  onChange: (patch: Partial<DashboardConfig>) => void;
+  onChange: (patch: Partial<DashboardSettings>) => void;
   onReplace: (config: DashboardConfig, message: string) => void;
   onExport: () => void;
   onImportFile: (file: File) => void;
@@ -258,6 +259,12 @@ export const SettingsDrawer = ({
               label="Open bookmarks in a new tab"
               checked={config.newTab}
               onChange={(newTab) => onChange({ newTab })}
+            />
+            <Switch
+              label="Don’t auto-hide the side bar"
+              hint="Keep the bar out on the left, instead of tucked behind its tab."
+              checked={config.pinBar}
+              onChange={(pinBar) => onChange({ pinBar })}
             />
 
             <section className="settings-section">

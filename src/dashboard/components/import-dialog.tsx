@@ -68,7 +68,7 @@ export const ImportDialog = ({
         {plan.config && (
           <div>
             <dt>Widgets</dt>
-            <dd>{plan.config.widgets.length}</dd>
+            <dd>{plan.config.pages.reduce((total, page) => total + page.widgets.length, 0)}</dd>
           </div>
         )}
       </dl>

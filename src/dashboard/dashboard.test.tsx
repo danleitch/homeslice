@@ -360,6 +360,42 @@ saved:
 
     expect(group('Code')).toBeInTheDocument();
   });
+
+  it('keeps a separate board on each page, chosen from the dots', async () => {
+    seed({
+      pages: [
+        simpleBoard,
+        { groups: [{ name: 'Media', bookmarks: [{ name: 'Plex', url: 'https://plex.tv' }] }] }
+      ]
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    const pages = screen.getByRole('navigation', { name: 'Pages' });
+    expect(within(pages).getByRole('button', { name: 'Page 1' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+    expect(group('Code')).toBeInTheDocument();
+
+    await user.click(within(pages).getByRole('button', { name: 'Page 2' }));
+
+    expect(group('Media')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Code' })).not.toBeInTheDocument();
+    expect(within(pages).getByRole('button', { name: 'Page 2' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+    expect(window.localStorage.getItem('dashboard-page')).toBe('1');
+
+    // Search still finds what lives on the other pages.
+    await user.type(screen.getByRole('combobox', { name: 'Search' }), 'github');
+    expect(await screen.findByRole('option', { name: /GitHub/ })).toBeInTheDocument();
+
+    await user.clear(screen.getByRole('combobox', { name: 'Search' }));
+    await user.click(within(pages).getByRole('button', { name: 'Page 3' }));
+    expect(await screen.findByRole('heading', { name: 'Your board is empty' })).toBeInTheDocument();
+  });
 });
 
 describe('Dashboard widgets', () => {
@@ -471,5 +507,202 @@ describe('Dashboard widgets', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(storedYaml()).toContain('weekStart: 0'));
+  });
+});
+
+describe('The side bar and extensions', () => {
+  const bar = (): HTMLElement => screen.getByRole('navigation', { name: 'Dashboard' });
+
+  it('tucks the bar away until it is wanted, and keeps it out once pinned', async () => {
+    seed(simpleBoard);
+    const user = userEvent.setup();
+    render(<App />);
+
+    expect(bar()).toHaveAttribute('data-state', 'hidden');
+
+    // Focus brings it out for the keyboard.
+    fireEvent.focus(screen.getByRole('button', { name: 'Add bookmark' }));
+    expect(bar()).toHaveAttribute('data-state', 'shown');
+
+    const dialog = await openSettingsTab(user, 'General');
+    await user.click(within(dialog).getByRole('switch', { name: /Don’t auto-hide the side bar/ }));
+    await user.click(within(dialog).getByRole('button', { name: 'Close settings' }));
+
+    expect(bar()).toHaveAttribute('data-state', 'shown');
+    expect(bar()).toHaveAttribute('data-pinned');
+    await waitFor(() => expect(storedYaml()).toContain('pinBar: true'));
+  });
+
+  it('turns Branchify off and on from Extensions', async () => {
+    seed(simpleBoard);
+    const user = userEvent.setup();
+    render(<App />);
+
+    expect(within(bar()).getByRole('button', { name: 'Branchify' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Extensions' }));
+    const panel = screen.getByRole('dialog', { name: 'Extensions' });
+    await user.click(within(panel).getByRole('switch', { name: 'Branchify enabled' }));
+    await user.click(within(panel).getByRole('button', { name: 'Close extensions' }));
+
+    expect(within(bar()).queryByRole('button', { name: 'Branchify' })).not.toBeInTheDocument();
+    await user.keyboard('b');
+    expect(screen.queryByRole('dialog', { name: /Branchify/ })).not.toBeInTheDocument();
+    await waitFor(() => expect(storedYaml()).toContain('- branchify'));
+  });
+
+  it('installs Doddle, opens it over the board in a frame, and uninstalls it', async () => {
+    seed(simpleBoard);
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: 'Extensions' }));
+    let panel = screen.getByRole('dialog', { name: 'Extensions' });
+    await user.click(within(panel).getByRole('button', { name: 'Install' }));
+    await waitFor(() => expect(storedYaml()).toContain('url: https://doddle.theleechies.co.za/'));
+    await user.click(within(panel).getByRole('button', { name: 'Open' }));
+
+    const app = screen.getByRole('dialog', { name: 'Doddle' });
+    expect(within(app).getByTitle('Doddle')).toHaveAttribute(
+      'src',
+      'https://doddle.theleechies.co.za/'
+    );
+    expect(window.location.hash).toBe('#app/doddle');
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Doddle' })).not.toBeInTheDocument();
+    expect(window.location.hash).toBe('');
+
+    // It has its own place in the bar now.
+    await user.click(within(bar()).getByRole('button', { name: 'Doddle' }));
+    expect(screen.getByRole('dialog', { name: 'Doddle' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Close Doddle' }));
+
+    await user.click(screen.getByRole('button', { name: 'Extensions' }));
+    panel = screen.getByRole('dialog', { name: 'Extensions' });
+    await user.click(within(panel).getByRole('button', { name: 'Uninstall Doddle' }));
+    await waitFor(() => expect(storedYaml()).not.toContain('doddle'));
+  });
+
+  it('leaves a turned-off widget out of the Add widget list', async () => {
+    seed({ ...simpleBoard, extensions: { disabled: ['widget:markets'] } });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: 'Edit the board' }));
+    await user.click(screen.getByRole('button', { name: /Widget/ }));
+    const picker = screen.getByRole('dialog', { name: 'Add a widget' });
+    expect(within(picker).queryByText('Markets')).not.toBeInTheDocument();
+    expect(within(picker).getByText('GitHub Trending')).toBeInTheDocument();
+  });
+
+  it('shows what is trending on GitHub', async () => {
+    seed({ widgets: [{ type: 'github', language: 'Rust', since: 'weekly' }], groups: [] });
+    const fetchMock = vi.fn<(url: string) => Promise<Response>>(
+      async () =>
+        new Response(
+          JSON.stringify({
+            pubDate: new Date().toUTCString(),
+            items: [
+              {
+                title: 'tokio-rs / tokio',
+                url: 'https://github.com/tokio-rs/tokio',
+                description: 'An asynchronous runtime',
+                language: 'Rust',
+                languageColor: '#dea584',
+                stars: '28,100',
+                forks: '2,600',
+                addStars: '410'
+              }
+            ]
+          })
+        )
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    render(<App />);
+
+    const card = screen.getByRole('region', { name: 'GitHub Trending' });
+    expect(await within(card).findByRole('link', { name: /tokio/ })).toHaveAttribute(
+      'href',
+      'https://github.com/tokio-rs/tokio'
+    );
+    expect(within(card).getByText('+410 this week')).toBeInTheDocument();
+    expect(String(fetchMock.mock.calls[0]?.[0])).toMatch(/\/data\/weekly\/rust\.json$/);
+  });
+
+  it('ranks the strongest AI models, from one lab when asked', async () => {
+    seed({ widgets: [{ type: 'benchlm', surface: 'coding', creator: 'anthropic', count: 3 }] });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              dataAsOf: '2026-10-02',
+              items: [
+                { rank: 1, name: 'GPT-6 Astra', creator: 'OpenAI', score: 88.75 },
+                { rank: 2, name: 'Claude Opus 5.5', creator: 'Anthropic', score: 87.78 },
+                { rank: 3, name: 'Claude Sonnet 5.5', creator: 'Anthropic', score: 83.42 },
+                { rank: 4, name: 'Claude Fable 5.1', creator: 'Anthropic', score: 82.85 },
+                { rank: 5, name: 'Claude Haiku 5', creator: 'Anthropic', score: 70.1 }
+              ]
+            }),
+            { headers: { 'content-type': 'application/json' } }
+          )
+      )
+    );
+    render(<App />);
+
+    const card = screen.getByRole('region', { name: 'AI Leaderboard' });
+    expect(await within(card).findByText('Claude Opus 5.5')).toBeInTheDocument();
+    expect(within(card).getByText('Claude Sonnet 5.5')).toBeInTheDocument();
+    expect(within(card).queryByText('GPT-6 Astra')).not.toBeInTheDocument();
+    expect(within(card).getByText('Claude Fable 5.1')).toBeInTheDocument();
+    expect(within(card).queryByText('Claude Haiku 5')).not.toBeInTheDocument();
+    expect(within(card).getByRole('link', { name: 'BenchLM.ai' })).toBeInTheDocument();
+  });
+
+  it('lists the TV everyone is watching, linked to TMDB', async () => {
+    seed({ widgets: [{ type: 'tv', window: 'day', count: 3 }] });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              results: [
+                {
+                  id: 1,
+                  name: 'East of Eden',
+                  first_air_date: '2026-10-01',
+                  vote_average: 7.9,
+                  vote_count: 12
+                }
+              ]
+            }),
+            { headers: { 'content-type': 'application/json' } }
+          )
+      )
+    );
+    render(<App />);
+
+    const card = screen.getByRole('region', { name: 'Popular TV' });
+    expect(await within(card).findByRole('link', { name: /East of Eden/ })).toHaveAttribute(
+      'href',
+      'https://www.themoviedb.org/tv/1'
+    );
+    expect(within(card).getByText('7.9')).toBeInTheDocument();
+  });
+
+  it('says when this server has no key for a widget', async () => {
+    seed({ widgets: [{ type: 'tv' }] });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}', { status: 401 }))
+    );
+    render(<App />);
+
+    const card = screen.getByRole('region', { name: 'Popular TV' });
+    expect(await within(card).findByRole('alert')).toHaveTextContent(/TMDB_TOKEN/);
   });
 });

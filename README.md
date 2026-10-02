@@ -37,10 +37,15 @@ and you're free to spin up your own the same way (see
 - **Widgets.** Weather from Open-Meteo, in the style of glance's widget: twelve
   bars across the day with daylight and rain marked. Markets with a month of
   trend for stocks, indices, FX and crypto. A world clock, this month's
-  calendar, and the top of Hacker News.
-- **Glass over a background you choose.** The koi pond, particles, a wallpaper
-  of your own, or a quiet gradient. Blur and tint are adjustable.
-- **Branchify is a tool on the board.** The **Branchify** button in the toolbar,
+  calendar, the top of Hacker News, GitHub Trending, the strongest AI models
+  from BenchLM, and the TV everyone is watching from TMDB.
+- **A side bar, as in VS Code.** Tools, apps and Extensions down the left edge,
+  with Add, Edit and Settings at the foot. It tucks away behind a small tab
+  until the pointer reaches the edge; Settings → General keeps it out.
+- **Glass over a background you choose.** The koi pond, Dreams (a calm drawn
+  valley, by day or night), particles, a wallpaper of your own, or a quiet
+  gradient. Blur and tint are adjustable.
+- **Branchify is a tool on the board.** The **Branchify** button in the side bar,
   the `B` key or the address `/#branchify` opens it over the dashboard. Its
   recent branches still swim as koi, and copying a new branch still earns koi
   coins.
@@ -118,6 +123,27 @@ page asks for them at `/api/markets/<symbol>` on its own server. The Vite dev
 and preview servers and the Docker image's Nginx relay that one endpoint. A
 plain static host without the relay shows a note in the markets widget instead
 of prices. Readings are cached in `localStorage` so a reload paints at once.
+
+GitHub Trending reads the static JSON that
+[isboyjc/github-trending-api](https://github.com/isboyjc/github-trending-api)
+publishes, straight from the browser.
+
+The **AI Leaderboard** (from [BenchLM](https://benchlm.ai)) and **Popular TV**
+(from [TMDB](https://www.themoviedb.org)) widgets need a key. Keys never go in
+the page, the YAML or git: they live in a `.env` file on the server (copy
+`.env.example`), and the page asks its own server at `/api/benchlm/rankings`
+and `/api/tmdb/trending-tv`, which adds the key. Nginx keeps each answer for
+84 hours, so each service is asked at most about twice a week however many
+people visit, which keeps BenchLM's free 1,000 reads a month in hand. The
+relays pass on only the ranking or the trending window, so a visitor can't
+spend reads by varying the address.
+
+### Extensions
+
+The **Extensions** button in the side bar turns Branchify and each widget on or
+off, and installs apps: any site, opened over the board in a frame at its own
+address, `/#app/<name>`. Doddle, a word game, is offered ready to install; add
+anything else by its address. The site has to allow being framed.
 
 ## Branchify Features
 
@@ -219,7 +245,7 @@ swim over one and under the other.
 - **Drag a fish** to carry it somewhere else in the pond. It rises toward the
   surface while you hold it, and swims calmly on from wherever you set it down.
 
-Clicks on the cards, the toolbar or any dialog are left alone, and the context
+Clicks on the cards, the side bar or any dialog are left alone, and the context
 menu is only replaced over open water. With reduced motion on, the pond stays still: fish
 can still be clicked for their card, but not carried.
 
@@ -243,7 +269,7 @@ the fish in a listing's photo is exactly the fish that swims in your pond.
 
 ### The market
 
-With the koi pond selected, a koi button appears in the dashboard's toolbar,
+With the koi pond selected, a koi button appears in the dashboard's side bar,
 beside the Branchify button:
 
 - **Daily stock.** The market lists six koi a day, seeded by the date, so
@@ -357,7 +383,9 @@ npm run dev
 
 Then open the local URL shown by Vite (typically `http://localhost:5173`). The
 dev server also relays `/api/markets` to Yahoo Finance, so the markets widget
-works locally.
+works locally, and BenchLM and TMDB with the keys in `.env` (copy
+`.env.example`). The dev server doesn't keep their answers the way nginx does;
+the page's own cache asks at most twice a day.
 
 ## Testing & Quality
 
@@ -392,8 +420,11 @@ docker build -t branchify:latest .
 ### Run container
 
 ```bash
-docker run --rm -p 8080:80 branchify:latest
+docker run --rm -p 8080:80 --env-file .env branchify:latest
 ```
+
+`--env-file .env` gives the AI Leaderboard and Popular TV widgets their keys;
+leave it out and those widgets say they aren't set up.
 
 App will be available at `http://localhost:8080`.
 
@@ -406,6 +437,9 @@ docker compose up -d --build
 This starts one service:
 
 - `branchify` (serves the static app on internal container port `80`)
+
+It reads `.env` beside `docker-compose.yml` when there is one, for the
+BenchLM and TMDB keys.
 
 The included Nginx config supports SPA route refresh via `try_files ... /index.html`.
 

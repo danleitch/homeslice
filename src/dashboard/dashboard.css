@@ -237,85 +237,6 @@ body {
   animation: rise 0.6s 0.05s var(--ease) both;
 }
 
-.toolbar {
-  justify-self: end;
-  align-self: start;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 5px;
-  border-radius: 16px;
-  animation: rise 0.6s 0.1s var(--ease) both;
-}
-
-.toolbar-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
-  min-width: 38px;
-  height: 38px;
-  padding: 0 10px;
-  border-radius: 11px;
-  color: var(--ink-soft);
-  font-size: 0.88rem;
-  font-weight: 550;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease,
-    transform 0.15s var(--ease);
-}
-
-.toolbar-btn:hover {
-  background: var(--surface-hover);
-  color: var(--ink);
-}
-
-.toolbar-btn:active {
-  transform: scale(0.96);
-}
-
-.toolbar-btn[aria-pressed='true'] {
-  background: var(--accent-wash);
-  color: var(--accent);
-}
-
-.toolbar-btn--tool {
-  background: linear-gradient(135deg, rgba(91, 134, 255, 0.24), rgba(63, 211, 160, 0.14));
-  color: var(--ink);
-  box-shadow: inset 0 0 0 1px rgba(138, 168, 255, 0.28);
-}
-
-.toolbar-btn--tool:hover {
-  background: linear-gradient(135deg, rgba(91, 134, 255, 0.36), rgba(63, 211, 160, 0.22));
-}
-
-.toolbar-sep {
-  width: 1px;
-  height: 22px;
-  margin: 0 4px;
-  background: var(--line-strong);
-}
-
-/* Branchify's market and particle buttons, at home in the toolbar. */
-.toolbar .header-action {
-  width: 38px;
-  height: 38px;
-  border-radius: 11px;
-  color: var(--ink-soft);
-  transition: background 0.15s ease;
-}
-
-.toolbar .header-action:hover {
-  background: var(--surface-hover);
-  color: var(--ink);
-}
-
-.toolbar .market-action {
-  position: relative;
-  display: inline-flex;
-}
-
 /* --- Search ------------------------------------------------------------------ */
 
 .search {
@@ -490,10 +411,10 @@ body {
 
 @media (max-width: 1100px) {
   .topbar {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
-      'hello tools'
-      'search search';
+      'hello'
+      'search';
     align-items: start;
   }
 
@@ -503,10 +424,6 @@ body {
 
   .topbar-center {
     grid-area: search;
-  }
-
-  .toolbar {
-    grid-area: tools;
   }
 
   .dash-grid > .grp,
@@ -529,10 +446,6 @@ body {
 
   .dash-grid {
     column-gap: 14px;
-  }
-
-  .toolbar-btn--tool span {
-    display: none;
   }
 }
 
@@ -2895,6 +2808,138 @@ body {
   z-index: 12;
 }
 
+/* --- Pages and the dots that choose them ------------------------------------------------- */
+
+/* A page slides a whole viewport across; the shell clips it there so it never
+   adds a horizontal scrollbar on the way. Only transform moves: opacity or a
+   filter on the page would cut its glass panels off from the pond behind. */
+.app-shell {
+  overflow-x: clip;
+}
+
+.pages {
+  position: relative;
+  --swoosh: cubic-bezier(0.76, 0, 0.24, 1);
+  --swoosh-time: 0.68s;
+}
+
+.page[data-state='leaving'] {
+  position: absolute;
+  inset: 0 0 auto;
+  pointer-events: none;
+  animation: var(--swoosh-time) var(--swoosh) forwards;
+}
+
+.page[data-state='leaving'][data-direction='next'] {
+  animation-name: page-out-next;
+}
+
+.page[data-state='leaving'][data-direction='prev'] {
+  animation-name: page-out-prev;
+}
+
+/* `backwards` only, so the page in view carries no transform once it lands
+   and the drag overlay keeps measuring from the viewport. */
+.page[data-state='current'][data-direction] {
+  animation: var(--swoosh-time) var(--swoosh) backwards;
+}
+
+.page[data-state='current'][data-direction='next'] {
+  animation-name: page-in-next;
+}
+
+.page[data-state='current'][data-direction='prev'] {
+  animation-name: page-in-prev;
+}
+
+.pager {
+  --slot: 22px;
+  --gap: 4px;
+  --pad-x: 8px;
+  --thumb: 20px;
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  z-index: 19;
+  display: flex;
+  gap: var(--gap);
+  padding: 4px var(--pad-x);
+  border-radius: 999px;
+  transform: translateX(-50%);
+  --glass-tint: 0.5;
+  animation: dock-in 0.45s var(--ease) both;
+  transition: bottom 0.35s var(--ease);
+}
+
+/* Edit mode's dock takes the bottom edge, so the dots step up above it. */
+.dash[data-editing='on'] .pager {
+  bottom: 84px;
+}
+
+.dash[data-editing='on'] .toasts {
+  bottom: 132px;
+}
+
+.pager-dot {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--slot);
+  height: var(--slot);
+  border-radius: 999px;
+}
+
+.pager-dot::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.34);
+  transition:
+    background 0.2s ease,
+    transform 0.2s var(--ease);
+}
+
+.pager-dot:hover::before {
+  background: rgba(255, 255, 255, 0.7);
+  transform: scale(1.25);
+}
+
+.pager-dot[aria-current='page']::before {
+  background: transparent;
+}
+
+/* The pill on the current dot. Its edges travel separately: the leading one
+   first, the trailing one a beat later, so it stretches and then snaps. */
+.pager-thumb {
+  position: absolute;
+  top: 50%;
+  height: 8px;
+  margin-top: -4px;
+  left: calc(
+    var(--pad-x) + var(--page) * (var(--slot) + var(--gap)) + (var(--slot) - var(--thumb)) / 2
+  );
+  right: calc(
+    var(--pad-x) + (var(--pages) - 1 - var(--page)) * (var(--slot) + var(--gap)) +
+      (var(--slot) - var(--thumb)) / 2
+  );
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent-strong), #c3d2ff);
+  box-shadow: 0 0 14px rgba(138, 168, 255, 0.75);
+  pointer-events: none;
+  transition:
+    left 0.42s var(--ease),
+    right 0.42s var(--ease);
+}
+
+.pager[data-direction='next'] .pager-thumb {
+  transition-delay: 0.12s, 0s;
+}
+
+.pager[data-direction='prev'] .pager-thumb {
+  transition-delay: 0s, 0.12s;
+}
+
 /* --- Motion ------------------------------------------------------------------------------- */
 
 @keyframes rise {
@@ -2970,6 +3015,30 @@ body {
   }
   100% {
     box-shadow: inset 0 0 0 1px var(--line);
+  }
+}
+
+@keyframes page-in-next {
+  from {
+    transform: translateX(100vw) scale(0.94);
+  }
+}
+
+@keyframes page-in-prev {
+  from {
+    transform: translateX(-100vw) scale(0.94);
+  }
+}
+
+@keyframes page-out-next {
+  to {
+    transform: translateX(-100vw) scale(0.94);
+  }
+}
+
+@keyframes page-out-prev {
+  to {
+    transform: translateX(100vw) scale(0.94);
   }
 }
 

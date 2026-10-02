@@ -34,6 +34,8 @@ export const LILY_PLACEMENTS_STORAGE_KEY = 'branchify-koi-lilies';
 export const FISH_NAMES_STORAGE_KEY = 'branchify-koi-names';
 // The image behind the dashboard's glass when the Wallpaper background is chosen.
 export const WALLPAPER_STORAGE_KEY = 'dashboard-wallpaper';
+// Whether the Dreams landscape shows by day, by night, or as the system's light or dark.
+export const DREAMS_MODE_STORAGE_KEY = 'dashboard-dreams-mode';
 // Matches the pond's own cap, so a base fish count of 10 has ten real branches
 // to promote out of "resident" and into "yours" before the koi runs out.
 export const MAX_RECENT_BRANCHES = MAX_BASE_FISH;
@@ -198,6 +200,7 @@ export const parseRecentBranches = (raw: string | null): RecentBranch[] => {
 
 export const BACKGROUND_STYLES: readonly BackgroundStyle[] = [
   'koi',
+  'dreams',
   'particles',
   'wallpaper',
   'plain'
@@ -210,6 +213,13 @@ export const parseBackground = (raw: string | null): BackgroundStyle =>
   BACKGROUND_STYLES.includes(raw as BackgroundStyle)
     ? (raw as BackgroundStyle)
     : DEFAULT_BACKGROUND;
+
+export type DreamsMode = 'auto' | 'day' | 'night';
+
+export const DREAMS_MODES: readonly DreamsMode[] = ['auto', 'day', 'night'];
+
+export const parseDreamsMode = (raw: string | null): DreamsMode =>
+  DREAMS_MODES.includes(raw as DreamsMode) ? (raw as DreamsMode) : 'auto';
 
 /** Falls back to the default for anything missing, non-numeric, or out of range. */
 export const parseBaseFish = (raw: string | null): number => {

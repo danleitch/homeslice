@@ -9,6 +9,7 @@ import {
   RECENT_STORAGE_KEY,
   SETTINGS_STORAGE_KEY,
   WALLPAPER_STORAGE_KEY,
+  DREAMS_MODE_STORAGE_KEY,
   readStorage,
   writeStorage
 } from '../../lib/storage';
@@ -18,6 +19,9 @@ import { configToYaml, yamlToConfig, type SavedState } from './yaml';
 /** The dashboard itself, stored as the same YAML the editor shows. */
 export const DASHBOARD_STORAGE_KEY = 'dashboard-config';
 
+/** The page this browser last looked at, so a reload comes back to it. */
+export const PAGE_STORAGE_KEY = 'dashboard-page';
+
 /**
  * Everything else worth carrying between browsers, by the name it has in an
  * export. Branchify's form and the pond's state are included so an import
@@ -26,6 +30,7 @@ export const DASHBOARD_STORAGE_KEY = 'dashboard-config';
 export const SAVED_KEYS: Readonly<Record<string, string>> = {
   background: BACKGROUND_STORAGE_KEY,
   wallpaper: WALLPAPER_STORAGE_KEY,
+  'dreams-mode': DREAMS_MODE_STORAGE_KEY,
   particles: PARTICLES_STORAGE_KEY,
   'branchify-settings': SETTINGS_STORAGE_KEY,
   'branchify-recent': RECENT_STORAGE_KEY,

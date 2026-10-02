@@ -3,7 +3,10 @@ import {
   Clock,
   CloudSun,
   Newspaper,
+  Star,
   TrendingUp,
+  Trophy,
+  Tv,
   type LucideIcon
 } from 'lucide-react';
 import type { WidgetType } from '../lib/model';
@@ -14,5 +17,8 @@ export const WIDGET_ICONS: Readonly<Record<WidgetType, LucideIcon>> = {
   markets: TrendingUp,
   clock: Clock,
   calendar: CalendarDays,
-  hackernews: Newspaper
+  hackernews: Newspaper,
+  github: Star,
+  benchlm: Trophy,
+  tv: Tv
 };

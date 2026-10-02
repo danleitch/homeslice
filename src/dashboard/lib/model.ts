@@ -6,6 +6,15 @@
  * a visitor exports and imports, so every field has a sanitiser: a hand-edited
  * file, an old export or a half-typed value must never break the page.
  */
+import { emptyExtensions, sanitizeExtensions, type ExtensionsConfig } from './extensions-config';
+import { BENCH_SURFACES, type BenchmarkWidget } from './benchlm';
+import { TRENDING_SINCE, languageSlug, type GithubTrendingWidget } from './github';
+import { TRENDING_WINDOWS, type PopularTvWidget } from './tmdb';
+
+export type { AppExtension, ExtensionsConfig } from './extensions-config';
+export type { BenchmarkWidget, BenchSurface } from './benchlm';
+export type { GithubTrendingWidget, TrendingSince } from './github';
+export type { PopularTvWidget, TrendingWindow } from './tmdb';
 
 /** How a group lays out its bookmarks. */
 export type BookmarkStyle = 'cards' | 'tiles' | 'list';
@@ -84,7 +93,14 @@ export type CalendarWidget = {
 };
 
 export type Widget =
-  WeatherWidget | MarketsWidget | ClockWidget | HackerNewsWidget | CalendarWidget;
+  | WeatherWidget
+  | MarketsWidget
+  | ClockWidget
+  | HackerNewsWidget
+  | CalendarWidget
+  | GithubTrendingWidget
+  | BenchmarkWidget
+  | PopularTvWidget;
 export type WidgetType = Widget['type'];
 
 export const WIDGET_TYPES: readonly WidgetType[] = [
@@ -92,7 +108,10 @@ export const WIDGET_TYPES: readonly WidgetType[] = [
   'markets',
   'clock',
   'calendar',
-  'hackernews'
+  'hackernews',
+  'github',
+  'benchlm',
+  'tv'
 ];
 
 export const WIDGET_LABELS: Readonly<Record<WidgetType, string>> = {
@@ -100,7 +119,10 @@ export const WIDGET_LABELS: Readonly<Record<WidgetType, string>> = {
   markets: 'Markets',
   clock: 'World clock',
   calendar: 'Calendar',
-  hackernews: 'Hacker News'
+  hackernews: 'Hacker News',
+  github: 'GitHub Trending',
+  benchlm: 'AI Leaderboard',
+  tv: 'Popular TV'
 };
 
 export const WIDGET_BLURBS: Readonly<Record<WidgetType, string>> = {
@@ -108,7 +130,10 @@ export const WIDGET_BLURBS: Readonly<Record<WidgetType, string>> = {
   markets: 'Stocks, indices and crypto with a month of trend',
   clock: 'The time where your people are',
   calendar: 'This month, today circled',
-  hackernews: 'The top stories right now'
+  hackernews: 'The top stories right now',
+  github: 'The repositories everyone is starring',
+  benchlm: 'The strongest AI models right now, from BenchLM',
+  tv: 'What everyone is watching, from TMDB'
 };
 
 export type SearchEngine = 'google' | 'duckduckgo' | 'bing' | 'brave' | 'kagi' | 'startpage';
@@ -129,7 +154,8 @@ export type Glass = {
   tint: number;
 };
 
-export type DashboardConfig = {
+/** What every page shares: the greeting, search, clock and glass. */
+export type DashboardSettings = {
   title: string;
   /** The name in the greeting; empty for a nameless "Good evening". */
   name: string;
@@ -137,8 +163,59 @@ export type DashboardConfig = {
   search: SearchEngine;
   clock: HourFormat;
   glass: Glass;
+  /** Whether the side bar stays out, rather than tucking away behind its tab. */
+  pinBar: boolean;
+  /** Which built-in extensions are off, and which apps are installed. */
+  extensions: ExtensionsConfig;
+};
+
+/** One page of the board: its own row of widgets and its own groups. */
+export type BoardPage = {
   widgets: Widget[];
   groups: Group[];
+};
+
+/** The board has this many pages, chosen from the dots along the bottom. */
+export const PAGE_COUNT = 3;
+
+export type DashboardConfig = DashboardSettings & {
+  /** Always PAGE_COUNT long; a board saved before pages existed becomes the first. */
+  pages: BoardPage[];
+};
+
+/**
+ * One page as the board sees it, with the settings every page shares. Every
+ * edit in `edit.ts` works on this, so none of them need to know about pages.
+ */
+export type PageConfig = DashboardSettings & BoardPage;
+
+export const emptyPage = (): BoardPage => ({ widgets: [], groups: [] });
+
+/** Pads or trims to exactly PAGE_COUNT pages. */
+const fillPages = (pages: readonly BoardPage[]): BoardPage[] =>
+  Array.from({ length: PAGE_COUNT }, (_unused, index) => pages[index] ?? emptyPage());
+
+export const clampPage = (index: number): number =>
+  Number.isInteger(index) ? Math.min(PAGE_COUNT - 1, Math.max(0, index)) : 0;
+
+/** A page with the shared settings, ready for the board and its edits. */
+export const pageOf = (config: DashboardConfig, index: number): PageConfig => {
+  const { pages, ...settings } = config;
+  return { ...settings, ...(pages[clampPage(index)] ?? emptyPage()) };
+};
+
+/** Puts an edited page back; a settings change made through it reaches every page. */
+export const withPage = (
+  config: DashboardConfig,
+  index: number,
+  page: PageConfig
+): DashboardConfig => {
+  const { widgets, groups, ...settings } = page;
+  const at = clampPage(index);
+  return {
+    ...settings,
+    pages: config.pages.map((current, other) => (other === at ? { widgets, groups } : current))
+  };
 };
 
 let idCounter = 0;
@@ -167,6 +244,13 @@ export const createStarterConfig = (): DashboardConfig => ({
   search: 'google',
   clock: '24h',
   glass: { ...DEFAULT_GLASS },
+  pinBar: false,
+  extensions: emptyExtensions(),
+  pages: fillPages([createStarterPage()])
+});
+
+/** The example's first page; the other pages start empty. */
+export const createStarterPage = (): BoardPage => ({
   widgets: [
     { id: newId('w'), type: 'weather', width: 4, location: 'London', units: 'metric' },
     {
@@ -231,8 +315,7 @@ export const createStarterConfig = (): DashboardConfig => ({
 
 export const emptyConfig = (): DashboardConfig => ({
   ...createStarterConfig(),
-  widgets: [],
-  groups: []
+  pages: fillPages([])
 });
 
 /* -------------------------------------------------------------------------- */
@@ -381,9 +464,50 @@ const sanitizeWidget = (value: unknown): Widget | null => {
         width,
         weekStart: value.weekStart === 0 || value.weekStart === 'sunday' ? 0 : 1
       };
+    case 'github':
+      return {
+        id,
+        type: 'github',
+        width,
+        language: languageSlug(text(value.language, '', 60)),
+        since: oneOf(value.since, TRENDING_SINCE, 'daily'),
+        count: Math.round(clampNumber(value.count, 3, 15, 6))
+      };
+    case 'benchlm':
+      return {
+        id,
+        type: 'benchlm',
+        width,
+        surface: oneOf(value.surface, BENCH_SURFACES, 'overall'),
+        creator: text(value.creator, '', 40),
+        count: Math.round(clampNumber(value.count, 3, 15, 5))
+      };
+    case 'tv':
+      return {
+        id,
+        type: 'tv',
+        width,
+        window: oneOf(value.window, TRENDING_WINDOWS, 'week'),
+        count: Math.round(clampNumber(value.count, 3, 12, 5))
+      };
     default:
       return null;
   }
+};
+
+const sanitizePage = (value: unknown): BoardPage => {
+  if (!isRecord(value)) {
+    return emptyPage();
+  }
+
+  return {
+    widgets: (Array.isArray(value.widgets) ? value.widgets : [])
+      .map(sanitizeWidget)
+      .filter((item): item is Widget => item !== null),
+    groups: (Array.isArray(value.groups) ? value.groups : [])
+      .map(sanitizeGroup)
+      .filter((item): item is Group => item !== null)
+  };
 };
 
 /** Keeps whatever still makes sense from a stored or imported config, and defaults the rest. */
@@ -406,12 +530,13 @@ export const sanitizeConfig = (value: unknown): DashboardConfig => {
       blur: Math.round(clampNumber(glass.blur, 0, 32, DEFAULT_GLASS.blur)),
       tint: Math.round(clampNumber(glass.tint, 0, 0.9, DEFAULT_GLASS.tint) * 100) / 100
     },
-    widgets: (Array.isArray(value.widgets) ? value.widgets : [])
-      .map(sanitizeWidget)
-      .filter((item): item is Widget => item !== null),
-    groups: (Array.isArray(value.groups) ? value.groups : [])
-      .map(sanitizeGroup)
-      .filter((item): item is Group => item !== null)
+    pinBar: value.pinBar === true,
+    extensions: sanitizeExtensions(value.extensions),
+    // A board saved before it had pages keeps its groups and widgets at the
+    // top level; they become the first page.
+    pages: fillPages(
+      (Array.isArray(value.pages) ? value.pages : [value]).slice(0, PAGE_COUNT).map(sanitizePage)
+    )
   };
 };
 
@@ -448,6 +573,12 @@ export const createWidget = (type: WidgetType): Widget => {
       return { id, type, width: 4, count: 6 };
     case 'calendar':
       return { id, type, width: 3, weekStart: 1 };
+    case 'github':
+      return { id, type, width: 4, language: 'all', since: 'daily', count: 6 };
+    case 'benchlm':
+      return { id, type, width: 4, surface: 'overall', creator: '', count: 5 };
+    case 'tv':
+      return { id, type, width: 4, window: 'week', count: 5 };
   }
 };
 
@@ -466,5 +597,9 @@ export const createBookmark = (fields: Omit<Bookmark, 'id'>): Bookmark => ({
   ...fields
 });
 
+/** Every page's groups, in page order. */
+export const allGroups = (config: DashboardConfig): Group[] =>
+  config.pages.flatMap((page) => page.groups);
+
 export const countBookmarks = (config: DashboardConfig): number =>
-  config.groups.reduce((total, group) => total + group.bookmarks.length, 0);
+  allGroups(config).reduce((total, group) => total + group.bookmarks.length, 0);

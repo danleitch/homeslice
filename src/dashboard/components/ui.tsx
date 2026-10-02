@@ -128,17 +128,26 @@ type DrawerProps = {
   title: ReactNode;
   onClose: () => void;
   children: ReactNode;
+  /** Settings slide in from the right; the Extensions view opens beside the side bar. */
+  side?: 'left' | 'right';
+  closeLabel?: string;
 };
 
 /** A panel that slides in from the right edge, for settings. */
-export const Drawer = ({ title, onClose, children }: DrawerProps): JSX.Element => {
+export const Drawer = ({
+  title,
+  onClose,
+  children,
+  side = 'right',
+  closeLabel = 'Close settings'
+}: DrawerProps): JSX.Element => {
   const titleId = useId();
   const ref = useRef<HTMLDivElement>(null);
   useDialogFocus(ref);
 
   return createPortal(
     <div
-      className="drawer-backdrop"
+      className={`drawer-backdrop drawer-backdrop--${side}`}
       data-dash=""
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
@@ -164,7 +173,7 @@ export const Drawer = ({ title, onClose, children }: DrawerProps): JSX.Element =
       >
         <header className="drawer-head">
           <h2 id={titleId}>{title}</h2>
-          <button type="button" className="icon-btn" aria-label="Close settings" onClick={onClose}>
+          <button type="button" className="icon-btn" aria-label={closeLabel} onClick={onClose}>
             <X size={16} />
           </button>
         </header>

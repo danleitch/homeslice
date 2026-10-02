@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { MAX_BASE_FISH, MIN_BASE_FISH } from '../lib/koi';
-import { BACKGROUND_STYLES } from '../lib/storage';
+import { BACKGROUND_STYLES, type DreamsMode } from '../lib/storage';
 import type { BackgroundStyle } from '../types';
 
 const BACKGROUND_LABELS: Readonly<Record<BackgroundStyle, string>> = {
   koi: 'Koi pond',
+  dreams: 'Dreams',
   particles: 'Particles',
   wallpaper: 'Wallpaper',
   plain: 'Plain'
@@ -12,6 +13,7 @@ const BACKGROUND_LABELS: Readonly<Record<BackgroundStyle, string>> = {
 
 const BACKGROUND_BLURBS: Readonly<Record<BackgroundStyle, string>> = {
   koi: 'A living pond under the glass',
+  dreams: 'A calm valley, by day or night',
   particles: 'A field of drifting points',
   wallpaper: 'Any image you like',
   plain: 'A quiet gradient'
@@ -38,6 +40,14 @@ type BackgroundSettingsProps = {
   onOpenParticles?: () => void;
   wallpaper: string;
   onWallpaperChange: (url: string) => void;
+  dreamsMode?: DreamsMode;
+  onDreamsModeChange?: (mode: DreamsMode) => void;
+};
+
+const DREAMS_MODE_LABELS: Readonly<Record<DreamsMode, string>> = {
+  auto: 'Match system',
+  day: 'Day',
+  night: 'Night'
 };
 
 /** The backdrop behind the dashboard, and what each one can be tuned with. */
@@ -52,7 +62,9 @@ export const BackgroundSettings = ({
   onOpenMarket,
   onOpenParticles,
   wallpaper,
-  onWallpaperChange
+  onWallpaperChange,
+  dreamsMode = 'auto',
+  onDreamsModeChange
 }: BackgroundSettingsProps): JSX.Element => {
   const [draft, setDraft] = useState(wallpaper);
 
@@ -123,6 +135,22 @@ export const BackgroundSettings = ({
             )}
           </div>
         </>
+      )}
+
+      {background === 'dreams' && onDreamsModeChange && (
+        <label className="settings-select">
+          Time of day
+          <select
+            value={dreamsMode}
+            onChange={(event) => onDreamsModeChange(event.target.value as DreamsMode)}
+          >
+            {(Object.keys(DREAMS_MODE_LABELS) as DreamsMode[]).map((mode) => (
+              <option key={mode} value={mode}>
+                {DREAMS_MODE_LABELS[mode]}
+              </option>
+            ))}
+          </select>
+        </label>
       )}
 
       {background === 'particles' && onOpenParticles && (

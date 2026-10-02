@@ -1,0 +1,227 @@
+/* ===========================================================================
+   Dreams: a calm drawn landscape behind the glass, in day and night palettes.
+   Every colour is a token, so the scene changes with one attribute.
+   ======================================================================== */
+
+.dreams {
+  /* Day: a low golden sun over sage hills and a still lake. */
+  --d-sky-1: #d98a68;
+  --d-sky-2: #eab38f;
+  --d-sky-3: #f4d9bc;
+  --d-sun: #fff2de;
+  --d-glow-1: rgba(255, 238, 210, 0.75);
+  --d-glow-2: rgba(255, 238, 210, 0);
+  --d-cloud: rgba(250, 228, 206, 0.75);
+  --d-star: rgba(255, 255, 255, 0);
+  --d-far: #cfa58c;
+  --d-far-trees: #bf977f;
+  --d-mid: #98b19f;
+  --d-mid-trees: #7c9c8b;
+  --d-lake-1: #c7d3c6;
+  --d-lake-2: #94b2a8;
+  --d-glint: rgba(255, 255, 255, 0.6);
+  --d-island: #5b8274;
+  --d-mist: rgba(255, 238, 222, 0.55);
+  --d-near: #4c776a;
+  --d-near-2: #41695c;
+  --d-near-trees: #365e52;
+  --d-meadow: #6b9479;
+  --d-bird: #4a5f57;
+  --d-shade: rgba(60, 32, 22, 0.28);
+
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--d-sky-3);
+}
+
+.dreams[data-mode='night'] {
+  /* Night: the same valley under a moon, the water holding its light. */
+  --d-sky-1: #111a2e;
+  --d-sky-2: #253152;
+  --d-sky-3: #444d6e;
+  --d-sun: #f3ead2;
+  --d-glow-1: rgba(243, 234, 210, 0.28);
+  --d-glow-2: rgba(243, 234, 210, 0);
+  --d-cloud: rgba(70, 82, 118, 0.6);
+  --d-star: rgba(255, 250, 235, 0.9);
+  --d-far: #323d5a;
+  --d-far-trees: #2b3550;
+  --d-mid: #253648;
+  --d-mid-trees: #1e2e3e;
+  --d-lake-1: #2a3953;
+  --d-lake-2: #142132;
+  --d-glint: rgba(243, 234, 210, 0.4);
+  --d-island: #13202b;
+  --d-mist: rgba(120, 140, 185, 0.2);
+  --d-near: #132430;
+  --d-near-2: #10202a;
+  --d-near-trees: #0c1922;
+  --d-meadow: #172a32;
+  --d-bird: rgba(0, 0, 0, 0);
+  --d-shade: rgba(5, 8, 18, 0.3);
+}
+
+@media (prefers-color-scheme: dark) {
+  .dreams[data-mode='auto'] {
+    --d-sky-1: #111a2e;
+    --d-sky-2: #253152;
+    --d-sky-3: #444d6e;
+    --d-sun: #f3ead2;
+    --d-glow-1: rgba(243, 234, 210, 0.28);
+    --d-glow-2: rgba(243, 234, 210, 0);
+    --d-cloud: rgba(70, 82, 118, 0.6);
+    --d-star: rgba(255, 250, 235, 0.9);
+    --d-far: #323d5a;
+    --d-far-trees: #2b3550;
+    --d-mid: #253648;
+    --d-mid-trees: #1e2e3e;
+    --d-lake-1: #2a3953;
+    --d-lake-2: #142132;
+    --d-glint: rgba(243, 234, 210, 0.4);
+    --d-island: #13202b;
+    --d-mist: rgba(120, 140, 185, 0.2);
+    --d-near: #132430;
+    --d-near-2: #10202a;
+    --d-near-trees: #0c1922;
+    --d-meadow: #172a32;
+    --d-bird: rgba(0, 0, 0, 0);
+    --d-shade: rgba(5, 8, 18, 0.3);
+  }
+}
+
+.dreams-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.dreams-sky-1 {
+  stop-color: var(--d-sky-1);
+}
+.dreams-sky-2 {
+  stop-color: var(--d-sky-2);
+}
+.dreams-sky-3 {
+  stop-color: var(--d-sky-3);
+}
+.dreams-lake-1 {
+  stop-color: var(--d-lake-1);
+}
+.dreams-lake-2 {
+  stop-color: var(--d-lake-2);
+}
+.dreams-glow-1 {
+  stop-color: var(--d-glow-1);
+}
+.dreams-glow-2 {
+  stop-color: var(--d-glow-2);
+}
+
+.dreams-sun {
+  fill: var(--d-sun);
+}
+.dreams-clouds {
+  fill: var(--d-cloud);
+  animation: dreams-drift 140s ease-in-out infinite alternate;
+}
+.dreams-stars {
+  fill: var(--d-star);
+}
+.dreams-stars circle {
+  animation: dreams-twinkle 6s ease-in-out infinite;
+}
+.dreams-far {
+  fill: var(--d-far);
+}
+.dreams-far-trees {
+  fill: var(--d-far-trees);
+}
+.dreams-mid {
+  fill: var(--d-mid);
+}
+.dreams-mid-trees {
+  fill: var(--d-mid-trees);
+}
+.dreams-glints {
+  fill: var(--d-glint);
+}
+.dreams-glints rect {
+  animation: dreams-twinkle 5s ease-in-out infinite;
+}
+.dreams-reflection {
+  fill: var(--d-glow-1);
+  opacity: 0.45;
+  filter: blur(14px);
+}
+.dreams-island {
+  fill: var(--d-island);
+}
+.dreams-mist {
+  fill: var(--d-mist);
+  animation: dreams-drift 70s ease-in-out infinite alternate-reverse;
+}
+.dreams-near {
+  fill: var(--d-near);
+}
+.dreams-near-2 {
+  fill: var(--d-near-2);
+}
+.dreams-near-trees {
+  fill: var(--d-near-trees);
+}
+.dreams-meadow {
+  fill: var(--d-meadow);
+}
+.dreams-birds {
+  fill: none;
+  stroke: var(--d-bird);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  animation: dreams-fly 90s ease-in-out infinite alternate;
+}
+
+/* A soft shade at the top, so the greeting and clock read over a bright sky. */
+.dreams-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, var(--d-shade), transparent 38%);
+}
+
+@keyframes dreams-drift {
+  from {
+    transform: translateX(-60px);
+  }
+  to {
+    transform: translateX(60px);
+  }
+}
+
+@keyframes dreams-fly {
+  from {
+    transform: translate(-120px, 10px);
+  }
+  to {
+    transform: translate(160px, -24px);
+  }
+}
+
+@keyframes dreams-twinkle {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dreams * {
+    animation: none !important;
+  }
+}

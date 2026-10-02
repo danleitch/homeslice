@@ -11,6 +11,7 @@ import {
 import {
   ArrowLeft,
   ArrowRight,
+  Blocks,
   BookmarkPlus,
   ChevronsDownUp,
   ChevronsUpDown,
@@ -21,22 +22,30 @@ import {
   GitBranch,
   LayoutGrid,
   List,
+  PanelLeft,
   Pencil,
   Rows3,
   Settings,
   SlidersHorizontal,
   Trash2
 } from 'lucide-react';
+import { AppSheet } from '../extensions/app-sheet';
+import { ExtensionsPanel } from '../extensions/extensions-panel';
+import { BRANCHIFY_ID, enabledWidgetTypes, iconForApp, isEnabled } from '../extensions/registry';
+import { useAppRoute } from '../extensions/use-app-route';
+import { ActivityBar, type ActivityItem } from './components/activity-bar';
 import { BookmarkDialog, type BookmarkTarget } from './components/bookmark-dialog';
 import { Board } from './components/board';
 import { GroupDialog, type GroupFields } from './components/group-dialog';
 import { ImportDialog } from './components/import-dialog';
 import { SearchBox, type Command } from './components/search-box';
 import { SettingsDrawer, type SettingsTab } from './components/settings-drawer';
+import { PageDots } from './components/page-dots';
 import { EditDock, EmptyBoard, TopBar } from './components/top-bar';
 import { ContextMenu, Toasts, type MenuItem } from './components/ui';
 import { WidgetDialog, WidgetPicker } from './components/widget-dialog';
-import { useDashboard } from './hooks/use-dashboard';
+import { useDashboard, type ApplyToPage } from './hooks/use-dashboard';
+import { usePage } from './hooks/use-page';
 import { clearRemoteCache } from './hooks/use-remote';
 import {
   addBookmark,
@@ -55,8 +64,14 @@ import {
   type BookmarkFields
 } from './lib/edit';
 import {
+  PAGE_COUNT,
   WIDGET_LABELS,
+  allGroups,
   createStarterConfig,
+  createStarterPage,
+  emptyConfig,
+  pageOf,
+  withPage,
   type Bookmark,
   type BookmarkStyle,
   type DashboardConfig,
@@ -76,7 +91,7 @@ import { exportYaml, planImport, type ImportPlan } from './lib/yaml';
 import './dashboard.css';
 
 type DashboardProps = {
-  /** The app's own toolbar buttons: the koi market while the pond swims, the particle controls. */
+  /** The app's own bar buttons: the koi market while the pond swims, the particle controls. */
   headerExtras?: ReactNode;
   /** Background controls for the Appearance settings. */
   appearance: (closeSettings: () => void) => ReactNode;
@@ -141,7 +156,19 @@ export const Dashboard = ({
   onOpenBranchify,
   onRestored
 }: DashboardProps): JSX.Element => {
-  const { config, apply, toasts, notify, dismiss, undo } = useDashboard();
+  const { config: dashboard, apply: applyAll, toasts, notify, dismiss, undo } = useDashboard();
+  const { page, leaving, direction, go, settle } = usePage();
+  // Everything below edits the page in view; only a restore or a reset reaches past it.
+  const config = useMemo(() => pageOf(dashboard, page), [dashboard, page]);
+  const apply = useCallback<ApplyToPage>(
+    (change, undoMessage) =>
+      applyAll((current) => {
+        const view = pageOf(current, page);
+        const next = change(view);
+        return next === view ? current : withPage(current, page, next);
+      }, undoMessage),
+    [applyAll, page]
+  );
   const [editing, setEditing] = useState(false);
   const [bookmarkDialog, setBookmarkDialog] = useState<BookmarkDialogState | null>(null);
   const [groupDialog, setGroupDialog] = useState<GroupDialogState | null>(null);
@@ -152,6 +179,11 @@ export const Dashboard = ({
   const [importing, setImporting] = useState<{ plan: ImportPlan; fileName: string } | null>(null);
   const [dropHint, setDropHint] = useState<'link' | 'file' | null>(null);
   const [freshId, setFreshId] = useState<string | null>(null);
+  const [extensionsOpen, setExtensionsOpen] = useState(false);
+  const [appId, openApp, closeApp] = useAppRoute();
+  const { extensions } = dashboard;
+  const branchifyOn = isEnabled(extensions, BRANCHIFY_ID);
+  const openedApp = appId ? extensions.apps.find((app) => app.id === appId) : undefined;
   const searchRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -401,7 +433,7 @@ export const Dashboard = ({
   };
 
   const exportBoard = useCallback((): void => {
-    const yaml = exportYaml(config, collectSavedState());
+    const yaml = exportYaml(dashboard, collectSavedState());
     const fileName = `dashboard-${new Date().toISOString().slice(0, 10)}.yaml`;
     const link = document.createElement('a');
     link.href = URL.createObjectURL(new Blob([yaml], { type: 'text/yaml' }));
@@ -411,7 +443,7 @@ export const Dashboard = ({
     link.remove();
     window.setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
     notify(`Exported ${fileName}`, 'success');
-  }, [config, notify]);
+  }, [dashboard, notify]);
 
   const importFile = useCallback(
     async (file: File): Promise<void> => {
@@ -467,29 +499,54 @@ export const Dashboard = ({
     apply((current) => ({ ...current, groups: plan.groups }), `Replaced your bookmarks`);
   };
 
+  /** Starting over clears every page; the example fills the first. */
   const resetBoard = (kind: 'example' | 'empty'): void => {
-    const starter = createStarterConfig();
+    const fresh = kind === 'example' ? createStarterConfig() : emptyConfig();
     clearRemoteCache();
-    apply(
-      (current) => ({
-        ...current,
-        widgets: kind === 'example' ? starter.widgets : [],
-        groups: kind === 'example' ? starter.groups : []
-      }),
+    applyAll(
+      (current) => ({ ...current, pages: fresh.pages }),
       kind === 'example' ? 'Started again from the example' : 'Cleared the board'
     );
     setSettingsTab(null);
+    go(0);
+  };
+
+  /** An empty page asked for the example: just that page gets it. */
+  const fillWithExample = (): void => {
+    clearRemoteCache();
+    apply((current) => ({ ...current, ...createStarterPage() }));
   };
 
   const commands = useMemo<Command[]>(
     () => [
+      ...(branchifyOn
+        ? [
+            {
+              id: 'branchify',
+              label: 'Open Branchify',
+              icon: <GitBranch size={15} />,
+              keywords: 'git branch name tool',
+              hint: 'B',
+              run: onOpenBranchify
+            }
+          ]
+        : []),
+      ...extensions.apps.map((app) => {
+        const Icon = iconForApp(app);
+        return {
+          id: `app:${app.id}`,
+          label: `Open ${app.name}`,
+          icon: <Icon size={15} />,
+          keywords: `app extension ${app.url}`,
+          run: () => openApp(app.id)
+        };
+      }),
       {
-        id: 'branchify',
-        label: 'Open Branchify',
-        icon: <GitBranch size={15} />,
-        keywords: 'git branch name tool',
-        hint: 'B',
-        run: onOpenBranchify
+        id: 'extensions',
+        label: 'Extensions',
+        icon: <Blocks size={15} />,
+        keywords: 'apps tools widgets install marketplace',
+        run: () => setExtensionsOpen(true)
       },
       {
         id: 'add',
@@ -529,8 +586,58 @@ export const Dashboard = ({
         run: exportBoard
       }
     ],
-    [exportBoard, onOpenBranchify, openAdd]
+    [branchifyOn, exportBoard, extensions.apps, onOpenBranchify, openAdd, openApp]
   );
+
+  const setPinBar = useCallback(
+    (pinBar: boolean): void => applyAll((current) => ({ ...current, pinBar })),
+    [applyAll]
+  );
+
+  const barItems: ActivityItem[] = [
+    ...(branchifyOn
+      ? [
+          {
+            id: 'branchify',
+            label: 'Branchify',
+            icon: <GitBranch size={20} aria-hidden="true" />,
+            shortcut: 'B',
+            onSelect: onOpenBranchify
+          }
+        ]
+      : []),
+    ...extensions.apps.map((app): ActivityItem => {
+      const Icon = iconForApp(app);
+      return {
+        id: `app:${app.id}`,
+        label: app.name,
+        icon: <Icon size={20} aria-hidden="true" />,
+        active: app.id === appId,
+        onSelect: () => openApp(app.id)
+      };
+    })
+  ];
+
+  const barMenu = (event: MouseEvent): void =>
+    setMenu({
+      x: event.clientX,
+      y: event.clientY,
+      label: 'Side bar',
+      items: [
+        {
+          label: 'Don’t auto-hide',
+          icon: <PanelLeft size={15} />,
+          checked: dashboard.pinBar,
+          onSelect: () => setPinBar(!dashboard.pinBar)
+        },
+        'separator',
+        {
+          label: 'Extensions…',
+          icon: <Blocks size={15} />,
+          onSelect: () => setExtensionsOpen(true)
+        }
+      ]
+    });
 
   // Keyboard shortcuts, for when nothing else wants the keys.
   useEffect(() => {
@@ -573,8 +680,10 @@ export const Dashboard = ({
           break;
         case 'b':
         case 'B':
-          event.preventDefault();
-          onOpenBranchify();
+          if (branchifyOn) {
+            event.preventDefault();
+            onOpenBranchify();
+          }
           break;
         case 'Escape':
           setEditing(false);
@@ -584,7 +693,7 @@ export const Dashboard = ({
 
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [onOpenBranchify, openAdd, undo]);
+  }, [branchifyOn, onOpenBranchify, openAdd, undo]);
 
   // A link pasted anywhere that isn't a text field starts a new bookmark.
   useEffect(() => {
@@ -659,7 +768,58 @@ export const Dashboard = ({
     };
   }, [importFile, openAdd]);
 
-  const isEmpty = config.groups.length === 0 && config.widgets.length === 0 && !editing;
+  // The page in view gets everything; one sliding out is only there to be seen.
+  const renderPage = (index: number): JSX.Element => {
+    const view = index === page ? config : pageOf(dashboard, index);
+    const isEmpty = view.groups.length === 0 && view.widgets.length === 0 && !editing;
+
+    return isEmpty ? (
+      <EmptyBoard
+        onAddBookmark={() => openAdd()}
+        onImport={() => fileRef.current?.click()}
+        onExample={fillWithExample}
+      />
+    ) : (
+      <Board
+        config={view}
+        editing={editing}
+        apply={apply}
+        freshId={freshId}
+        onEditBookmark={(bookmark) => {
+          const found = findBookmark(config.groups, bookmark.id);
+
+          if (found) {
+            setBookmarkDialog({ mode: 'edit', bookmark, groupId: found.group.id });
+          }
+        }}
+        onDeleteBookmark={removeBookmark}
+        onBookmarkMenu={bookmarkMenu}
+        onAddBookmark={(groupId) => openAdd({ groupId })}
+        onGroupMenu={groupMenu}
+        onToggleGroup={toggleGroup}
+        onAddGroup={() => setGroupDialog({ mode: 'add' })}
+        onAddWidget={() => setPickerOpen(true)}
+        onConfigureWidget={setWidgetDialog}
+        onRemoveWidget={removeWidget}
+        onDropLink={(groupId, url, title) => {
+          let addedId = '';
+          apply((current) => {
+            const result = addBookmark(
+              current,
+              { groupId },
+              { url, name: title || guessName(url), description: '', icon: '' }
+            );
+            addedId = result.bookmark.id;
+            return result.config;
+          });
+          flash(addedId);
+        }}
+      />
+    );
+  };
+
+  // React 18 doesn't know `inert` yet, so it goes through as a plain attribute.
+  const inert = { inert: '' } as Record<string, string>;
 
   return (
     <div
@@ -667,18 +827,22 @@ export const Dashboard = ({
       data-editing={editing ? 'on' : undefined}
       style={{ '--glass-blur': `${config.glass.blur}px` } as CSSProperties}
     >
-      <TopBar
-        name={config.name}
-        clock={config.clock}
-        editing={editing}
+      <ActivityBar
+        pinned={dashboard.pinBar}
+        items={barItems}
         extras={headerExtras}
-        onToggleEdit={() => setEditing((current) => !current)}
+        editing={editing}
+        extensionsOpen={extensionsOpen}
+        onOpenExtensions={() => setExtensionsOpen(true)}
         onAddBookmark={() => openAdd()}
-        onOpenBranchify={onOpenBranchify}
+        onToggleEdit={() => setEditing((current) => !current)}
         onOpenSettings={() => setSettingsTab('general')}
-      >
+        onContextMenu={barMenu}
+      />
+
+      <TopBar name={config.name} clock={config.clock}>
         <SearchBox
-          groups={config.groups}
+          groups={allGroups(dashboard)}
           engine={config.search}
           newTab={config.newTab}
           commands={commands}
@@ -686,49 +850,28 @@ export const Dashboard = ({
         />
       </TopBar>
 
-      {isEmpty ? (
-        <EmptyBoard
-          onAddBookmark={() => openAdd()}
-          onImport={() => fileRef.current?.click()}
-          onExample={() => resetBoard('example')}
-        />
-      ) : (
-        <Board
-          config={config}
-          editing={editing}
-          apply={apply}
-          freshId={freshId}
-          onEditBookmark={(bookmark) => {
-            const found = findBookmark(config.groups, bookmark.id);
+      <div className="pages" data-moving={leaving !== null ? '' : undefined}>
+        {Array.from({ length: PAGE_COUNT }, (_unused, index) => index)
+          .filter((index) => index === page || index === leaving)
+          .map((index) => (
+            <div
+              key={index}
+              className="page"
+              data-state={index === page ? 'current' : 'leaving'}
+              data-direction={direction ?? undefined}
+              {...(index === page ? {} : { 'aria-hidden': true, ...inert })}
+              onAnimationEnd={(event) => {
+                if (event.target === event.currentTarget && index !== page) {
+                  settle(index);
+                }
+              }}
+            >
+              {renderPage(index)}
+            </div>
+          ))}
+      </div>
 
-            if (found) {
-              setBookmarkDialog({ mode: 'edit', bookmark, groupId: found.group.id });
-            }
-          }}
-          onDeleteBookmark={removeBookmark}
-          onBookmarkMenu={bookmarkMenu}
-          onAddBookmark={(groupId) => openAdd({ groupId })}
-          onGroupMenu={groupMenu}
-          onToggleGroup={toggleGroup}
-          onAddGroup={() => setGroupDialog({ mode: 'add' })}
-          onAddWidget={() => setPickerOpen(true)}
-          onConfigureWidget={setWidgetDialog}
-          onRemoveWidget={removeWidget}
-          onDropLink={(groupId, url, title) => {
-            let addedId = '';
-            apply((current) => {
-              const result = addBookmark(
-                current,
-                { groupId },
-                { url, name: title || guessName(url), description: '', icon: '' }
-              );
-              addedId = result.bookmark.id;
-              return result.config;
-            });
-            flash(addedId);
-          }}
-        />
-      )}
+      <PageDots count={PAGE_COUNT} page={page} direction={direction} onGo={go} />
 
       <input
         ref={fileRef}
@@ -796,6 +939,7 @@ export const Dashboard = ({
 
       {pickerOpen && (
         <WidgetPicker
+          types={enabledWidgetTypes(extensions)}
           onClose={() => setPickerOpen(false)}
           onPick={(type) => {
             setPickerOpen(false);
@@ -807,7 +951,10 @@ export const Dashboard = ({
             });
 
             // Most widgets want a word about what to show before they are useful.
-            if (created.widget && type !== 'calendar' && type !== 'hackernews') {
+            if (
+              created.widget &&
+              !['calendar', 'hackernews', 'github', 'benchlm', 'tv'].includes(type)
+            ) {
               setWidgetDialog(created.widget);
             }
           }}
@@ -827,17 +974,33 @@ export const Dashboard = ({
 
       {settingsTab && (
         <SettingsDrawer
-          config={config}
+          config={dashboard}
           initialTab={settingsTab}
           appearance={appearance(() => setSettingsTab(null))}
           onChange={(patch) => apply((current) => ({ ...current, ...patch }))}
-          onReplace={(next: DashboardConfig, message) => apply(() => next, message)}
+          onReplace={(next: DashboardConfig, message) => applyAll(() => next, message)}
           onExport={exportBoard}
           onImportFile={(file) => void importFile(file)}
           onReset={resetBoard}
           onClose={() => setSettingsTab(null)}
         />
       )}
+
+      {extensionsOpen && (
+        <ExtensionsPanel
+          extensions={extensions}
+          onChange={(next, message) =>
+            applyAll((current) => ({ ...current, extensions: next }), message)
+          }
+          onOpenApp={(id) => {
+            setExtensionsOpen(false);
+            openApp(id);
+          }}
+          onClose={() => setExtensionsOpen(false)}
+        />
+      )}
+
+      {openedApp && <AppSheet app={openedApp} onClose={closeApp} />}
 
       {importing && (
         <ImportDialog

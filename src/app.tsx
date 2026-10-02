@@ -12,6 +12,7 @@ import { marketFishOf } from './lib/koi-inspect';
 import {
   BACKGROUND_STORAGE_KEY,
   BASE_FISH_STORAGE_KEY,
+  DREAMS_MODE_STORAGE_KEY,
   FISH_NAMES_STORAGE_KEY,
   LILY_PLACEMENTS_STORAGE_KEY,
   MAX_FISH_NAMES,
@@ -19,12 +20,14 @@ import {
   WALLPAPER_STORAGE_KEY,
   parseBackground,
   parseBaseFish,
+  parseDreamsMode,
   parseFishNames,
   parseLilyPlacements,
   parseParticleSettings,
   parseWallpaper,
   readStorage,
   writeStorage,
+  type DreamsMode,
   type FishNames
 } from './lib/storage';
 import type { ParticleSettings } from './lib/particles';
@@ -38,6 +41,13 @@ import type { BackgroundStyle } from './types';
 const Koi3dBackground = lazy(() =>
   import('./components/koi3d-background').then((module) => ({
     default: module.Koi3dBackground
+  }))
+);
+
+// The Dreams landscape is drawn in SVG; it arrives only for those who choose it.
+const DreamsBackground = lazy(() =>
+  import('./components/dreams-background').then((module) => ({
+    default: module.DreamsBackground
   }))
 );
 
@@ -101,6 +111,9 @@ const Shell = ({ onRestored }: ShellProps): JSX.Element => {
   const [wallpaper, setWallpaper] = useState(() =>
     parseWallpaper(readStorage(WALLPAPER_STORAGE_KEY))
   );
+  const [dreamsMode, setDreamsMode] = useState<DreamsMode>(() =>
+    parseDreamsMode(readStorage(DREAMS_MODE_STORAGE_KEY))
+  );
   const [baseFishCount, setBaseFishCount] = useState<number>(() =>
     parseBaseFish(readStorage(BASE_FISH_STORAGE_KEY))
   );
@@ -129,6 +142,10 @@ const Shell = ({ onRestored }: ShellProps): JSX.Element => {
   useEffect(() => {
     writeStorage(WALLPAPER_STORAGE_KEY, wallpaper);
   }, [wallpaper]);
+
+  useEffect(() => {
+    writeStorage(DREAMS_MODE_STORAGE_KEY, dreamsMode);
+  }, [dreamsMode]);
 
   useEffect(() => {
     writeStorage(BASE_FISH_STORAGE_KEY, String(baseFishCount));
@@ -206,6 +223,8 @@ const Shell = ({ onRestored }: ShellProps): JSX.Element => {
       }}
       wallpaper={wallpaper}
       onWallpaperChange={setWallpaper}
+      dreamsMode={dreamsMode}
+      onDreamsModeChange={setDreamsMode}
     />
   );
 
@@ -223,6 +242,11 @@ const Shell = ({ onRestored }: ShellProps): JSX.Element => {
             fishNames={fishNames}
             onRenameFish={renameFish}
           />
+        </Suspense>
+      )}
+      {background === 'dreams' && (
+        <Suspense fallback={null}>
+          <DreamsBackground mode={dreamsMode} />
         </Suspense>
       )}
       {background === 'particles' && (

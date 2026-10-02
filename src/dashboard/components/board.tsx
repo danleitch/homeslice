@@ -29,7 +29,7 @@ import {
 import { SortableContext, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { FolderPlus, LayoutGrid } from 'lucide-react';
-import type { UseDashboard } from '../hooks/use-dashboard';
+import type { ApplyToPage } from '../hooks/use-dashboard';
 import { useJoinedRef, useMasonryRef } from '../hooks/use-masonry';
 import { useSpanResize } from '../hooks/use-span-resize';
 import {
@@ -43,7 +43,7 @@ import {
 import {
   GRID_COLUMNS,
   type Bookmark,
-  type DashboardConfig,
+  type PageConfig,
   type Group,
   type Widget
 } from '../lib/model';
@@ -90,9 +90,9 @@ export type BoardActions = {
 type BoardProps = BoardActions & {
   /** A bookmark just added or moved, which glows for a moment. */
   freshId?: string | null;
-  config: DashboardConfig;
+  config: PageConfig;
   editing: boolean;
-  apply: UseDashboard['apply'];
+  apply: ApplyToPage;
 };
 
 const GridGuides = (): JSX.Element => (
@@ -180,7 +180,7 @@ type SortableGroupProps = {
   linkOver: boolean;
   freshId: string | null;
   actions: BoardActions;
-  apply: UseDashboard['apply'];
+  apply: ApplyToPage;
   onResizing: (resizing: boolean) => void;
   onLinkOver: (groupId: string | null) => void;
 };
@@ -279,11 +279,11 @@ const SortableGroup = ({
 
 type SortableWidgetProps = {
   widget: Widget;
-  config: DashboardConfig;
+  config: PageConfig;
   editing: boolean;
   gridRef: RefObject<HTMLDivElement>;
   actions: BoardActions;
-  apply: UseDashboard['apply'];
+  apply: ApplyToPage;
   onResizing: (resizing: boolean) => void;
 };
 

@@ -51,7 +51,7 @@ describe('dashboard YAML', () => {
     expect(plan.ok).toBe(true);
     expect(plan.ok && plan.value.source).toBe('dashboard');
     expect(plan.ok && plan.value.saved).toEqual({ background: 'koi', 'pond-fish': 4 });
-    expect(plan.ok && plan.value.config?.groups).toHaveLength(3);
+    expect(plan.ok && plan.value.config?.pages[0].groups).toHaveLength(3);
   });
 });
 

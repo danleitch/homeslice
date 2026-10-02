@@ -6,12 +6,15 @@
  * are left out, so the file reads like something a person wrote.
  */
 import { dump, load, YAMLException } from 'js-yaml';
+import { extensionsToYaml } from './extensions-config';
 import {
+  allGroups,
   createBookmark,
   createGroup,
   isRecord,
   sanitizeConfig,
   type Bookmark,
+  type BoardPage,
   type DashboardConfig,
   type Group,
   type Widget
@@ -25,6 +28,7 @@ export const YAML_HEADER = `# Your dashboard: bookmarks, widgets and settings.
 #   si-github (Simple Icons), mdi-home (Material Design Icons),
 #   sh-jellyfin (selfh.st icons), plex.png (dashboard-icons),
 #   an emoji like 🚀, or the address of any image.
+# Each of the three pages has its own widgets and groups, in order.
 # Widths are columns of a 12-column board, from 3 to 12.
 `;
 
@@ -51,6 +55,11 @@ const widgetToYaml = (widget: Widget): Record<string, unknown> => {
   return rest;
 };
 
+const pageToYaml = (page: BoardPage): Record<string, unknown> => ({
+  widgets: page.widgets.map(widgetToYaml),
+  groups: page.groups.map(groupToYaml)
+});
+
 /** The plain object the YAML is written from. */
 export const configToObject = (config: DashboardConfig): Record<string, unknown> => ({
   title: config.title,
@@ -59,8 +68,11 @@ export const configToObject = (config: DashboardConfig): Record<string, unknown>
   search: config.search,
   clock: config.clock,
   glass: { blur: config.glass.blur, tint: config.glass.tint },
-  widgets: config.widgets.map(widgetToYaml),
-  groups: config.groups.map(groupToYaml)
+  ...(config.pinBar ? { pinBar: true } : {}),
+  ...(extensionsToYaml(config.extensions)
+    ? { extensions: extensionsToYaml(config.extensions) }
+    : {}),
+  pages: config.pages.map(pageToYaml)
 });
 
 const dumpYaml = (value: unknown): string =>
@@ -103,7 +115,7 @@ export const yamlToConfig = (text: string): ParseResult<DashboardConfig> => {
   if (!isRecord(parsed.value)) {
     return {
       ok: false,
-      problem: { message: 'Expected settings like "title:" and "groups:" at the top.', line: 1 }
+      problem: { message: 'Expected settings like "title:" and "pages:" at the top.', line: 1 }
     };
   }
 
@@ -125,7 +137,7 @@ export type SavedState = Record<string, unknown>;
 export type ImportPlan = {
   /** What kind of file this was, for the confirmation. */
   source: 'dashboard' | 'homepage' | 'browser';
-  /** The groups the file brings. */
+  /** The groups the file brings, from every page of a dashboard export. */
   groups: Group[];
   /** A full dashboard export brings its settings and widgets too. */
   config: DashboardConfig | null;
@@ -306,13 +318,16 @@ export const planImport = (text: string): ParseResult<ImportPlan> => {
     return { ok: true, value: { source: 'homepage', groups: homepage, config: null, saved: null } };
   }
 
-  if (isRecord(parsed.value) && ('groups' in parsed.value || 'widgets' in parsed.value)) {
+  if (
+    isRecord(parsed.value) &&
+    ('pages' in parsed.value || 'groups' in parsed.value || 'widgets' in parsed.value)
+  ) {
     const config = sanitizeConfig(parsed.value);
     const saved = isRecord(parsed.value.saved) ? parsed.value.saved : null;
 
     return {
       ok: true,
-      value: { source: 'dashboard', groups: config.groups, config, saved }
+      value: { source: 'dashboard', groups: allGroups(config), config, saved }
     };
   }
 

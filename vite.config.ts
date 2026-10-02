@@ -1,6 +1,6 @@
 /// <reference types="vitest/config" />
 import { Agent } from 'node:https';
-import { defineConfig, type ProxyOptions } from 'vite';
+import { defineConfig, loadEnv, type ProxyOptions } from 'vite';
 
 /**
  * Yahoo turns away TLS handshakes that look like a script's (Node's default
@@ -43,32 +43,65 @@ const marketsProxy: Record<string, ProxyOptions> = {
   }
 };
 
-export default defineConfig({
-  server: {
-    host: true,
-    port: 5173,
-    proxy: marketsProxy
+/** One of the few values a relay passes on; anything else becomes the first. */
+const oneOf = (path: string, name: string, options: readonly string[]): string => {
+  const value = new URL(path, 'http://relay').searchParams.get(name) ?? '';
+  return options.includes(value) ? value : options[0];
+};
+
+/**
+ * BenchLM and TMDB need a key, which lives in .env beside this file and never
+ * reaches the page: these relays add it, as nginx.conf does in the Docker
+ * image. Only the one endpoint each widget reads, with its settings checked.
+ */
+const keyedProxies = (env: Record<string, string>): Record<string, ProxyOptions> => ({
+  '/api/benchlm/rankings': {
+    target: 'https://data.benchlm.ai',
+    changeOrigin: true,
+    rewrite: (path) =>
+      `/v1/rankings/current?surface=${oneOf(path, 'surface', ['overall', 'coding', 'agentic', 'knowledge'])}&limit=50`,
+    headers: { Authorization: `Bearer ${env.BENCHLM_TOKEN ?? ''}` }
   },
-  preview: {
-    proxy: marketsProxy
-  },
-  test: {
-    globals: true,
-    environment: 'jsdom',
-    setupFiles: './src/test/setup.ts',
-    // Only this app's tests; reference checkouts beside it bring their own.
-    include: ['src/**/*.test.{ts,tsx}'],
-    css: true,
-    coverage: {
-      provider: 'v8',
-      include: ['src/**/*.{ts,tsx}'],
-      exclude: [
-        'src/**/*.test.{ts,tsx}',
-        'src/main.tsx',
-        'src/test/**',
-        'src/declarations.d.ts',
-        'src/vendor/**'
-      ]
-    }
+  '/api/tmdb/trending-tv': {
+    target: 'https://api.themoviedb.org',
+    changeOrigin: true,
+    rewrite: (path) => `/3/trending/tv/${oneOf(path, 'window', ['week', 'day'])}?language=en-US`,
+    headers: { Authorization: `Bearer ${env.TMDB_TOKEN ?? ''}` }
   }
+});
+
+export default defineConfig(({ mode }) => {
+  // Every variable, not only VITE_ ones; none of these are put in the bundle.
+  const env = loadEnv(mode, process.cwd(), '');
+  const proxy = { ...marketsProxy, ...keyedProxies(env) };
+
+  return {
+    server: {
+      host: true,
+      port: 5173,
+      proxy
+    },
+    preview: {
+      proxy
+    },
+    test: {
+      globals: true,
+      environment: 'jsdom',
+      setupFiles: './src/test/setup.ts',
+      // Only this app's tests; reference checkouts beside it bring their own.
+      include: ['src/**/*.test.{ts,tsx}'],
+      css: true,
+      coverage: {
+        provider: 'v8',
+        include: ['src/**/*.{ts,tsx}'],
+        exclude: [
+          'src/**/*.test.{ts,tsx}',
+          'src/main.tsx',
+          'src/test/**',
+          'src/declarations.d.ts',
+          'src/vendor/**'
+        ]
+      }
+    }
+  };
 });

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { DashboardConfig } from '../lib/model';
+import type { DashboardConfig, PageConfig } from '../lib/model';
 import { DASHBOARD_STORAGE_KEY, loadConfig, saveConfig } from '../lib/storage';
 import { yamlToConfig } from '../lib/yaml';
 
@@ -32,6 +32,9 @@ export type UseDashboard = {
   dismiss: (id: number) => void;
   undo: (id?: number) => boolean;
 };
+
+/** `apply` for the page in view: the change sees that page, with the shared settings. */
+export type ApplyToPage = (change: (page: PageConfig) => PageConfig, undoMessage?: string) => void;
 
 let toastCounter = 0;
 

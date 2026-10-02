@@ -1,5 +1,5 @@
 /**
- * Every change a visitor can make to the board, as pure functions from one
+ * Every change a visitor can make to a page of the board, as pure functions from one
  * config to the next. The hook keeps the previous config for undo, so none of
  * these need to worry about taking anything back.
  */
@@ -9,7 +9,7 @@ import {
   createGroup,
   createWidget,
   type Bookmark,
-  type DashboardConfig,
+  type PageConfig,
   type Group,
   type Widget,
   type WidgetType
@@ -38,10 +38,10 @@ export const findBookmark = (
 };
 
 const mapGroup = (
-  config: DashboardConfig,
+  config: PageConfig,
   groupId: string,
   change: (group: Group) => Group
-): DashboardConfig => ({
+): PageConfig => ({
   ...config,
   groups: config.groups.map((group) => (group.id === groupId ? change(group) : group))
 });
@@ -50,10 +50,10 @@ export type BookmarkFields = Omit<Bookmark, 'id'>;
 
 /** Adds a bookmark to the end of a group; a group that doesn't exist yet is created by name. */
 export const addBookmark = (
-  config: DashboardConfig,
+  config: PageConfig,
   target: { groupId: string } | { newGroup: string },
   fields: BookmarkFields
-): { config: DashboardConfig; bookmark: Bookmark; groupId: string } => {
+): { config: PageConfig; bookmark: Bookmark; groupId: string } => {
   const bookmark = createBookmark(fields);
 
   if ('newGroup' in target) {
@@ -77,10 +77,10 @@ export const addBookmark = (
 };
 
 export const updateBookmark = (
-  config: DashboardConfig,
+  config: PageConfig,
   bookmarkId: string,
   patch: Partial<BookmarkFields>
-): DashboardConfig => ({
+): PageConfig => ({
   ...config,
   groups: config.groups.map((group) =>
     group.bookmarks.some((bookmark) => bookmark.id === bookmarkId)
@@ -94,7 +94,7 @@ export const updateBookmark = (
   )
 });
 
-export const deleteBookmark = (config: DashboardConfig, bookmarkId: string): DashboardConfig => ({
+export const deleteBookmark = (config: PageConfig, bookmarkId: string): PageConfig => ({
   ...config,
   groups: config.groups.map((group) => ({
     ...group,
@@ -139,48 +139,48 @@ export const moveBookmark = (
 };
 
 export const addGroup = (
-  config: DashboardConfig,
+  config: PageConfig,
   name: string,
   patch: Partial<Omit<Group, 'id' | 'bookmarks'>> = {}
-): { config: DashboardConfig; group: Group } => {
+): { config: PageConfig; group: Group } => {
   const group = { ...createGroup(name), ...patch };
   return { config: { ...config, groups: [...config.groups, group] }, group };
 };
 
 export const updateGroup = (
-  config: DashboardConfig,
+  config: PageConfig,
   groupId: string,
   patch: Partial<Omit<Group, 'id'>>
-): DashboardConfig =>
+): PageConfig =>
   mapGroup(config, groupId, (group) => ({
     ...group,
     ...patch,
     ...(patch.width !== undefined ? { width: clampSpan(patch.width) } : {})
   }));
 
-export const deleteGroup = (config: DashboardConfig, groupId: string): DashboardConfig => ({
+export const deleteGroup = (config: PageConfig, groupId: string): PageConfig => ({
   ...config,
   groups: config.groups.filter((group) => group.id !== groupId)
 });
 
-export const moveGroup = (config: DashboardConfig, from: number, to: number): DashboardConfig => ({
+export const moveGroup = (config: PageConfig, from: number, to: number): PageConfig => ({
   ...config,
   groups: arrayMove(config.groups, from, to)
 });
 
 export const addWidget = (
-  config: DashboardConfig,
+  config: PageConfig,
   type: WidgetType
-): { config: DashboardConfig; widget: Widget } => {
+): { config: PageConfig; widget: Widget } => {
   const widget = createWidget(type);
   return { config: { ...config, widgets: [...config.widgets, widget] }, widget };
 };
 
 export const updateWidget = (
-  config: DashboardConfig,
+  config: PageConfig,
   widgetId: string,
   patch: Partial<Widget>
-): DashboardConfig => ({
+): PageConfig => ({
   ...config,
   widgets: config.widgets.map((widget) =>
     widget.id === widgetId
@@ -195,21 +195,18 @@ export const updateWidget = (
   )
 });
 
-export const deleteWidget = (config: DashboardConfig, widgetId: string): DashboardConfig => ({
+export const deleteWidget = (config: PageConfig, widgetId: string): PageConfig => ({
   ...config,
   widgets: config.widgets.filter((widget) => widget.id !== widgetId)
 });
 
-export const moveWidget = (config: DashboardConfig, from: number, to: number): DashboardConfig => ({
+export const moveWidget = (config: PageConfig, from: number, to: number): PageConfig => ({
   ...config,
   widgets: arrayMove(config.widgets, from, to)
 });
 
 /** Adds imported groups after the existing ones, merging into any group with the same name. */
-export const mergeGroups = (
-  config: DashboardConfig,
-  incoming: readonly Group[]
-): DashboardConfig => {
+export const mergeGroups = (config: PageConfig, incoming: readonly Group[]): PageConfig => {
   const groups = config.groups.map((group) => ({ ...group, bookmarks: [...group.bookmarks] }));
 
   for (const group of incoming) {

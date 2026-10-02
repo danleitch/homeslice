@@ -8,25 +8,28 @@ import {
   updateGroup,
   updateWidget
 } from './edit';
-import { sanitizeConfig, type DashboardConfig } from './model';
+import { pageOf, sanitizeConfig, type PageConfig } from './model';
 
-const board = (): DashboardConfig =>
-  sanitizeConfig({
-    widgets: [{ type: 'weather', location: 'Oslo' }],
-    groups: [
-      {
-        name: 'Code',
-        bookmarks: [
-          { name: 'GitHub', url: 'https://github.com' },
-          { name: 'GitLab', url: 'https://gitlab.com' },
-          { name: 'npm', url: 'https://npmjs.com' }
-        ]
-      },
-      { name: 'Read', bookmarks: [{ name: 'HN', url: 'https://news.ycombinator.com' }] }
-    ]
-  });
+const board = (): PageConfig =>
+  pageOf(
+    sanitizeConfig({
+      widgets: [{ type: 'weather', location: 'Oslo' }],
+      groups: [
+        {
+          name: 'Code',
+          bookmarks: [
+            { name: 'GitHub', url: 'https://github.com' },
+            { name: 'GitLab', url: 'https://gitlab.com' },
+            { name: 'npm', url: 'https://npmjs.com' }
+          ]
+        },
+        { name: 'Read', bookmarks: [{ name: 'HN', url: 'https://news.ycombinator.com' }] }
+      ]
+    }),
+    0
+  );
 
-const names = (config: DashboardConfig): string[][] =>
+const names = (config: PageConfig): string[][] =>
   config.groups.map((group) => group.bookmarks.map((bookmark) => bookmark.name));
 
 describe('board edits', () => {
@@ -107,7 +110,7 @@ describe('board edits', () => {
         },
         { name: 'New', bookmarks: [{ name: 'X', url: 'https://x.example' }] }
       ]
-    }).groups;
+    }).pages[0].groups;
 
     expect(names(mergeGroups(config, incoming))).toEqual([
       ['GitHub', 'GitLab', 'npm', 'Bitbucket'],

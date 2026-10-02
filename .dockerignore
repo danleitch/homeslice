@@ -7,3 +7,6 @@ Dockerfile
 docker-compose.yml
 /homepage
 /glance
+.env
+.env.*
+!.env.example

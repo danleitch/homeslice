@@ -1,12 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { GRID_COLUMNS, MIN_SPAN, countBookmarks, createWidget, sanitizeConfig } from './model';
+import {
+  GRID_COLUMNS,
+  MIN_SPAN,
+  PAGE_COUNT,
+  countBookmarks,
+  createWidget,
+  emptyPage,
+  pageOf,
+  sanitizeConfig,
+  withPage
+} from './model';
 
 describe('sanitizeConfig', () => {
   it('turns anything that is not a board into an empty one', () => {
     for (const value of [null, 'nope', 42, ['a']]) {
       const config = sanitizeConfig(value);
-      expect(config.groups).toEqual([]);
-      expect(config.widgets).toEqual([]);
+      expect(config.pages[0].groups).toEqual([]);
+      expect(config.pages[0].widgets).toEqual([]);
       expect(config.title).toBe('Home');
     }
   });
@@ -21,8 +31,8 @@ describe('sanitizeConfig', () => {
       ]
     });
 
-    expect(config.groups[0].bookmarks).toHaveLength(1);
-    expect(config.groups[0].bookmarks[0].url).toBe('https://a.example');
+    expect(config.pages[0].groups[0].bookmarks).toHaveLength(1);
+    expect(config.pages[0].groups[0].bookmarks[0].url).toBe('https://a.example');
   });
 
   it('keeps widths on the board and styles it knows', () => {
@@ -34,8 +44,8 @@ describe('sanitizeConfig', () => {
       ]
     });
 
-    expect(config.groups.map((group) => group.width)).toEqual([GRID_COLUMNS, MIN_SPAN, 6]);
-    expect(config.groups.map((group) => group.style)).toEqual(['cards', 'cards', 'tiles']);
+    expect(config.pages[0].groups.map((group) => group.width)).toEqual([GRID_COLUMNS, MIN_SPAN, 6]);
+    expect(config.pages[0].groups.map((group) => group.style)).toEqual(['cards', 'cards', 'tiles']);
   });
 
   it('reads each kind of widget, and glance’s word for markets', () => {
@@ -50,27 +60,27 @@ describe('sanitizeConfig', () => {
       ]
     });
 
-    expect(config.widgets.map((widget) => widget.type)).toEqual([
+    expect(config.pages[0].widgets.map((widget) => widget.type)).toEqual([
       'weather',
       'markets',
       'clock',
       'hackernews',
       'calendar'
     ]);
-    expect(config.widgets[1]).toMatchObject({
+    expect(config.pages[0].widgets[1]).toMatchObject({
       symbols: [
         { symbol: 'AAPL', name: '' },
         { symbol: 'BTC-USD', name: 'Bitcoin' }
       ]
     });
-    expect(config.widgets[2]).toMatchObject({
+    expect(config.pages[0].widgets[2]).toMatchObject({
       zones: [
         { zone: 'Europe/Paris', label: '' },
         { zone: 'Asia/Tokyo', label: 'Tokyo' }
       ]
     });
-    expect(config.widgets[3]).toMatchObject({ count: 15 });
-    expect(config.widgets[4]).toMatchObject({ weekStart: 0 });
+    expect(config.pages[0].widgets[3]).toMatchObject({ count: 15 });
+    expect(config.pages[0].widgets[4]).toMatchObject({ weekStart: 0 });
   });
 
   it('keeps the glass within its range', () => {
@@ -91,5 +101,44 @@ describe('sanitizeConfig', () => {
     });
 
     expect(countBookmarks(config)).toBe(3);
+  });
+});
+
+describe('pages', () => {
+  it('turns a board saved before pages into the first of three', () => {
+    const config = sanitizeConfig({
+      widgets: [{ type: 'calendar' }],
+      groups: [{ name: 'Code', bookmarks: [{ url: 'https://a.example' }] }]
+    });
+
+    expect(config.pages).toHaveLength(PAGE_COUNT);
+    expect(config.pages[0].groups.map((group) => group.name)).toEqual(['Code']);
+    expect(config.pages[0].widgets).toHaveLength(1);
+    expect(config.pages.slice(1)).toEqual([emptyPage(), emptyPage()]);
+  });
+
+  it('always keeps exactly three pages', () => {
+    const many = sanitizeConfig({
+      pages: [1, 2, 3, 4].map((n) => ({ groups: [{ name: `P${n}` }] }))
+    });
+    const few = sanitizeConfig({ pages: [{ groups: [{ name: 'Only' }] }] });
+
+    expect(many.pages.map((page) => page.groups[0].name)).toEqual(['P1', 'P2', 'P3']);
+    expect(few.pages).toHaveLength(PAGE_COUNT);
+    expect(countBookmarks(few)).toBe(0);
+  });
+
+  it('edits one page through its view, and shares settings across all of them', () => {
+    const config = sanitizeConfig({
+      pages: [{ groups: [{ name: 'One' }] }, { groups: [{ name: 'Two' }] }]
+    });
+    const view = pageOf(config, 1);
+
+    expect(view.groups.map((group) => group.name)).toEqual(['Two']);
+
+    const next = withPage(config, 1, { ...view, name: 'Sam', groups: [] });
+    expect(next.name).toBe('Sam');
+    expect(next.pages[0]).toBe(config.pages[0]);
+    expect(next.pages[1].groups).toEqual([]);
   });
 });

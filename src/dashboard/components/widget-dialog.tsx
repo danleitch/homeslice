@@ -1,5 +1,7 @@
 import { useId, useMemo, useState, type FormEvent } from 'react';
 import { Plus, X } from 'lucide-react';
+import { BENCH_SURFACES, SURFACE_LABELS } from '../lib/benchlm';
+import { POPULAR_LANGUAGES, TRENDING_SINCE, languageSlug } from '../lib/github';
 import {
   WIDGET_BLURBS,
   WIDGET_LABELS,
@@ -14,15 +16,23 @@ import { WIDTH_OPTIONS } from './layout-options';
 import { Field, Modal, Segmented } from './ui';
 
 export const WidgetPicker = ({
+  types = WIDGET_TYPES,
   onPick,
   onClose
 }: {
+  /** The widgets whose extensions are turned on. */
+  types?: readonly WidgetType[];
   onPick: (type: WidgetType) => void;
   onClose: () => void;
 }): JSX.Element => (
   <Modal title="Add a widget" subtitle="Widgets sit above your groups." onClose={onClose}>
     <div className="picker">
-      {WIDGET_TYPES.map((type) => {
+      {types.length === 0 && (
+        <p className="field-hint">
+          Every widget is turned off. Turn some back on in Extensions, in the side bar.
+        </p>
+      )}
+      {types.map((type) => {
         const Icon = WIDGET_ICONS[type];
         return (
           <button key={type} type="button" className="picker-option" onClick={() => onPick(type)}>
@@ -106,7 +116,9 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
           ? { ...draft, zones: draft.zones.filter((zone) => zone.zone.trim()) }
           : draft.type === 'weather'
             ? { ...draft, location: draft.location.trim() }
-            : draft;
+            : draft.type === 'github'
+              ? { ...draft, language: languageSlug(draft.language) }
+              : draft;
 
     onSave(cleaned);
   };
@@ -315,6 +327,112 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
               onChange={(event) => patch({ count: Number(event.target.value) })}
             />
           </Field>
+        )}
+
+        {draft.type === 'benchlm' && (
+          <>
+            <div className="field">
+              <span className="field-label">Ranking</span>
+              <Segmented
+                label="Ranking"
+                value={draft.surface}
+                options={BENCH_SURFACES.map((surface) => ({
+                  value: surface,
+                  label: SURFACE_LABELS[surface]
+                }))}
+                onChange={(surface) => patch({ surface })}
+              />
+            </div>
+            <Field label="Only from" hint="A lab, like Anthropic or Google. Leave empty for all.">
+              <input
+                type="text"
+                value={draft.creator}
+                maxLength={40}
+                placeholder="Every lab"
+                data-autofocus=""
+                onChange={(event) => patch({ creator: event.target.value })}
+              />
+            </Field>
+            <Field label={`Models: ${draft.count}`}>
+              <input
+                type="range"
+                min={3}
+                max={15}
+                value={draft.count}
+                onChange={(event) => patch({ count: Number(event.target.value) })}
+              />
+            </Field>
+          </>
+        )}
+
+        {draft.type === 'tv' && (
+          <>
+            <div className="field">
+              <span className="field-label">Trending</span>
+              <Segmented
+                label="Trending"
+                value={draft.window}
+                options={[
+                  { value: 'day', label: 'Today' },
+                  { value: 'week', label: 'This week' }
+                ]}
+                onChange={(window) => patch({ window })}
+              />
+            </div>
+            <Field label={`Shows: ${draft.count}`}>
+              <input
+                type="range"
+                min={3}
+                max={12}
+                value={draft.count}
+                data-autofocus=""
+                onChange={(event) => patch({ count: Number(event.target.value) })}
+              />
+            </Field>
+          </>
+        )}
+
+        {draft.type === 'github' && (
+          <>
+            <Field label="Language" hint="Any language GitHub lists, or “all” for every one.">
+              <input
+                type="text"
+                list="github-languages"
+                value={draft.language}
+                spellCheck={false}
+                data-autofocus=""
+                onChange={(event) => patch({ language: event.target.value })}
+                onBlur={(event) => patch({ language: languageSlug(event.target.value) })}
+              />
+              <datalist id="github-languages">
+                {POPULAR_LANGUAGES.map((language) => (
+                  <option key={language} value={language} />
+                ))}
+              </datalist>
+            </Field>
+            <div className="field">
+              <span className="field-label">Trending</span>
+              <Segmented
+                label="Trending"
+                value={draft.since}
+                options={TRENDING_SINCE.map((since) => ({
+                  value: since,
+                  label:
+                    since === 'daily' ? 'Today' : since === 'weekly' ? 'This week' : 'This month'
+                }))}
+                onChange={(since) => patch({ since })}
+              />
+            </div>
+            <Field label={`Repositories: ${draft.count}`}>
+              <input
+                type="range"
+                min={3}
+                max={15}
+                value={draft.count}
+                onChange={(event) => patch({ count: Number(event.target.value) })}
+              />
+            </Field>
+          </>
         )}
 
         {draft.type === 'calendar' && (

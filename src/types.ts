@@ -27,4 +27,4 @@ export type BranchSettings = BranchSeparators & {
 };
 
 /** Which backdrop the app draws behind the dashboard. */
-export type BackgroundStyle = 'koi' | 'particles' | 'wallpaper' | 'plain';
+export type BackgroundStyle = 'koi' | 'dreams' | 'particles' | 'wallpaper' | 'plain';

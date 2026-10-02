@@ -1,7 +1,10 @@
 import type { HourFormat, Widget } from '../lib/model';
+import { BenchmarkWidget } from './benchlm-widget';
+import { GithubTrendingWidget } from './github-widget';
 import { HackerNewsWidget } from './hackernews-widget';
 import { MarketsWidget } from './markets-widget';
 import { CalendarWidget, ClockWidget } from './time-widgets';
+import { PopularTvWidget } from './tv-widget';
 import { WeatherWidget } from './weather-widget';
 
 /** Draws a widget's body from its settings. */
@@ -25,5 +28,11 @@ export const WidgetView = ({
       return <CalendarWidget widget={widget} />;
     case 'hackernews':
       return <HackerNewsWidget widget={widget} newTab={newTab} />;
+    case 'github':
+      return <GithubTrendingWidget widget={widget} newTab={newTab} />;
+    case 'benchlm':
+      return <BenchmarkWidget widget={widget} newTab={newTab} />;
+    case 'tv':
+      return <PopularTvWidget widget={widget} newTab={newTab} />;
   }
 };

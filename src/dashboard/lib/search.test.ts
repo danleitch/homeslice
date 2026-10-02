@@ -1,19 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { sanitizeConfig } from './model';
+import { allGroups, sanitizeConfig } from './model';
 import { searchBookmarks } from './search';
 
-const { groups } = sanitizeConfig({
-  groups: [
-    {
-      name: 'Code',
-      bookmarks: [
-        { name: 'GitHub', url: 'https://github.com', description: 'Pull requests' },
-        { name: 'Stack Overflow', url: 'https://stackoverflow.com' }
-      ]
-    },
-    { name: 'Café', bookmarks: [{ name: 'Menu', url: 'https://cafe.example/menu' }] }
-  ]
-});
+const groups = allGroups(
+  sanitizeConfig({
+    groups: [
+      {
+        name: 'Code',
+        bookmarks: [
+          { name: 'GitHub', url: 'https://github.com', description: 'Pull requests' },
+          { name: 'Stack Overflow', url: 'https://stackoverflow.com' }
+        ]
+      },
+      { name: 'Café', bookmarks: [{ name: 'Menu', url: 'https://cafe.example/menu' }] }
+    ]
+  })
+);
 
 const found = (query: string): string[] =>
   searchBookmarks(groups, query).map((hit) => hit.bookmark.name);
