@@ -8,6 +8,7 @@
  */
 import type { AgendaWidget } from './agenda';
 import { emptyExtensions, sanitizeExtensions, type ExtensionsConfig } from './extensions-config';
+import { FOCUS_LIMITS, type FocusWidget } from './focus';
 import { BENCH_SURFACES, type BenchmarkWidget } from './benchlm';
 import { TRENDING_SINCE, languageSlug, type GithubTrendingWidget } from './github';
 import { PULLS_SHOWS, readToken, type PullsWidget } from './pulls';
@@ -17,6 +18,7 @@ import { TRENDING_WINDOWS, type PopularTvWidget } from './tmdb';
 export type { AgendaWidget } from './agenda';
 export type { AppExtension, ExtensionsConfig } from './extensions-config';
 export type { BenchmarkWidget, BenchSurface } from './benchlm';
+export type { FocusWidget } from './focus';
 export type { PullsShow, PullsWidget } from './pulls';
 export type { GithubTrendingWidget, TrendingSince } from './github';
 export type { PopularTvWidget, TrendingWindow } from './tmdb';
@@ -101,6 +103,7 @@ export type Widget =
   | WeatherWidget
   | MarketsWidget
   | ClockWidget
+  | FocusWidget
   | HackerNewsWidget
   | CalendarWidget
   | AgendaWidget
@@ -114,6 +117,7 @@ export const WIDGET_TYPES: readonly WidgetType[] = [
   'weather',
   'markets',
   'clock',
+  'focus',
   'calendar',
   'agenda',
   'hackernews',
@@ -127,6 +131,7 @@ export const WIDGET_LABELS: Readonly<Record<WidgetType, string>> = {
   weather: 'Weather',
   markets: 'Markets',
   clock: 'World clock',
+  focus: 'Focus timer',
   calendar: 'Calendar',
   agenda: 'Agenda',
   hackernews: 'Hacker News',
@@ -140,6 +145,7 @@ export const WIDGET_BLURBS: Readonly<Record<WidgetType, string>> = {
   weather: 'Today at a glance, from Open-Meteo',
   markets: 'Stocks, indices and crypto with a month of trend',
   clock: 'The time where your people are',
+  focus: 'A focus timer with breaks, counting down in the tab title',
   calendar: 'This month, today circled',
   agenda: 'Your Google Calendar: the month, and what is coming up',
   hackernews: 'The top stories right now',
@@ -501,6 +507,29 @@ const sanitizeWidget = (value: unknown): Widget | null => {
         since: oneOf(value.since, TRENDING_SINCE, 'daily'),
         count: Math.round(clampNumber(value.count, 3, 15, 6))
       };
+    case 'focus':
+      return {
+        id,
+        type: 'focus',
+        width,
+        focus: Math.round(
+          clampNumber(
+            value.focus,
+            FOCUS_LIMITS.focus.min,
+            FOCUS_LIMITS.focus.max,
+            FOCUS_LIMITS.focus.fallback
+          )
+        ),
+        rest: Math.round(
+          clampNumber(
+            value.rest,
+            FOCUS_LIMITS.rest.min,
+            FOCUS_LIMITS.rest.max,
+            FOCUS_LIMITS.rest.fallback
+          )
+        ),
+        sound: value.sound !== false
+      };
     case 'prs':
       return {
         id,
@@ -617,6 +646,8 @@ export const createWidget = (type: WidgetType): Widget => {
       return { id, type, width: 4, weekStart: 1, count: 5, month: true };
     case 'github':
       return { id, type, width: 4, language: 'all', since: 'daily', count: 6 };
+    case 'focus':
+      return { id, type, width: 3, focus: 25, rest: 5, sound: true };
     case 'prs':
       return { id, type, width: 4, token: '', show: 'both', count: 5 };
     case 'benchlm':

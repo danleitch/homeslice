@@ -7,6 +7,7 @@ import {
   presetOf,
   type BenchPreset
 } from '../lib/benchlm';
+import { FOCUS_LIMITS } from '../lib/focus';
 import { POPULAR_LANGUAGES, TRENDING_SINCE, languageSlug } from '../lib/github';
 import { isToken, readToken } from '../lib/pulls';
 import {
@@ -20,7 +21,7 @@ import {
 } from '../lib/model';
 import { WIDGET_ICONS } from '../widgets/widget-icons';
 import { WIDTH_OPTIONS } from './layout-options';
-import { Field, Modal, Segmented } from './ui';
+import { Field, Modal, Segmented, Switch } from './ui';
 
 export const WidgetPicker = ({
   types = WIDGET_TYPES,
@@ -415,6 +416,37 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
                 listed price are left out.
               </span>
             </div>
+          </>
+        )}
+
+        {draft.type === 'focus' && (
+          <>
+            <Field label={`Focus: ${draft.focus} minutes`}>
+              <input
+                type="range"
+                min={FOCUS_LIMITS.focus.min}
+                max={FOCUS_LIMITS.focus.max}
+                step={5}
+                value={draft.focus}
+                data-autofocus=""
+                onChange={(event) => patch({ focus: Number(event.target.value) })}
+              />
+            </Field>
+            <Field label={`Break: ${draft.rest} minutes`}>
+              <input
+                type="range"
+                min={FOCUS_LIMITS.rest.min}
+                max={FOCUS_LIMITS.rest.max}
+                value={draft.rest}
+                onChange={(event) => patch({ rest: Number(event.target.value) })}
+              />
+            </Field>
+            <Switch
+              label="Chime when time is up"
+              hint="The timer is shared by every Focus widget and every open tab of this dashboard, and its countdown shows in the tab's title."
+              checked={draft.sound}
+              onChange={(sound) => patch({ sound })}
+            />
           </>
         )}
 

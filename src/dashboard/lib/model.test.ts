@@ -159,6 +159,27 @@ describe('sanitizeConfig', () => {
     expect(createWidget('prs')).toMatchObject({ type: 'prs', token: '', show: 'both', count: 5 });
   });
 
+  it('reads the Focus timer, keeping its lengths in range and its chime on unless turned off', () => {
+    const [plain, tuned, long, short, text, quiet] = sanitizeConfig({
+      widgets: [
+        { type: 'focus' },
+        { type: 'focus', focus: 50, rest: 10, sound: false, width: 6 },
+        { type: 'focus', focus: 500, rest: 500 },
+        { type: 'focus', focus: 1, rest: 0 },
+        { type: 'focus', focus: '40', rest: 'long' },
+        { type: 'focus', sound: 'no' }
+      ]
+    }).pages[0].widgets;
+
+    expect(plain).toMatchObject({ type: 'focus', width: 4, focus: 25, rest: 5, sound: true });
+    expect(tuned).toMatchObject({ focus: 50, rest: 10, sound: false, width: 6 });
+    expect(long).toMatchObject({ focus: 90, rest: 30 });
+    expect(short).toMatchObject({ focus: 5, rest: 1 });
+    expect(text).toMatchObject({ focus: 40, rest: 5 });
+    expect(quiet).toMatchObject({ sound: true });
+    expect(createWidget('focus')).toMatchObject({ type: 'focus', focus: 25, rest: 5, sound: true });
+  });
+
   it('keeps the glass within its range', () => {
     expect(sanitizeConfig({ glass: { blur: 400, tint: -1 } }).glass).toEqual({ blur: 32, tint: 0 });
   });

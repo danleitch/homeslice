@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 import type { HourFormat, Widget } from '../lib/model';
 import { AgendaWidget } from './agenda-widget';
 import { BenchmarkWidget } from './benchlm-widget';
+import { FocusWidget } from './focus-widget';
 import { GithubTrendingWidget } from './github-widget';
 import { HackerNewsWidget } from './hackernews-widget';
 import { MarketsWidget } from './markets-widget';
@@ -27,6 +28,8 @@ export const WidgetView = ({
       return <MarketsWidget widget={widget} />;
     case 'clock':
       return <ClockWidget widget={widget} clock={clock} />;
+    case 'focus':
+      return <FocusWidget widget={widget} />;
     case 'calendar':
       return <CalendarWidget widget={widget} />;
     case 'agenda':
