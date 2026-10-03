@@ -1,8 +1,9 @@
-# Branchify
+# Home Slice
 
-Branchify is a personal dashboard for the sites you open every day: groups of
+Home Slice is a personal dashboard for the sites you open every day: groups of
 bookmarks on glass cards over a living koi pond, with weather, markets and news
-alongside. The Branchify branch-name generator is built in as a tool for devs.
+alongside. A branch-name generator, [Branchify](#branchify-the-branch-name-tool),
+is built in as a tool for devs.
 
 It ships as a self-contained Docker image, so you can run it wherever you like —
 a spare port on your laptop, a VPS, or a homelab box behind your own reverse
@@ -11,8 +12,6 @@ browser's `localStorage`, and you export it as YAML to keep a copy or move it
 to another browser. I run my own instance from a self-hosted server at home,
 and you're free to spin up your own the same way (see
 [Docker (Static Hosting)](#docker-static-hosting) below).
-
-<img width="499" height="361" alt="image" src="https://github.com/user-attachments/assets/460553d6-db0d-4e29-ab59-4c06fa1ae305" />
 
 ## The Dashboard
 
@@ -145,7 +144,10 @@ off, and installs apps: any site, opened over the board in a frame at its own
 address, `/#app/<name>`. Doddle, a word game, is offered ready to install; add
 anything else by its address. The site has to allow being framed.
 
-## Branchify Features
+## Branchify, the branch-name tool
+
+Branchify is the branch-name generator built into Home Slice. Open it from the
+side bar, with `B`, or at `/#branchify`.
 
 - Fast branch name generation with simple inputs
 - Supports optional ticket numbers while keeping the final branch visible
@@ -154,7 +156,7 @@ anything else by its address. The site has to allow being framed.
 - Persists your latest values and recent branches in `localStorage`
 - Fully static frontend output (`dist/`) with no backend runtime
 - Mobile-friendly, minimal UI
-- A living koi pond behind the form, with a daily koi market you stock by making branches
+- Recent branches swim as koi in the pond behind the dashboard, and copying a new branch earns coins for the daily koi market
 
 ## Branch Naming Formula
 
