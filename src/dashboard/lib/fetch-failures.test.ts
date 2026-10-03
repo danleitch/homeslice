@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchRankings } from './benchlm';
+import { fetchPrices, fetchRankings } from './benchlm';
 import { fetchTrending } from './github';
 import { ProxyUnavailableError, fetchQuotes } from './markets';
 import { fetchShows } from './tmdb';
@@ -87,6 +87,20 @@ describe('when a service does not answer well', () => {
 
       expect(fetchMock.mock.calls[0]![0]).toContain('surface=coding');
       expect(fetchMock.mock.calls[0]![1]).toEqual({ signal });
+    });
+
+    it('says the host has no relay for prices, when it answers with a page', async () => {
+      serve({ type: 'text/html' });
+
+      await expect(fetchPrices(signal)).rejects.toThrow(
+        'BenchLM’s prices go through this dashboard’s server, which this host doesn’t provide.'
+      );
+    });
+
+    it('says the prices did not answer, for any other failure', async () => {
+      serve({ status: 502 });
+
+      await expect(fetchPrices(signal)).rejects.toThrow('BenchLM’s prices didn’t answer.');
     });
   });
 

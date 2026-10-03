@@ -70,6 +70,19 @@ const keyedProxies = (env: Record<string, string>): Record<string, ProxyOptions>
   }
 });
 
+/**
+ * The AI Leaderboard's budget view reads BenchLM's public price list, which
+ * needs no key. It comes in pages of 200 models; only those offsets pass.
+ */
+const pricingProxy: Record<string, ProxyOptions> = {
+  '/api/benchlm/pricing': {
+    target: 'https://benchlm.ai',
+    changeOrigin: true,
+    rewrite: (path) =>
+      `/api/data/pricing?limit=200&offset=${oneOf(path, 'offset', ['0', '200', '400', '600', '800'])}`
+  }
+};
+
 /** The Agenda widget reads up to three calendars, one variable each (see .env.example). */
 const CALENDAR_VARIABLES = ['CALENDAR_ICAL_URL', 'CALENDAR_ICAL_URL_2', 'CALENDAR_ICAL_URL_3'];
 
@@ -116,7 +129,12 @@ const calendarProxies = (env: Record<string, string>): Record<string, ProxyOptio
 export default defineConfig(({ mode }) => {
   // Every variable, not only VITE_ ones; none of these are put in the bundle.
   const env = loadEnv(mode, process.cwd(), '');
-  const proxy = { ...marketsProxy, ...keyedProxies(env), ...calendarProxies(env) };
+  const proxy = {
+    ...marketsProxy,
+    ...pricingProxy,
+    ...keyedProxies(env),
+    ...calendarProxies(env)
+  };
 
   return {
     server: {

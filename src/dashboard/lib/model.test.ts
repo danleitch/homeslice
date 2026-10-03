@@ -104,6 +104,25 @@ describe('sanitizeConfig', () => {
     });
   });
 
+  it('reads the AI Leaderboard’s price limit, keeping it to a sensible range', () => {
+    const [given, huge, negative, missing, text] = sanitizeConfig({
+      widgets: [
+        { type: 'benchlm', maxPrice: 0.5 },
+        { type: 'benchlm', maxPrice: 5000 },
+        { type: 'benchlm', maxPrice: -3 },
+        { type: 'benchlm' },
+        { type: 'benchlm', maxPrice: 'cheap' }
+      ]
+    }).pages[0].widgets;
+
+    expect(given).toMatchObject({ maxPrice: 0.5 });
+    expect(huge).toMatchObject({ maxPrice: 100 });
+    expect(negative).toMatchObject({ maxPrice: 0 });
+    expect(missing).toMatchObject({ maxPrice: 0 });
+    expect(text).toMatchObject({ maxPrice: 0 });
+    expect(createWidget('benchlm')).toMatchObject({ maxPrice: 0 });
+  });
+
   it('keeps the glass within its range', () => {
     expect(sanitizeConfig({ glass: { blur: 400, tint: -1 } }).glass).toEqual({ blur: 32, tint: 0 });
   });

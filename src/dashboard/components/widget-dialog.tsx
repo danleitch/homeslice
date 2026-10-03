@@ -1,6 +1,12 @@
 import { useId, useMemo, useState, type FormEvent, type JSX } from 'react';
 import { Plus, X } from 'lucide-react';
-import { BENCH_SURFACES, SURFACE_LABELS } from '../lib/benchlm';
+import {
+  BENCH_PRESETS,
+  BENCH_SURFACES,
+  SURFACE_LABELS,
+  presetOf,
+  type BenchPreset
+} from '../lib/benchlm';
 import { POPULAR_LANGUAGES, TRENDING_SINCE, languageSlug } from '../lib/github';
 import {
   WIDGET_BLURBS,
@@ -49,6 +55,11 @@ export const WidgetPicker = ({
     </div>
   </Modal>
 );
+
+const BENCH_PRESET_NAMES = Object.keys(BENCH_PRESETS) as BenchPreset[];
+
+/** Dollars per million tokens; 0 is no limit. */
+const MAX_PRICES = [0, 0.5, 1, 2, 5] as const;
 
 const supportedZones = (): string[] => {
   try {
@@ -333,6 +344,21 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
         {draft.type === 'benchlm' && (
           <>
             <div className="field">
+              <span className="field-label">Preset</span>
+              <Segmented
+                label="Preset"
+                value={presetOf(draft)}
+                options={BENCH_PRESET_NAMES.map((name) => ({
+                  value: name,
+                  label: BENCH_PRESETS[name].label
+                }))}
+                onChange={(name) => {
+                  const { surface, creator, count, maxPrice } = BENCH_PRESETS[name as BenchPreset];
+                  patch({ surface, creator, count, maxPrice });
+                }}
+              />
+            </div>
+            <div className="field">
               <span className="field-label">Ranking</span>
               <Segmented
                 label="Ranking"
@@ -363,6 +389,22 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
                 onChange={(event) => patch({ count: Number(event.target.value) })}
               />
             </Field>
+            <div className="field">
+              <span className="field-label">Max price</span>
+              <Segmented
+                label="Max price"
+                value={String(draft.maxPrice)}
+                options={MAX_PRICES.map((price) => ({
+                  value: String(price),
+                  label: price ? `$${Number.isInteger(price) ? price : price.toFixed(2)}` : 'Any'
+                }))}
+                onChange={(price) => patch({ maxPrice: Number(price) })}
+              />
+              <span className="field-hint">
+                Per million tokens, counting three parts input to one part output. Models without a
+                listed price are left out.
+              </span>
+            </div>
           </>
         )}
 
