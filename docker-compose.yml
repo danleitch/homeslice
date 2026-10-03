@@ -1,10 +1,10 @@
 services:
-  branchify:
+  homeslice:
     build:
       context: .
       dockerfile: Dockerfile
-    image: branchify:latest
-    container_name: branchify
+    image: blades/homeslice:latest
+    container_name: homeslice
     ports:
       - '80'
     # BENCHLM_TOKEN and TMDB_TOKEN, for the widgets that need a key; see .env.example.
