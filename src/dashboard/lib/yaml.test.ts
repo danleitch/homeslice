@@ -18,6 +18,22 @@ describe('dashboard YAML', () => {
     expect(parsed.ok && strip(parsed.value)).toEqual(strip(config));
   });
 
+  it('carries the status bar’s services in the export, and leaves them out when there are none', () => {
+    const watching = configToYaml(
+      sanitizeConfig({ status: ['npm', 'github'], statusDegraded: true })
+    );
+
+    expect(watching).toMatch(/^status:\n {2}- github\n {2}- npm$/m);
+    expect(watching).toMatch(/^statusDegraded: true$/m);
+
+    const parsed = yamlToConfig(watching);
+    expect(parsed.ok && parsed.value.status).toEqual(['github', 'npm']);
+    expect(parsed.ok && parsed.value.statusDegraded).toBe(true);
+
+    const quiet = configToYaml(sanitizeConfig({}));
+    expect(quiet).not.toContain('status');
+  });
+
   it('leaves out fields that are at their defaults', () => {
     const yaml = configToYaml(
       sanitizeConfig({

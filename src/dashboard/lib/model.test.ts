@@ -123,6 +123,22 @@ describe('sanitizeConfig', () => {
     expect(createWidget('benchlm')).toMatchObject({ maxPrice: 0 });
   });
 
+  it('reads which services the status bar watches, and whether it tells of slow service', () => {
+    const watched = sanitizeConfig({
+      status: ['npm', 'nonsense', 'github', 'npm', 5],
+      statusDegraded: true
+    });
+
+    expect(watched.status).toEqual(['github', 'npm']);
+    expect(watched.statusDegraded).toBe(true);
+    expect(sanitizeConfig({ status: 'vercel' }).status).toEqual(['vercel']);
+    expect(sanitizeConfig({ statusDegraded: 'yes' }).statusDegraded).toBe(false);
+
+    const none = sanitizeConfig({});
+    expect(none.status).toEqual([]);
+    expect(none.statusDegraded).toBe(false);
+  });
+
   it('keeps the glass within its range', () => {
     expect(sanitizeConfig({ glass: { blur: 400, tint: -1 } }).glass).toEqual({ blur: 32, tint: 0 });
   });

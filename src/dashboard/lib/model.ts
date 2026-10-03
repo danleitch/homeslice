@@ -10,6 +10,7 @@ import type { AgendaWidget } from './agenda';
 import { emptyExtensions, sanitizeExtensions, type ExtensionsConfig } from './extensions-config';
 import { BENCH_SURFACES, type BenchmarkWidget } from './benchlm';
 import { TRENDING_SINCE, languageSlug, type GithubTrendingWidget } from './github';
+import { readStatusIds } from './status-services';
 import { TRENDING_WINDOWS, type PopularTvWidget } from './tmdb';
 
 export type { AgendaWidget } from './agenda';
@@ -173,6 +174,10 @@ export type DashboardSettings = {
   pinBar: boolean;
   /** Which built-in extensions are off, and which apps are installed. */
   extensions: ExtensionsConfig;
+  /** The services whose status pages the alert bar watches (see status-services.ts). */
+  status: string[];
+  /** Whether the alert bar tells of slow or partly broken service too, not only of outages. */
+  statusDegraded: boolean;
 };
 
 /** One page of the board: its own row of widgets and its own groups. */
@@ -252,6 +257,8 @@ export const createStarterConfig = (): DashboardConfig => ({
   glass: { ...DEFAULT_GLASS },
   pinBar: false,
   extensions: emptyExtensions(),
+  status: [],
+  statusDegraded: false,
   pages: fillPages([createStarterPage()])
 });
 
@@ -548,6 +555,8 @@ export const sanitizeConfig = (value: unknown): DashboardConfig => {
     },
     pinBar: value.pinBar === true,
     extensions: sanitizeExtensions(value.extensions),
+    status: readStatusIds(value.status),
+    statusDegraded: value.statusDegraded === true,
     // A board saved before it had pages keeps its groups and widgets at the
     // top level; they become the first page.
     pages: fillPages(
