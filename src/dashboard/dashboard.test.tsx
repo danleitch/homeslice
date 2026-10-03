@@ -576,7 +576,10 @@ describe('The side bar and extensions', () => {
     // It has its own place in the bar now.
     await user.click(within(bar()).getByRole('button', { name: 'Doddle' }));
     expect(screen.getByRole('dialog', { name: 'Doddle' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Close Doddle' }));
+    // Doddle opens bare, with no close button: a click outside it puts it away.
+    expect(screen.queryByRole('button', { name: 'Close Doddle' })).not.toBeInTheDocument();
+    await user.click(document.querySelector('.app-backdrop')!);
+    expect(screen.queryByRole('dialog', { name: 'Doddle' })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Extensions' }));
     panel = screen.getByRole('dialog', { name: 'Extensions' });

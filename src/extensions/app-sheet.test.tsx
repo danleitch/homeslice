@@ -3,11 +3,11 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AppSheet } from './app-sheet';
 
-const app = { id: 'doddle', name: 'Doddle', url: 'https://doddle.example.com/play' };
+const app = { id: 'gizmo', name: 'Gizmo', url: 'https://gizmo.example.com/play' };
 const SLOW_LOAD_MS = 6000;
 
-const frame = (): HTMLIFrameElement => screen.getByTitle('Doddle') as HTMLIFrameElement;
-const dialog = (): HTMLElement => screen.getByRole('dialog', { name: 'Doddle' });
+const frame = (): HTMLIFrameElement => screen.getByTitle('Gizmo') as HTMLIFrameElement;
+const dialog = (): HTMLElement => screen.getByRole('dialog', { name: 'Gizmo' });
 
 describe('AppSheet', () => {
   beforeEach(() => {
@@ -21,15 +21,15 @@ describe('AppSheet', () => {
   it('frames the app at its own address, saying what it is and where it runs', () => {
     render(<AppSheet app={app} onClose={vi.fn()} />);
 
-    expect(frame()).toHaveAttribute('src', 'https://doddle.example.com/play');
-    expect(screen.getByText('doddle.example.com/play')).toBeInTheDocument();
+    expect(frame()).toHaveAttribute('src', 'https://gizmo.example.com/play');
+    expect(screen.getByText('gizmo.example.com/play')).toBeInTheDocument();
     expect(dialog()).toHaveAttribute('aria-modal', 'true');
   });
 
   it('shows the address without its scheme, for http as well', () => {
-    render(<AppSheet app={{ ...app, url: 'http://doddle.lan:8080/' }} onClose={vi.fn()} />);
+    render(<AppSheet app={{ ...app, url: 'http://gizmo.lan:8080/' }} onClose={vi.fn()} />);
 
-    expect(screen.getByText('doddle.lan:8080/')).toBeInTheDocument();
+    expect(screen.getByText('gizmo.lan:8080/')).toBeInTheDocument();
   });
 
   it('lets the app do its work, but not reach into the board, or say where it came from', () => {
@@ -45,7 +45,7 @@ describe('AppSheet', () => {
   it('says it is opening the app until the app has loaded', () => {
     render(<AppSheet app={app} onClose={vi.fn()} />);
 
-    expect(screen.getByRole('status')).toHaveTextContent('Opening Doddle…');
+    expect(screen.getByRole('status')).toHaveTextContent('Opening Gizmo…');
     expect(frame()).not.toHaveAttribute('data-loaded');
 
     fireEvent.load(frame());
@@ -60,13 +60,13 @@ describe('AppSheet', () => {
     act(() => {
       vi.advanceTimersByTime(SLOW_LOAD_MS - 1);
     });
-    expect(screen.getByRole('status')).toHaveTextContent('Opening Doddle…');
+    expect(screen.getByRole('status')).toHaveTextContent('Opening Gizmo…');
 
     act(() => {
       vi.advanceTimersByTime(1);
     });
 
-    expect(screen.getByRole('status')).toHaveTextContent('Still waiting on Doddle');
+    expect(screen.getByRole('status')).toHaveTextContent('Still waiting on Gizmo');
     expect(screen.getByRole('link', { name: 'Open it in a tab' })).toHaveAttribute('href', app.url);
   });
 
@@ -87,11 +87,11 @@ describe('AppSheet', () => {
 
     fireEvent.load(first);
     act(() => {
-      fireEvent.click(screen.getByRole('button', { name: 'Reload Doddle' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Reload Gizmo' }));
     });
 
     expect(frame()).not.toBe(first);
-    expect(screen.getByRole('status')).toHaveTextContent('Opening Doddle…');
+    expect(screen.getByRole('status')).toHaveTextContent('Opening Gizmo…');
 
     act(() => {
       vi.advanceTimersByTime(SLOW_LOAD_MS);
@@ -103,7 +103,7 @@ describe('AppSheet', () => {
   it('opens the app in a tab of its own on request', () => {
     render(<AppSheet app={app} onClose={vi.fn()} />);
 
-    const link = screen.getByRole('link', { name: 'Open Doddle in a new tab' });
+    const link = screen.getByRole('link', { name: 'Open Gizmo in a new tab' });
 
     expect(link).toHaveAttribute('href', app.url);
     expect(link).toHaveAttribute('target', '_blank');
@@ -117,7 +117,7 @@ describe('AppSheet', () => {
 
     const { unmount } = render(<AppSheet app={app} onClose={vi.fn()} />);
 
-    expect(screen.getByRole('button', { name: 'Close Doddle' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Close Gizmo' })).toHaveFocus();
 
     unmount();
 
@@ -143,7 +143,7 @@ describe('AppSheet', () => {
       const onClose = vi.fn();
       render(<AppSheet app={app} onClose={onClose} />);
 
-      await userEvent.click(screen.getByRole('button', { name: 'Close Doddle' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Close Gizmo' }));
 
       expect(onClose).toHaveBeenCalledTimes(1);
     });
@@ -182,6 +182,47 @@ describe('AppSheet', () => {
 
       fireEvent.mouseDown(container.querySelector('.app-backdrop')!);
       expect(onClose).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('an app that opens frameless', () => {
+    const doddle = { id: 'doddle', name: 'Doddle', url: 'https://doddle.example.com/' };
+
+    it('has no title bar or buttons, just the app', () => {
+      render(<AppSheet app={doddle} onClose={vi.fn()} />);
+
+      expect(screen.queryByRole('button', { name: 'Close Doddle' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Reload Doddle' })).not.toBeInTheDocument();
+      expect(screen.getByRole('dialog', { name: 'Doddle' })).toHaveAttribute('data-frameless');
+      expect(screen.getByRole('dialog', { name: 'Doddle' })).not.toHaveClass('glass');
+      expect(screen.getByTitle('Doddle')).toHaveAttribute('src', doddle.url);
+    });
+
+    it('takes focus itself, so Escape still closes it', () => {
+      const onClose = vi.fn();
+      render(<AppSheet app={doddle} onClose={onClose} />);
+
+      expect(screen.getByRole('dialog', { name: 'Doddle' })).toHaveFocus();
+
+      fireEvent.keyDown(screen.getByRole('dialog', { name: 'Doddle' }), { key: 'Escape' });
+
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('closes when the space outside it is clicked', () => {
+      const onClose = vi.fn();
+      const { container } = render(<AppSheet app={doddle} onClose={onClose} />);
+
+      fireEvent.mouseDown(container.querySelector('.app-backdrop')!);
+
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('is the only kind that opens bare: other apps keep their title bar', () => {
+      render(<AppSheet app={app} onClose={vi.fn()} />);
+
+      expect(dialog()).not.toHaveAttribute('data-frameless');
+      expect(screen.getByRole('button', { name: 'Close Gizmo' })).toBeInTheDocument();
     });
   });
 });
