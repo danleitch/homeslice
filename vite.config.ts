@@ -87,6 +87,7 @@ export default defineConfig(({ mode }) => {
     test: {
       globals: true,
       environment: 'jsdom',
+      globalSetup: './vitest.global-setup.ts',
       setupFiles: './src/test/setup.ts',
       // Only this app's tests; reference checkouts beside it bring their own.
       include: ['src/**/*.test.{ts,tsx}'],
