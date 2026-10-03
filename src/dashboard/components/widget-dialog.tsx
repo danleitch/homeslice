@@ -436,7 +436,38 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
           </>
         )}
 
-        {draft.type === 'calendar' && (
+        {draft.type === 'agenda' && (
+          <>
+            <Field label={`Events: ${draft.count}`}>
+              <input
+                type="range"
+                min={3}
+                max={12}
+                value={draft.count}
+                data-autofocus=""
+                onChange={(event) => patch({ count: Number(event.target.value) })}
+              />
+            </Field>
+            <div className="field">
+              <span className="field-label">Show</span>
+              <Segmented
+                label="Show"
+                value={draft.month ? 'month' : 'list'}
+                options={[
+                  { value: 'month', label: 'Month and list' },
+                  { value: 'list', label: 'List only' }
+                ]}
+                onChange={(value) => patch({ month: value === 'month' })}
+              />
+              <span className="field-hint">
+                Calendars come from this server’s CALENDAR_ICAL_URL settings: up to three, from
+                Google Calendar’s secret address in iCal format.
+              </span>
+            </div>
+          </>
+        )}
+
+        {(draft.type === 'calendar' || (draft.type === 'agenda' && draft.month)) && (
           <div className="field">
             <span className="field-label">Weeks start on</span>
             <Segmented

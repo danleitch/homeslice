@@ -6,11 +6,13 @@
  * a visitor exports and imports, so every field has a sanitiser: a hand-edited
  * file, an old export or a half-typed value must never break the page.
  */
+import type { AgendaWidget } from './agenda';
 import { emptyExtensions, sanitizeExtensions, type ExtensionsConfig } from './extensions-config';
 import { BENCH_SURFACES, type BenchmarkWidget } from './benchlm';
 import { TRENDING_SINCE, languageSlug, type GithubTrendingWidget } from './github';
 import { TRENDING_WINDOWS, type PopularTvWidget } from './tmdb';
 
+export type { AgendaWidget } from './agenda';
 export type { AppExtension, ExtensionsConfig } from './extensions-config';
 export type { BenchmarkWidget, BenchSurface } from './benchlm';
 export type { GithubTrendingWidget, TrendingSince } from './github';
@@ -98,6 +100,7 @@ export type Widget =
   | ClockWidget
   | HackerNewsWidget
   | CalendarWidget
+  | AgendaWidget
   | GithubTrendingWidget
   | BenchmarkWidget
   | PopularTvWidget;
@@ -108,6 +111,7 @@ export const WIDGET_TYPES: readonly WidgetType[] = [
   'markets',
   'clock',
   'calendar',
+  'agenda',
   'hackernews',
   'github',
   'benchlm',
@@ -119,6 +123,7 @@ export const WIDGET_LABELS: Readonly<Record<WidgetType, string>> = {
   markets: 'Markets',
   clock: 'World clock',
   calendar: 'Calendar',
+  agenda: 'Agenda',
   hackernews: 'Hacker News',
   github: 'GitHub Trending',
   benchlm: 'AI Leaderboard',
@@ -130,6 +135,7 @@ export const WIDGET_BLURBS: Readonly<Record<WidgetType, string>> = {
   markets: 'Stocks, indices and crypto with a month of trend',
   clock: 'The time where your people are',
   calendar: 'This month, today circled',
+  agenda: 'Your Google Calendar: the month, and what is coming up',
   hackernews: 'The top stories right now',
   github: 'The repositories everyone is starring',
   benchlm: 'The strongest AI models right now, from BenchLM',
@@ -464,6 +470,15 @@ const sanitizeWidget = (value: unknown): Widget | null => {
         width,
         weekStart: value.weekStart === 0 || value.weekStart === 'sunday' ? 0 : 1
       };
+    case 'agenda':
+      return {
+        id,
+        type: 'agenda',
+        width,
+        weekStart: value.weekStart === 0 || value.weekStart === 'sunday' ? 0 : 1,
+        count: Math.round(clampNumber(value.count, 3, 12, 5)),
+        month: value.month !== false
+      };
     case 'github':
       return {
         id,
@@ -573,6 +588,8 @@ export const createWidget = (type: WidgetType): Widget => {
       return { id, type, width: 4, count: 6 };
     case 'calendar':
       return { id, type, width: 3, weekStart: 1 };
+    case 'agenda':
+      return { id, type, width: 4, weekStart: 1, count: 5, month: true };
     case 'github':
       return { id, type, width: 4, language: 'all', since: 'daily', count: 6 };
     case 'benchlm':

@@ -83,6 +83,27 @@ describe('sanitizeConfig', () => {
     expect(config.pages[0].widgets[4]).toMatchObject({ weekStart: 0 });
   });
 
+  it('reads the Agenda, keeping its settings within range', () => {
+    const [plain, tuned, sunday, bounded] = sanitizeConfig({
+      widgets: [
+        { type: 'agenda' },
+        { type: 'agenda', width: 8, weekStart: 'sunday', count: '9', month: false },
+        { type: 'agenda', weekStart: 0 },
+        { type: 'agenda', count: 99, month: 'no' }
+      ]
+    }).pages[0].widgets;
+
+    expect(plain).toMatchObject({ type: 'agenda', width: 4, weekStart: 1, count: 5, month: true });
+    expect(tuned).toMatchObject({ width: 8, weekStart: 0, count: 9, month: false });
+    expect(sunday).toMatchObject({ weekStart: 0 });
+    expect(bounded).toMatchObject({ count: 12, month: true });
+    expect(
+      sanitizeConfig({ widgets: [{ type: 'agenda', count: 1 }] }).pages[0].widgets[0]
+    ).toMatchObject({
+      count: 3
+    });
+  });
+
   it('keeps the glass within its range', () => {
     expect(sanitizeConfig({ glass: { blur: 400, tint: -1 } }).glass).toEqual({ blur: 32, tint: 0 });
   });
@@ -90,6 +111,13 @@ describe('sanitizeConfig', () => {
   it('gives every new widget something sensible to show', () => {
     expect(createWidget('weather')).toMatchObject({ location: 'London' });
     expect(createWidget('markets')).toMatchObject({ type: 'markets' });
+    expect(createWidget('agenda')).toMatchObject({
+      type: 'agenda',
+      width: 4,
+      weekStart: 1,
+      count: 5,
+      month: true
+    });
   });
 
   it('counts bookmarks across groups', () => {

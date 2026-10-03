@@ -38,6 +38,10 @@ and you're free to spin up your own the same way (see
   trend for stocks, indices, FX and crypto. A world clock, this month's
   calendar, the top of Hacker News, GitHub Trending, the strongest AI models
   from BenchLM, and the TV everyone is watching from TMDB.
+- **Your Google Calendar.** The [Agenda](#agenda-your-google-calendar) widget
+  shows the month with a dot under every day that has something on, and the
+  days to come beneath it: what is on now, what is next and in how long, a
+  button to join the call, and a click for the details.
 - **A side bar, as in VS Code.** Tools, apps and Extensions down the left edge,
   with Add, Edit and Settings at the foot. It tucks away behind a small tab
   until the pointer reaches the edge; Settings → General keeps it out.
@@ -136,6 +140,58 @@ and `/api/tmdb/trending-tv`, which adds the key. Nginx keeps each answer for
 people visit, which keeps BenchLM's free 1,000 reads a month in hand. The
 relays pass on only the ranking or the trending window, so a visitor can't
 spend reads by varying the address.
+
+### Agenda: your Google Calendar
+
+The **Agenda** widget reads your Google Calendar. It is a month, with a dot
+under each day that has something on, and the days from the one you pick
+onward as a list. Beside the month, once the widget is half the board wide or
+more, the list moves to the right.
+
+- Today is circled, and the day you pick is outlined; the arrows (or `Page Up`
+  and `Page Down`) turn the month, and **Today** brings you back. With the
+  keyboard, the arrow keys, `Home` and `End` move between days.
+- An event that is on shows **Now** and how far through it you are; the next
+  one says how long until it starts. Events that are over fade.
+- Click an event for its place (a link to the map), notes and exact times. If
+  it has a Meet, Zoom, Teams or similar link, a button joins the call.
+- All-day and multi-day events say which day of how many it is, repeating
+  events and the days taken out of them come out as Google has them, and
+  cancelled events stay hidden.
+- Up to three calendars show in their own colours, with a key underneath.
+- **List only** drops the month for a plain list of what is coming up.
+
+It needs no Google sign-in or Cloud project: Google gives every calendar a
+private web address that serves it as an iCal feed, and the dashboard reads
+that. Read-only, and it works with any calendar that has such an address.
+
+1. In Google Calendar, open **Settings**, pick the calendar under **Settings
+   for my calendars**, and scroll to **Integrate calendar**.
+2. Copy **Secret address in iCal format**.
+3. Put it in `.env` as `CALENDAR_ICAL_URL`, with no quotes. For a second and a
+   third calendar use `CALENDAR_ICAL_URL_2` and `CALENDAR_ICAL_URL_3`.
+4. Restart the server, then add the **Agenda** widget.
+
+Like the BenchLM and TMDB keys, the addresses never reach the page, the YAML or
+git: the page asks this server at `/api/calendar/1` to `/3`, which fetches the
+address it holds. Nginx keeps each feed for five minutes, so Google is asked
+about that often however many people visit, and the page looks every ten.
+Changes in Google Calendar can take a few minutes to show.
+
+**This makes your calendar readable by anyone who can open the dashboard.**
+That is fine on a home network, or behind a VPN or a reverse proxy with a
+login. If the dashboard is open to the internet, put a login in front of it,
+or leave the Agenda out. Reset the secret address in Google Calendar if it
+ever leaks.
+
+```yaml
+widgets:
+  - type: agenda
+    width: 6
+    weekStart: 1 # 0 for Sunday
+    count: 6 # events in the list, 3 to 12
+    month: true # false for the list alone
+```
 
 ### Extensions
 
@@ -393,8 +449,8 @@ npm run dev
 
 Then open the local URL shown by Vite (typically `http://localhost:5173`). The
 dev server also relays `/api/markets` to Yahoo Finance, so the markets widget
-works locally, and BenchLM and TMDB with the keys in `.env` (copy
-`.env.example`). The dev server doesn't keep their answers the way nginx does;
+works locally, and BenchLM, TMDB and your calendars with the keys and
+addresses in `.env` (copy `.env.example`). The dev server doesn't keep their answers the way nginx does;
 the page's own cache asks at most twice a day.
 
 ## Testing & Quality
@@ -416,7 +472,7 @@ stand-ins for the canvas and for three.js.
 
 `npm run coverage` fails if line, statement or function coverage drops below
 99%, or branch coverage below 93%, so new code arrives with its tests. At the
-last count the suite ran about 1,800 tests at roughly 99.8% line coverage;
+last count the suite ran about 2,000 tests at roughly 99.8% line coverage;
 the few lines left are defensive guards that can't be reached. The suite runs
 in UTC, so it gives the same answers on any machine.
 
@@ -451,8 +507,9 @@ docker build -t blades/homeslice:latest .
 The Dockerfile builds the site with Node 24 and serves it from Nginx. Then run
 it as above.
 
-`--env-file .env` gives the AI Leaderboard and Popular TV widgets their keys;
-leave it out and those widgets say they aren't set up.
+`--env-file .env` gives the AI Leaderboard and Popular TV widgets their keys and
+the Agenda its calendar addresses; leave it out and those widgets say they
+aren't set up.
 
 App will be available at `http://localhost:8080`.
 
@@ -467,7 +524,7 @@ This starts one service:
 - `homeslice` (serves the static app on internal container port `80`)
 
 It reads `.env` beside `docker-compose.yml` when there is one, for the
-BenchLM and TMDB keys.
+BenchLM and TMDB keys and the calendar addresses.
 
 If you ran an earlier version of this project, its service was called
 `branchify`. Add `--remove-orphans` once, so Compose removes the old container
@@ -480,6 +537,12 @@ Finance's chart endpoint, and nothing else. The image installs it as a template
 so Nginx resolves Yahoo with the container's own DNS servers per request, which
 means the container starts even if DNS isn't up yet. Yahoo turns away TLS
 handshakes that look scripted, so the relay offers a browser-like cipher order.
+
+The Agenda's `/api/calendar/1` to `/api/calendar/3` relays work the same way for
+the calendar addresses in `.env`: each fetches only its own address, passes
+nothing the visitor sends, keeps the feed for five minutes and marks it
+`private`. A calendar with no address answers `204`, which the widget reads as
+not set up.
 
 ## GitHub Actions to Docker Hub
 

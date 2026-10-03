@@ -329,7 +329,7 @@ describe('Dashboard flows', () => {
       key({ key: 'e' });
 
       await userEvent.click(screen.getByRole('button', { name: /Widget/ }));
-      await userEvent.click(screen.getByRole('button', { name: /Calendar/ }));
+      await userEvent.click(screen.getByRole('button', { name: /^Calendar/ }));
       expect(screen.getByRole('grid', { name: 'This month' })).toBeInTheDocument();
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
@@ -345,6 +345,18 @@ describe('Dashboard flows', () => {
         expect(window.localStorage.getItem(DASHBOARD_STORAGE_KEY)).toContain('Oslo')
       );
       expect(stored).not.toBeNull();
+    });
+
+    it('adds an agenda straight away, which says so when no calendar answers', async () => {
+      render(<App />);
+      key({ key: 'e' });
+
+      await userEvent.click(screen.getByRole('button', { name: /Widget/ }));
+      await userEvent.click(screen.getByRole('button', { name: /^Agenda/ }));
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(await screen.findByRole('alert')).toHaveTextContent('Google Calendar didn’t answer.');
+      expect(screen.getByRole('region', { name: 'Agenda' })).toBeInTheDocument();
     });
 
     it('removes a widget, and can take it back', async () => {
