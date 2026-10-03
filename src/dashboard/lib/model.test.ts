@@ -139,6 +139,26 @@ describe('sanitizeConfig', () => {
     expect(none.statusDegraded).toBe(false);
   });
 
+  it('reads My PRs, keeping its settings within range and anything but a token out', () => {
+    const token = 'github_pat_11ABCDEFG0abcdefghijklmnopqrstuvwxyz';
+    const [plain, tuned, junk, bounded, low] = sanitizeConfig({
+      widgets: [
+        { type: 'prs' },
+        { type: 'prs', token: `  ${token} `, show: 'review', count: '8', width: 6 },
+        { type: 'prs', token: 'not a token at all', show: 'everything' },
+        { type: 'prs', count: 99 },
+        { type: 'prs', count: 1 }
+      ]
+    }).pages[0].widgets;
+
+    expect(plain).toMatchObject({ type: 'prs', width: 4, token: '', show: 'both', count: 5 });
+    expect(tuned).toMatchObject({ token, show: 'review', count: 8, width: 6 });
+    expect(junk).toMatchObject({ token: '', show: 'both' });
+    expect(bounded).toMatchObject({ count: 10 });
+    expect(low).toMatchObject({ count: 3 });
+    expect(createWidget('prs')).toMatchObject({ type: 'prs', token: '', show: 'both', count: 5 });
+  });
+
   it('keeps the glass within its range', () => {
     expect(sanitizeConfig({ glass: { blur: 400, tint: -1 } }).glass).toEqual({ blur: 32, tint: 0 });
   });

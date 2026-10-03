@@ -34,6 +34,21 @@ describe('dashboard YAML', () => {
     expect(quiet).not.toContain('status');
   });
 
+  it('carries a My PRs token in the export, and warns that it is private', () => {
+    const token = 'github_pat_11ABCDEFG0abcdefghijklmnopqrstuvwxyz';
+    const yaml = configToYaml(sanitizeConfig({ widgets: [{ type: 'prs', token, show: 'mine' }] }));
+
+    expect(yaml).toContain(`token: ${token}`);
+    expect(yaml).toMatch(/A My PRs widget keeps its GitHub token here\./);
+
+    const parsed = yamlToConfig(yaml);
+    expect(parsed.ok && parsed.value.pages[0].widgets[0]).toMatchObject({
+      type: 'prs',
+      token,
+      show: 'mine'
+    });
+  });
+
   it('leaves out fields that are at their defaults', () => {
     const yaml = configToYaml(
       sanitizeConfig({

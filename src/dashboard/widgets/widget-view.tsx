@@ -7,6 +7,7 @@ import { HackerNewsWidget } from './hackernews-widget';
 import { MarketsWidget } from './markets-widget';
 import { CalendarWidget, ClockWidget } from './time-widgets';
 import { PopularTvWidget } from './tv-widget';
+import { PullsWidget } from './pulls-widget';
 import { WeatherWidget } from './weather-widget';
 
 /** Draws a widget's body from its settings. */
@@ -34,6 +35,8 @@ export const WidgetView = ({
       return <HackerNewsWidget widget={widget} newTab={newTab} />;
     case 'github':
       return <GithubTrendingWidget widget={widget} newTab={newTab} />;
+    case 'prs':
+      return <PullsWidget widget={widget} newTab={newTab} />;
     case 'benchlm':
       return <BenchmarkWidget widget={widget} newTab={newTab} />;
     case 'tv':

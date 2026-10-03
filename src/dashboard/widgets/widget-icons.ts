@@ -3,6 +3,7 @@ import {
   CalendarDays,
   Clock,
   CloudSun,
+  GitPullRequest,
   Newspaper,
   Star,
   TrendingUp,
@@ -21,6 +22,7 @@ export const WIDGET_ICONS: Readonly<Record<WidgetType, LucideIcon>> = {
   agenda: CalendarClock,
   hackernews: Newspaper,
   github: Star,
+  prs: GitPullRequest,
   benchlm: Trophy,
   tv: Tv
 };

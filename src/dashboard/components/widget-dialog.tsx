@@ -8,6 +8,7 @@ import {
   type BenchPreset
 } from '../lib/benchlm';
 import { POPULAR_LANGUAGES, TRENDING_SINCE, languageSlug } from '../lib/github';
+import { isToken, readToken } from '../lib/pulls';
 import {
   WIDGET_BLURBS,
   WIDGET_LABELS,
@@ -116,6 +117,13 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
       }
     }
 
+    if (draft.type === 'prs' && draft.token.trim() && !isToken(draft.token)) {
+      setError(
+        'That doesn’t look like a GitHub token. It is letters, numbers and underscores, 20 or more of them, like github_pat_… or ghp_…'
+      );
+      return;
+    }
+
     const cleaned: Widget =
       draft.type === 'markets'
         ? {
@@ -130,7 +138,9 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
             ? { ...draft, location: draft.location.trim() }
             : draft.type === 'github'
               ? { ...draft, language: languageSlug(draft.language) }
-              : draft;
+              : draft.type === 'prs'
+                ? { ...draft, token: readToken(draft.token) }
+                : draft;
 
     onSave(cleaned);
   };
@@ -405,6 +415,62 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
                 listed price are left out.
               </span>
             </div>
+          </>
+        )}
+
+        {draft.type === 'prs' && (
+          <>
+            <Field
+              label="GitHub token"
+              hint={
+                <>
+                  Make a{' '}
+                  <a
+                    href="https://github.com/settings/personal-access-tokens/new"
+                    target="_blank"
+                    rel="noreferrer noopener"
+                  >
+                    read-only token
+                  </a>
+                  : read access to Pull requests, Commit statuses and Checks on the repositories you
+                  want. It is saved in this browser and in the YAML export, so keep both private.
+                </>
+              }
+              error={error}
+            >
+              <input
+                type="password"
+                value={draft.token}
+                maxLength={255}
+                placeholder="github_pat_…"
+                autoComplete="off"
+                spellCheck={false}
+                data-autofocus=""
+                onChange={(event) => patch({ token: event.target.value })}
+              />
+            </Field>
+            <div className="field">
+              <span className="field-label">Show</span>
+              <Segmented
+                label="Show"
+                value={draft.show}
+                options={[
+                  { value: 'both', label: 'Both' },
+                  { value: 'review', label: 'To review' },
+                  { value: 'mine', label: 'Mine' }
+                ]}
+                onChange={(show) => patch({ show })}
+              />
+            </div>
+            <Field label={`Pull requests: ${draft.count}`} hint="Per list.">
+              <input
+                type="range"
+                min={3}
+                max={10}
+                value={draft.count}
+                onChange={(event) => patch({ count: Number(event.target.value) })}
+              />
+            </Field>
           </>
         )}
 

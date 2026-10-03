@@ -10,12 +10,14 @@ import type { AgendaWidget } from './agenda';
 import { emptyExtensions, sanitizeExtensions, type ExtensionsConfig } from './extensions-config';
 import { BENCH_SURFACES, type BenchmarkWidget } from './benchlm';
 import { TRENDING_SINCE, languageSlug, type GithubTrendingWidget } from './github';
+import { PULLS_SHOWS, readToken, type PullsWidget } from './pulls';
 import { readStatusIds } from './status-services';
 import { TRENDING_WINDOWS, type PopularTvWidget } from './tmdb';
 
 export type { AgendaWidget } from './agenda';
 export type { AppExtension, ExtensionsConfig } from './extensions-config';
 export type { BenchmarkWidget, BenchSurface } from './benchlm';
+export type { PullsShow, PullsWidget } from './pulls';
 export type { GithubTrendingWidget, TrendingSince } from './github';
 export type { PopularTvWidget, TrendingWindow } from './tmdb';
 
@@ -103,6 +105,7 @@ export type Widget =
   | CalendarWidget
   | AgendaWidget
   | GithubTrendingWidget
+  | PullsWidget
   | BenchmarkWidget
   | PopularTvWidget;
 export type WidgetType = Widget['type'];
@@ -115,6 +118,7 @@ export const WIDGET_TYPES: readonly WidgetType[] = [
   'agenda',
   'hackernews',
   'github',
+  'prs',
   'benchlm',
   'tv'
 ];
@@ -127,6 +131,7 @@ export const WIDGET_LABELS: Readonly<Record<WidgetType, string>> = {
   agenda: 'Agenda',
   hackernews: 'Hacker News',
   github: 'GitHub Trending',
+  prs: 'My PRs',
   benchlm: 'AI Leaderboard',
   tv: 'Popular TV'
 };
@@ -139,6 +144,7 @@ export const WIDGET_BLURBS: Readonly<Record<WidgetType, string>> = {
   agenda: 'Your Google Calendar: the month, and what is coming up',
   hackernews: 'The top stories right now',
   github: 'The repositories everyone is starring',
+  prs: 'Reviews waiting on you, and your open PRs with their checks',
   benchlm: 'The strongest AI models right now, from BenchLM',
   tv: 'What everyone is watching, from TMDB'
 };
@@ -495,6 +501,15 @@ const sanitizeWidget = (value: unknown): Widget | null => {
         since: oneOf(value.since, TRENDING_SINCE, 'daily'),
         count: Math.round(clampNumber(value.count, 3, 15, 6))
       };
+    case 'prs':
+      return {
+        id,
+        type: 'prs',
+        width,
+        token: readToken(value.token),
+        show: oneOf(value.show, PULLS_SHOWS, 'both'),
+        count: Math.round(clampNumber(value.count, 3, 10, 5))
+      };
     case 'benchlm':
       return {
         id,
@@ -602,6 +617,8 @@ export const createWidget = (type: WidgetType): Widget => {
       return { id, type, width: 4, weekStart: 1, count: 5, month: true };
     case 'github':
       return { id, type, width: 4, language: 'all', since: 'daily', count: 6 };
+    case 'prs':
+      return { id, type, width: 4, token: '', show: 'both', count: 5 };
     case 'benchlm':
       return { id, type, width: 4, surface: 'overall', creator: '', count: 5, maxPrice: 0 };
     case 'tv':
