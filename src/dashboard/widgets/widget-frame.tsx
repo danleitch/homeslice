@@ -3,7 +3,8 @@ import {
   type CSSProperties,
   type HTMLAttributes,
   type PointerEvent,
-  type ReactNode
+  type ReactNode,
+  type JSX
 } from 'react';
 import { GripVertical, Settings2, X } from 'lucide-react';
 import type { DraggableSyntheticListeners } from '@dnd-kit/core';

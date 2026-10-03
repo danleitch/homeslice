@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { memo, useEffect, useMemo, useState, type CSSProperties, type JSX } from 'react';
 import {
   faviconCandidates,
   monogramFor,

@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import type { AiHandoffTarget } from '../lib/ai-handoff';
 
 type AiHandoffLinksProps = {

@@ -1,3 +1,5 @@
+import type { JSX } from 'react';
+
 const REPO_URL = 'https://github.com/danleitch/branchify';
 
 // Octocat mark from simple-icons (CC0), renders with currentColor and needs no image request.

@@ -1,4 +1,12 @@
-import { Suspense, lazy, useCallback, useEffect, useState, type CSSProperties } from 'react';
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useState,
+  type CSSProperties,
+  type JSX
+} from 'react';
 import { BranchifySheet } from './branchify/branchify-sheet';
 import { useBranchify } from './branchify/use-branchify';
 import { BackgroundSettings } from './components/background-settings';

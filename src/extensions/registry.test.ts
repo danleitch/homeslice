@@ -8,6 +8,7 @@ import {
   BRANCHIFY_ID,
   appToExtension,
   enabledWidgetTypes,
+  hostLabel,
   installApp,
   isEnabled,
   setEnabled,
@@ -79,5 +80,16 @@ describe('extensions', () => {
     expect(extensionsToYaml({ disabled: ['branchify'], apps: [] })).toEqual({
       disabled: ['branchify']
     });
+  });
+});
+
+describe('hostLabel', () => {
+  it('names the host an app runs on, with its port', () => {
+    expect(hostLabel('https://doddle.example.com/play')).toBe('doddle.example.com');
+    expect(hostLabel('http://nas.lan:8080/app')).toBe('nas.lan:8080');
+  });
+
+  it('gives back an address that is not one, as it was', () => {
+    expect(hostLabel('not a url')).toBe('not a url');
   });
 });

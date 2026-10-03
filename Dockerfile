@@ -1,11 +1,11 @@
-FROM node:22-alpine AS builder
+FROM node:24-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM nginx:1.27-alpine AS runtime
+FROM nginx:1.31-alpine AS runtime
 # Read from the container's resolv.conf at start, for the markets proxy.
 ENV NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
 # Keys for the AI Leaderboard and Popular TV widgets, given at run time (never

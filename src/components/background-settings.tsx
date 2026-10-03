@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type JSX } from 'react';
 import { MAX_BASE_FISH, MIN_BASE_FISH } from '../lib/koi';
 import { BACKGROUND_STYLES, type DreamsMode } from '../lib/storage';
 import type { BackgroundStyle } from '../types';

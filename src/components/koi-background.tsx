@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, type RefObject } from 'react';
+import { memo, useEffect, useMemo, useRef, type RefObject, type JSX } from 'react';
 import { drawKoi } from '../lib/koi-draw';
 import {
   nominalLength,
@@ -24,7 +24,7 @@ type KoiBackgroundProps = {
   /** Goldfish bought at the market, who swim with whichever koi are there. */
   ownedGoldfish?: readonly OwnedGoldfish[];
   /** The panel, which the koi treat as an island so they stay in view around it. */
-  avoidRef?: RefObject<HTMLElement>;
+  avoidRef?: RefObject<HTMLElement | null>;
   /** Where the visitor has floated the lilies to. */
   lilyPlacements?: LilyPlacements;
   /** A lily has been dragged somewhere new. */

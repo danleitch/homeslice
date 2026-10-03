@@ -1,4 +1,4 @@
-import { useCallback, type CSSProperties } from 'react';
+import { useCallback, type CSSProperties, type JSX } from 'react';
 import {
   Cloud,
   CloudDrizzle,

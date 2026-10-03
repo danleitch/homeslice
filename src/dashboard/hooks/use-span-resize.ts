@@ -7,7 +7,7 @@ import { GRID_COLUMNS, MIN_SPAN } from '../lib/model';
  * live, so what the visitor sees while dragging is exactly what they get.
  */
 export const useSpanResize = (
-  gridRef: RefObject<HTMLElement>,
+  gridRef: RefObject<HTMLElement | null>,
   span: number,
   onSpan: (span: number) => void,
   onResizing: (resizing: boolean) => void

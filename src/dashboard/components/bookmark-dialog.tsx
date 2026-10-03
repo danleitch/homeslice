@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent, type JSX } from 'react';
 import { Trash2 } from 'lucide-react';
 import type { BookmarkFields } from '../lib/edit';
 import type { Group } from '../lib/model';

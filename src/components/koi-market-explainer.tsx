@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type JSX } from 'react';
 import {
   COINS_PER_BRANCH,
   DAILY_BRANCH_REWARDS,

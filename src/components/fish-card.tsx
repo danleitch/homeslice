@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type JSX } from 'react';
 import { MAX_FISH_NAME, cleanFishName } from '../lib/fish-name';
 import { joinedLabel } from '../lib/fish-growth';
 import { closeLiveKoi } from '../lib/koi-live';

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { App } from './app';
 
@@ -56,6 +56,18 @@ describe('App', () => {
       await user.click(screen.getByRole('button', { name: 'Close Branchify' }));
       expect(screen.queryByRole('dialog', { name: /Branchify/ })).not.toBeInTheDocument();
       expect(window.location.hash).toBe('');
+    });
+
+    it('closes when the dim space around it is pressed, but not when the sheet is', async () => {
+      const user = userEvent.setup({ delay: null });
+      openBranchify();
+      render(<App />);
+
+      await user.click(screen.getByRole('dialog', { name: /Branchify/ }));
+      expect(screen.getByRole('dialog', { name: /Branchify/ })).toBeInTheDocument();
+
+      await user.click(document.querySelector('.tool-backdrop')!);
+      expect(screen.queryByRole('dialog', { name: /Branchify/ })).not.toBeInTheDocument();
     });
 
     it('opens with the B key and closes on Escape', async () => {
@@ -150,6 +162,20 @@ describe('App', () => {
       // The recent list is now empty, so the whole section disappears (the branch
       // name still shows in the generated-output panel above it).
       expect(screen.queryByRole('heading', { name: 'Recent branches' })).not.toBeInTheDocument();
+    });
+
+    it('does not reload the page when Enter is pressed in the form', async () => {
+      const user = userEvent.setup({ delay: null });
+      render(<App />);
+
+      const form = screen.getByLabelText('Description').closest('form')!;
+
+      // fireEvent returns false when the event's default action was prevented.
+      expect(fireEvent.submit(form)).toBe(false);
+
+      await fillForm(user, { description: 'Tidy up{Enter}' });
+
+      expect(screen.getByLabelText('Description')).toHaveValue('Tidy up');
     });
 
     it('clears the form on reset', async () => {
@@ -277,6 +303,21 @@ describe('App', () => {
         expect(
           within(dialog).getByRole('button', { name: 'Remove type style' })
         ).toBeInTheDocument();
+      });
+
+      it('closes when the dim space around it is pressed, but not when the panel is', async () => {
+        const user = userEvent.setup({ delay: null });
+        render(<App />);
+
+        const dialog = await openBranchifySettings(user);
+        await user.click(dialog);
+        expect(screen.getByRole('dialog', { name: 'Branchify settings' })).toBeInTheDocument();
+
+        await user.click(document.querySelector('.settings-backdrop')!);
+        expect(
+          screen.queryByRole('dialog', { name: 'Branchify settings' })
+        ).not.toBeInTheDocument();
+        expect(screen.getByRole('dialog', { name: /Branchify/ })).toBeInTheDocument();
       });
 
       it('closes on Escape and returns focus to the settings button, leaving Branchify open', async () => {

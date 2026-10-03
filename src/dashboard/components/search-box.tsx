@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode, type RefObject } from 'react';
+import { useMemo, useState, type ReactNode, type RefObject, type JSX } from 'react';
 import { ArrowUpRight, CornerDownLeft, Globe, Search } from 'lucide-react';
 import { SEARCH_ENGINES, type Group, type SearchEngine } from '../lib/model';
 import { searchBookmarks } from '../lib/search';
@@ -26,7 +26,7 @@ type SearchBoxProps = {
   engine: SearchEngine;
   newTab: boolean;
   commands: readonly Command[];
-  inputRef: RefObject<HTMLInputElement>;
+  inputRef: RefObject<HTMLInputElement | null>;
 };
 
 /**

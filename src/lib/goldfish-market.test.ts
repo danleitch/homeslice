@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GOLDFISH, goldfishOf } from './goldfish';
+import { GOLDFISH, GOLDFISH_NAMES, goldfishOf } from './goldfish';
 import { goldfishCounter } from './goldfish-market';
 
 const DAY = '2026-09-23';
@@ -67,5 +67,15 @@ describe('the goldfish counter', () => {
       .sort((a, b) => a.lengthCm - b.lengthCm);
 
     expect(comets[comets.length - 1]!.price).toBeGreaterThan(comets[0]!.price);
+  });
+
+  it('still names every fish when the whole pond already holds every name', () => {
+    const listings = goldfishCounter(DAY, [], GOLDFISH_NAMES);
+
+    expect(listings.length).toBeGreaterThan(0);
+
+    for (const listing of listings) {
+      expect(GOLDFISH_NAMES).toContain(listing.name);
+    }
   });
 });

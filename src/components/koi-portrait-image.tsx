@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type JSX } from 'react';
 import type { FishGenome } from '../lib/koi-genome';
 import { hideLiveKoi, showLiveKoi } from '../lib/koi-live';
 import { koiPortrait, portraitKey } from '../lib/koi-portrait';

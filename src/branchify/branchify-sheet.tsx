@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type JSX } from 'react';
 import { X } from 'lucide-react';
 import { BranchForm } from '../components/branch-form';
 import { BranchOutputs } from '../components/branch-outputs';

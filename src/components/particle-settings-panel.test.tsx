@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, type JSX } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   DEFAULT_PARTICLE_SETTINGS,
+  MAX_EMOJI_LENGTH,
   PARTICLE_PRESETS,
   type ParticleSettings
 } from '../lib/particles';
@@ -103,6 +104,50 @@ describe('ParticleSettingsPanel', () => {
 
     await user.selectOptions(screen.getByRole('combobox', { name: 'Shape' }), 'Emoji');
     expect(screen.getByRole('textbox', { name: 'Emoji' })).toHaveValue('✨');
+  });
+
+  it('changes a colour from its picker, and shows what was picked', () => {
+    const onChange = vi.fn();
+    render(<Harness onChange={onChange} />);
+
+    fireEvent.change(screen.getByLabelText('Background'), { target: { value: '#102030' } });
+
+    expect(onChange).toHaveBeenLastCalledWith({
+      ...DEFAULT_PARTICLE_SETTINGS,
+      background: '#102030'
+    });
+    expect(screen.getByLabelText('Background')).toHaveValue('#102030');
+  });
+
+  it('keeps the emoji it is given to a sane few, counting each emoji once', async () => {
+    const onChange = vi.fn();
+    render(
+      <Harness initial={{ ...DEFAULT_PARTICLE_SETTINGS, shape: 'emoji' }} onChange={onChange} />
+    );
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Emoji' }), {
+      target: { value: '🌸'.repeat(40) }
+    });
+
+    const kept = onChange.mock.lastCall![0].emoji as string;
+
+    expect(Array.from(kept)).toHaveLength(MAX_EMOJI_LENGTH);
+    expect(kept).toBe('🌸'.repeat(MAX_EMOJI_LENGTH));
+  });
+
+  it.each([
+    ['Direction', 'Up and right', { direction: 'top-right' }],
+    ['At the edges', 'Bounce', { edges: 'bounce' }],
+    ['On click', 'Bubble', { clickMode: 'bubble' }]
+  ] as const)('changes %s to %s', async (label, choice, change) => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const initial = { ...DEFAULT_PARTICLE_SETTINGS, hover: true, click: true };
+    render(<Harness initial={initial} onChange={onChange} />);
+
+    await user.selectOptions(screen.getByRole('combobox', { name: label }), choice);
+
+    expect(onChange).toHaveBeenLastCalledWith({ ...initial, ...change });
   });
 
   it('closes on Escape and from its close button', async () => {

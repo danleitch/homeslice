@@ -1,8 +1,9 @@
-# Branchify
+# Home Slice
 
-Branchify is a personal dashboard for the sites you open every day: groups of
+Home Slice is a personal dashboard for the sites you open every day: groups of
 bookmarks on glass cards over a living koi pond, with weather, markets and news
-alongside. The Branchify branch-name generator is built in as a tool for devs.
+alongside. A branch-name generator, [Branchify](#branchify-the-branch-name-tool),
+is built in as a tool for devs.
 
 It ships as a self-contained Docker image, so you can run it wherever you like —
 a spare port on your laptop, a VPS, or a homelab box behind your own reverse
@@ -11,8 +12,6 @@ browser's `localStorage`, and you export it as YAML to keep a copy or move it
 to another browser. I run my own instance from a self-hosted server at home,
 and you're free to spin up your own the same way (see
 [Docker (Static Hosting)](#docker-static-hosting) below).
-
-<img width="499" height="361" alt="image" src="https://github.com/user-attachments/assets/460553d6-db0d-4e29-ab59-4c06fa1ae305" />
 
 ## The Dashboard
 
@@ -145,7 +144,10 @@ off, and installs apps: any site, opened over the board in a frame at its own
 address, `/#app/<name>`. Doddle, a word game, is offered ready to install; add
 anything else by its address. The site has to allow being framed.
 
-## Branchify Features
+## Branchify, the branch-name tool
+
+Branchify is the branch-name generator built into Home Slice. Open it from the
+side bar, with `B`, or at `/#branchify`.
 
 - Fast branch name generation with simple inputs
 - Supports optional ticket numbers while keeping the final branch visible
@@ -154,19 +156,20 @@ anything else by its address. The site has to allow being framed.
 - Persists your latest values and recent branches in `localStorage`
 - Fully static frontend output (`dist/`) with no backend runtime
 - Mobile-friendly, minimal UI
-- A living koi pond behind the form, with a daily koi market you stock by making branches
+- Recent branches swim as koi in the pond behind the dashboard, and copying a new branch earns coins for the daily koi market
 
 ## Branch Naming Formula
 
-Branchify uses a simple, consistent branch naming pattern:
+Branchify uses a simple, consistent branch naming pattern. The separators below
+are the defaults; you can change them in Branchify's settings.
 
 ### With Ticket Number
 
 ```
-<type>/<ticket-number>/<details>
+<type>/<ticket-number>-<details>
 ```
 
-**Example:** `feat/BRF-123/add-user-authentication`
+**Example:** `feat/BRF-123-add-user-authentication`
 
 ### Without Ticket Number
 
@@ -309,17 +312,23 @@ beside the Branchify button:
   and the koi under your pointer comes to life and swims in place.
 
 There is no payment gateway and no server. Coins and koi live in `localStorage`
-under `branchify-koi-market`.
+under `branchify-koi-market`. That key, and the other `branchify-*` ones, keep
+the names the project had before it became Home Slice, so nobody's saved coins,
+koi or settings are lost.
 
 ## Tech Stack
 
-- [Vite](https://vite.dev/) (build + dev server)
-- React + TypeScript
+- [Vite 8](https://vite.dev/) (build + dev server)
+- [React 19](https://react.dev/) + [TypeScript 6](https://www.typescriptlang.org/) in strict mode
+- [three.js](https://threejs.org/) for the koi pond and [tsParticles](https://particles.js.org/) for the particles background
 - [dnd kit](https://dndkit.com/) for dragging and sorting, [js-yaml](https://github.com/nodeca/js-yaml) for the YAML
 - [Lucide](https://lucide.dev/) icons and the [Inter](https://rsms.me/inter/) typeface, both bundled
-- [Vitest](https://vitest.dev/) + [Testing Library](https://testing-library.com/) for tests
-- ESLint + Prettier for linting and formatting
+- [Vitest 5](https://vitest.dev/) + [Testing Library](https://testing-library.com/) on jsdom for tests, with V8 coverage
+- ESLint 10 + Prettier for linting and formatting
 - Nginx for static Docker hosting
+
+Node 22.22.2 or newer (or 24.15+) is needed to build and test; the Docker image
+builds with Node 24.
 
 ## Project Structure
 
@@ -367,12 +376,13 @@ src/
     koi-inspect.ts            # What a clicked fish's card says about it
     pond-decor.ts             # Stones on the bed, lilies on the surface
     pond-surface.ts           # Ripples and floating pellets
+  test/                       # Shared test setup and a recording canvas stand-in
   vendor/koi-pond/            # The hyperfrontend koi, untouched (see its README)
 ```
 
 Presentation lives in `components/`, reusable stateful behaviour in `hooks/`,
-and all pure logic in `lib/` so it can be unit-tested in isolation. Every module
-stays well under 250 lines.
+and all pure logic in `lib/` so it can be unit-tested in isolation. Tests sit
+beside the code they cover, as `*.test.ts` and `*.test.tsx`.
 
 ## Local Development
 
@@ -392,14 +402,26 @@ the page's own cache asks at most twice a day.
 ```bash
 npm test            # run the unit and component test suite once
 npm run test:watch  # watch mode for local development
-npm run coverage    # run tests with a coverage report
+npm run coverage    # run the suite with coverage, failing under the thresholds
 npm run lint        # ESLint
 npm run format      # apply Prettier formatting
+npm run build       # type-check (tsc -b) and build
 ```
 
 The pure logic in `src/lib/` is covered by fast unit tests, and the React
-components are exercised with Testing Library. CI runs lint, formatting, tests,
-and a production build before any Docker image is built.
+components, hooks and widgets are exercised with Testing Library: the board's
+dialogs, drag and drop, keyboard and context menus, the widgets' loading, error
+and empty states, and the pond's canvas and WebGL drawing through recording
+stand-ins for the canvas and for three.js.
+
+`npm run coverage` fails if line, statement or function coverage drops below
+99%, or branch coverage below 93%, so new code arrives with its tests. At the
+last count the suite ran about 1,800 tests at roughly 99.8% line coverage;
+the few lines left are defensive guards that can't be reached. The suite runs
+in UTC, so it gives the same answers on any machine.
+
+CI runs lint, the formatting check, the tests with coverage and a production
+build before any Docker image is built.
 
 ## Production Build
 
@@ -411,17 +433,23 @@ The static site is written to `dist/`.
 
 ## Docker (Static Hosting)
 
-### Build image
+The image is published on Docker Hub as
+[`blades/homeslice`](https://hub.docker.com/r/blades/homeslice).
+
+### Run the published image
 
 ```bash
-docker build -t branchify:latest .
+docker run --rm -p 8080:80 --env-file .env blades/homeslice:latest
 ```
 
-### Run container
+### Build it yourself
 
 ```bash
-docker run --rm -p 8080:80 --env-file .env branchify:latest
+docker build -t blades/homeslice:latest .
 ```
+
+The Dockerfile builds the site with Node 24 and serves it from Nginx. Then run
+it as above.
 
 `--env-file .env` gives the AI Leaderboard and Popular TV widgets their keys;
 leave it out and those widgets say they aren't set up.
@@ -436,10 +464,14 @@ docker compose up -d --build
 
 This starts one service:
 
-- `branchify` (serves the static app on internal container port `80`)
+- `homeslice` (serves the static app on internal container port `80`)
 
 It reads `.env` beside `docker-compose.yml` when there is one, for the
 BenchLM and TMDB keys.
+
+If you ran an earlier version of this project, its service was called
+`branchify`. Add `--remove-orphans` once, so Compose removes the old container
+instead of leaving it running beside the new one.
 
 The included Nginx config supports SPA route refresh via `try_files ... /index.html`.
 
@@ -451,30 +483,53 @@ handshakes that look scripted, so the relay offers a browser-like cipher order.
 
 ## GitHub Actions to Docker Hub
 
-The workflow at `.github/workflows/docker-publish.yml` will:
+The workflow at `.github/workflows/docker-publish.yml` has two jobs:
 
-- build the Docker image for pull requests targeting `main`
-- build and push the image to Docker Hub on pushes to `main`
-- publish `latest` for the default branch and `sha-*` tags for traceability
+1. **verify** installs with `npm ci` and runs lint, the formatting check, the
+   tests with coverage and a production build.
+2. **docker** builds the image once verify passes, and pushes it to Docker Hub
+   unless the run is for a pull request.
 
-Add these repository secrets in GitHub before enabling the publish step:
+It runs on pull requests to `main` (build only, nothing is pushed), on pushes
+to `main`, on version tags such as `v1.2.0`, and by hand from the Actions tab
+(**Run workflow**). A push publishes these tags:
 
-- `DOCKERHUB_USERNAME`
-- `DOCKERHUB_TOKEN`
+- `latest`, for the default branch
+- `sha-<commit>`, for traceability
+- the tag's own name (`v1.2.0`), for a version tag
 
-Optional repository variable:
+### Setting it up
 
-- `DOCKERHUB_REPOSITORY` to publish to an explicit image path such as `blades/branchify`
+Docker needs nothing more than the Dockerfile in this repo to build the image.
+Publishing it needs a Docker Hub account and two secrets in GitHub:
 
-The published image name defaults to:
+1. **Docker Hub repository.** Create `homeslice` under the `blades` account at
+   hub.docker.com. (Pushing to a repository that doesn't exist yet creates it
+   too, but creating it first lets you choose whether it is public or private.)
+2. **Docker Hub access token.** In Docker Hub go to _Account settings →
+   Personal access tokens → Generate new token_, give it **Read & Write**
+   access and copy the token. It is shown once.
+3. **GitHub secrets.** In this repository go to _Settings → Secrets and
+   variables → Actions → New repository secret_ and add:
+   - `DOCKERHUB_USERNAME`: `blades`
+   - `DOCKERHUB_TOKEN`: the token from step 2
+4. **Publish.** Push to `main` (or run the workflow by hand). A few minutes
+   later `blades/homeslice:latest` is on Docker Hub, and `docker compose pull`
+   on the server fetches it.
+
+The image name defaults to:
 
 ```text
-<DOCKERHUB_USERNAME>/branchify
+<DOCKERHUB_USERNAME>/homeslice
 ```
 
-If `DOCKERHUB_REPOSITORY` is set, it overrides the default and publishes to that exact Docker Hub repository.
+To publish somewhere else, set the optional repository **variable** (under
+_Settings → Secrets and variables → Actions → Variables_) `DOCKERHUB_REPOSITORY`
+to the exact path, such as `blades/homeslice`; it overrides the default.
 
-Pull request builds do not push to Docker Hub. They build against a local fallback image name so the workflow still validates successfully when secrets are unavailable.
+Pull request builds never log in or push. They build against a local fallback
+image name, so a pull request validates even from a fork with no secrets. A
+push to `main` without the two secrets fails at the Docker Hub login step.
 
 ## Notes
 

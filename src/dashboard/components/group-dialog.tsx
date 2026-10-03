@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, type JSX } from 'react';
 import { STYLE_CHOICES, WIDTH_OPTIONS } from './layout-options';
 import type { BookmarkStyle, Group } from '../lib/model';
 import { Field, Modal, Segmented } from './ui';

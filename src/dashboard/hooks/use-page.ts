@@ -28,7 +28,7 @@ export const usePage = (): UsePage => {
     leaving: null,
     direction: null
   }));
-  const timer = useRef<number>();
+  const timer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     writeStorage(PAGE_STORAGE_KEY, String(state.page));

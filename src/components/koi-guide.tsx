@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { useAwake } from '../hooks/use-awake';
 import { KOI_AGE_CLASSES, POND_DAYS_PER_DAY, lengthAtAge } from '../lib/fish-growth';
 import { GOLDFISH, type GoldfishVariety } from '../lib/goldfish';

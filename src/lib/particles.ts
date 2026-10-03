@@ -437,7 +437,8 @@ export const toParticlesOptions = (settings: ParticleSettings): ParticlesOptions
       }
     },
     particles: {
-      color: { value: s.randomColor ? 'random' : s.color },
+      // tsParticles 4 paints from `paint` and no longer reads `particles.color`.
+      paint: { fill: { enable: true, color: { value: s.randomColor ? 'random' : s.color } } },
       links: {
         color: s.linkColor,
         distance: s.linkDistance,

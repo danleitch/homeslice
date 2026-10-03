@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { FishCard as FishCardData } from '../lib/koi-inspect';
 import { FishCard } from './fish-card';
@@ -85,6 +85,36 @@ describe('FishCard', () => {
     expect(within(card).getByText('Nisai · 42 cm, could reach 70 cm')).toBeInTheDocument();
   });
 
+  it.each([
+    ['goldfish', 'Goldfish'],
+    ['resident', 'Pond resident'],
+    ['branch', 'Branch koi']
+  ] as const)('calls a %s “%s”', (kind, label) => {
+    renderCard({ ...branchKoi, kind });
+
+    expect(
+      within(screen.getByRole('dialog', { name: /Sora/ })).getByText(label)
+    ).toBeInTheDocument();
+  });
+
+  it('calls a koi from the market by how rare it is, and a koi of no rarity just a koi', () => {
+    const { rerender } = renderCard({ ...marketKoi, rarity: 'legendary' });
+    const label = (): string => document.querySelector('.rarity-badge')?.textContent ?? '';
+
+    expect(label()).toBe('Legendary');
+
+    rerender(
+      <FishCard
+        card={{ ...marketKoi, rarity: null }}
+        anchor={{ x: 100, y: 100 }}
+        now={NOW}
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(label()).toBe('Koi');
+  });
+
   it('closes from its button and from Escape', async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
@@ -157,6 +187,21 @@ describe('FishCard', () => {
       await user.clear(screen.getByRole('textbox'));
       await user.type(screen.getByRole('textbox'), 'Momo');
       await user.click(screen.getByText('Taisho Sanke'));
+
+      expect(onRename).toHaveBeenCalledExactlyOnceWith('Momo');
+    });
+
+    it('saves once when Enter and the blur that follows it arrive together', () => {
+      const { onRename } = renderRenamable();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Rename Sora' }));
+      const box = screen.getByRole('textbox');
+      fireEvent.change(box, { target: { value: 'Momo' } });
+
+      act(() => {
+        fireEvent.keyDown(box, { key: 'Enter' });
+        fireEvent.blur(box);
+      });
 
       expect(onRename).toHaveBeenCalledExactlyOnceWith('Momo');
     });
