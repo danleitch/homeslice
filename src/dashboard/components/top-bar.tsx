@@ -1,5 +1,14 @@
 import type { ReactNode, JSX } from 'react';
-import { BookmarkPlus, Check, FileUp, FolderPlus, LayoutGrid, Plus, Sparkles } from 'lucide-react';
+import {
+  BookmarkPlus,
+  Check,
+  ExternalLink,
+  FileUp,
+  FolderPlus,
+  LayoutGrid,
+  Plus,
+  Sparkles
+} from 'lucide-react';
 import type { HourFormat } from '../lib/model';
 import { useNow } from '../hooks/use-now';
 import { formatTime } from '../lib/time';
@@ -79,14 +88,19 @@ export const EditDock = ({
   </div>
 );
 
+/** Where bugs and feature requests go. */
+export const ISSUES_URL = 'https://github.com/danleitch/personaldash/issues/new';
+
 type EmptyBoardProps = {
   onAddBookmark: () => void;
+  onAddWidget: () => void;
   onImport: () => void;
   onExample: () => void;
 };
 
 export const EmptyBoard = ({
   onAddBookmark,
+  onAddWidget,
   onImport,
   onExample
 }: EmptyBoardProps): JSX.Element => (
@@ -96,12 +110,15 @@ export const EmptyBoard = ({
     </span>
     <h2>Your board is empty</h2>
     <p>
-      Add the sites you open every day, bring in your browser’s bookmarks, or start from an example
-      and make it yours.
+      Add the sites you open every day, drop in a widget, bring in your browser’s bookmarks, or
+      start from an example and make it yours.
     </p>
     <div className="empty-actions">
       <button type="button" className="btn btn-primary" onClick={onAddBookmark}>
         <Plus size={15} aria-hidden="true" /> Add a bookmark
+      </button>
+      <button type="button" className="btn btn-secondary" onClick={onAddWidget}>
+        <LayoutGrid size={15} aria-hidden="true" /> Add a widget
       </button>
       <button type="button" className="btn btn-secondary" onClick={onImport}>
         <FileUp size={15} aria-hidden="true" /> Import bookmarks
@@ -112,6 +129,12 @@ export const EmptyBoard = ({
     </div>
     <p className="empty-hint">
       Tip: paste a link anywhere on this page, or drag one in from another tab.
+    </p>
+    <p className="empty-feedback">
+      Hit a bug, or want a feature?{' '}
+      <a href={ISSUES_URL} target="_blank" rel="noopener noreferrer">
+        Open an issue on GitHub <ExternalLink size={12} aria-hidden="true" />
+      </a>
     </p>
   </section>
 );
