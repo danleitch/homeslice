@@ -5,7 +5,7 @@
  * Ids exist only while the page is open, and fields left at their defaults
  * are left out, so the file reads like something a person wrote.
  */
-import { dump, load, YAMLException } from 'js-yaml';
+import { CORE_SCHEMA, dump, load, mergeTag, YAMLException } from 'js-yaml';
 import { extensionsToYaml } from './extensions-config';
 import {
   allGroups,
@@ -76,7 +76,13 @@ export const configToObject = (config: DashboardConfig): Record<string, unknown>
 });
 
 const dumpYaml = (value: unknown): string =>
-  dump(value, { indent: 2, lineWidth: 120, noRefs: true, quotingType: '"' });
+  dump(value, { indent: 2, lineWidth: 120, noRefs: true, quoteStyle: 'double' });
+
+/**
+ * What a file may use: the YAML core types, plus `<<` merge keys, which
+ * homepage files lean on and js-yaml 5 no longer reads unless asked.
+ */
+const READ_SCHEMA = CORE_SCHEMA.withTags(mergeTag);
 
 export const configToYaml = (config: DashboardConfig): string =>
   `${YAML_HEADER}\n${dumpYaml(configToObject(config))}`;
@@ -88,7 +94,7 @@ export type ParseResult<T> = { ok: true; value: T } | { ok: false; problem: Yaml
 /** Reads YAML (or JSON, which is YAML too), reporting where it went wrong. */
 export const readYaml = (text: string): ParseResult<unknown> => {
   try {
-    return { ok: true, value: load(text) };
+    return { ok: true, value: load(text, { schema: READ_SCHEMA }) };
   } catch (error) {
     if (error instanceof YAMLException) {
       return {

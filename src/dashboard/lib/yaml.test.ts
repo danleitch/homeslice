@@ -103,6 +103,24 @@ describe('importing', () => {
     });
   });
 
+  it('follows YAML merge keys, as homepage files use them', () => {
+    const plan = planImport(`
+- Media:
+    - Plex: &media
+        href: http://plex.lan:32400
+        icon: plex.png
+    - Jellyfin:
+        <<: *media
+        href: http://jellyfin.lan:8096
+`);
+
+    expect(plan.ok && plan.value.groups[0].bookmarks[1]).toMatchObject({
+      name: 'Jellyfin',
+      url: 'http://jellyfin.lan:8096',
+      icon: 'plex.png'
+    });
+  });
+
   it('reads the bookmarks file a browser exports, folder by folder', () => {
     const plan = planImport(`<!DOCTYPE NETSCAPE-Bookmark-file-1>
 <META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">

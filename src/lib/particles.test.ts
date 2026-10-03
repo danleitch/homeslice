@@ -11,18 +11,25 @@ import {
 } from './particles';
 import { parseParticleSettings } from './storage';
 
+/** Reads an option a plugin supplies, which tsParticles 4 leaves untyped. */
+const at = (value: unknown, ...path: string[]): unknown =>
+  path.reduce<unknown>((node, key) => (node as Record<string, unknown> | undefined)?.[key], value);
+
 describe('toParticlesOptions', () => {
   it('draws the default exactly as Branchify always has', () => {
     const options = toParticlesOptions(DEFAULT_PARTICLE_SETTINGS);
 
     expect(options.background).toEqual({ color: { value: '#0d1117' } });
-    expect(options.interactivity?.events).toEqual({
+    expect(at(options, 'interactivity', 'events')).toEqual({
       onHover: { enable: true, mode: 'repulse' },
       onClick: { enable: false, mode: 'push' }
     });
-    expect(options.interactivity?.modes?.repulse).toEqual({ distance: 100, duration: 0.4 });
+    expect(at(options, 'interactivity', 'modes', 'repulse')).toEqual({
+      distance: 100,
+      duration: 0.4
+    });
     expect(options.particles).toMatchObject({
-      color: { value: '#4c7ff7' },
+      paint: { fill: { enable: true, color: { value: '#4c7ff7' } } },
       links: { color: '#4c7ff7', distance: 150, enable: true, opacity: 0.3, width: 1 },
       move: { enable: true, speed: 1.2, outModes: { default: 'bounce' } },
       number: { density: { enable: true }, value: 300 },
@@ -35,7 +42,7 @@ describe('toParticlesOptions', () => {
   it('asks tsParticles for random colours when they are switched on', () => {
     const options = toParticlesOptions({ ...DEFAULT_PARTICLE_SETTINGS, randomColor: true });
 
-    expect(options.particles?.color).toEqual({ value: 'random' });
+    expect(at(options, 'particles', 'paint', 'fill', 'color')).toEqual({ value: 'random' });
   });
 
   it('gives polygons and stars their sides', () => {
@@ -80,11 +87,11 @@ describe('toParticlesOptions', () => {
       removeQuantity: 5
     });
 
-    expect(options.interactivity?.events).toEqual({
+    expect(at(options, 'interactivity', 'events')).toEqual({
       onHover: { enable: true, mode: 'grab' },
       onClick: { enable: true, mode: 'remove' }
     });
-    expect(options.interactivity?.modes).toMatchObject({
+    expect(at(options, 'interactivity', 'modes')).toMatchObject({
       grab: { distance: 220 },
       remove: { quantity: 5 }
     });
