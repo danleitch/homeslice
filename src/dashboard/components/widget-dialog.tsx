@@ -96,7 +96,8 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
     }
 
     if (draft.type === 'clock') {
-      const bad = draft.zones.find((zone) => !isZone(zone.zone));
+      // Blank rows are left out below, so only a zone that was actually typed can be wrong.
+      const bad = draft.zones.find((zone) => zone.zone.trim() && !isZone(zone.zone));
 
       if (bad) {
         setError(`“${bad.zone}” isn’t a time zone. Try one like Europe/Paris.`);

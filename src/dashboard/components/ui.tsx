@@ -231,7 +231,7 @@ const MenuList = ({
   const move = (event: KeyboardEvent<HTMLDivElement>): void => {
     const buttons = Array.from(
       event.currentTarget.querySelectorAll<HTMLElement>(
-        ':scope > [role="menuitem"]:not([disabled])'
+        ':scope > .menu-row > [role="menuitem"]:not([disabled])'
       )
     );
     const index = buttons.indexOf(document.activeElement as HTMLElement);
