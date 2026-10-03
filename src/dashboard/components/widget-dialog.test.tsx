@@ -722,6 +722,51 @@ describe('WidgetDialog', () => {
     });
   });
 
+  describe('agenda', () => {
+    it('shows the number of events and what is shown', () => {
+      open(widgetOf('agenda', { count: 8, month: true }));
+
+      expect(slider(/Events/)).toHaveValue('8');
+      expect(screen.getByRole('radio', { name: 'Month and list' })).toBeChecked();
+      expect(screen.getByRole('radio', { name: 'Monday' })).toBeChecked();
+    });
+
+    it('says where its calendars come from', () => {
+      open(widgetOf('agenda'));
+
+      expect(screen.getByText(/CALENDAR_ICAL_URL/)).toBeInTheDocument();
+    });
+
+    it('saves a different number of events', async () => {
+      const { onSave } = open(widgetOf('agenda', { count: 5 }));
+
+      fireEvent.change(slider(/Events/), { target: { value: '10' } });
+      await save();
+
+      expect(saved(onSave)).toMatchObject({ type: 'agenda', count: 10 });
+    });
+
+    it('saves the list alone, which has no use for the day the weeks start on', async () => {
+      const { onSave } = open(widgetOf('agenda', { month: true, weekStart: 1 }));
+
+      await choose('Show', 'List only');
+      expect(screen.queryByRole('radiogroup', { name: 'Weeks start on' })).not.toBeInTheDocument();
+      await save();
+
+      expect(saved(onSave)).toMatchObject({ month: false });
+    });
+
+    it('saves the month and list, and weeks that start on Sunday', async () => {
+      const { onSave } = open(widgetOf('agenda', { month: false, weekStart: 1 }));
+
+      await choose('Show', 'Month and list');
+      await choose('Weeks start on', 'Sunday');
+      await save();
+
+      expect(saved(onSave)).toMatchObject({ month: true, weekStart: 0 });
+    });
+  });
+
   describe('calendar', () => {
     it('shows which day the weeks start on', () => {
       open(widgetOf('calendar', { weekStart: 0 }));

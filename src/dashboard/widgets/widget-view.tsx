@@ -1,5 +1,6 @@
 import type { JSX } from 'react';
 import type { HourFormat, Widget } from '../lib/model';
+import { AgendaWidget } from './agenda-widget';
 import { BenchmarkWidget } from './benchlm-widget';
 import { GithubTrendingWidget } from './github-widget';
 import { HackerNewsWidget } from './hackernews-widget';
@@ -27,6 +28,8 @@ export const WidgetView = ({
       return <ClockWidget widget={widget} clock={clock} />;
     case 'calendar':
       return <CalendarWidget widget={widget} />;
+    case 'agenda':
+      return <AgendaWidget widget={widget} clock={clock} newTab={newTab} />;
     case 'hackernews':
       return <HackerNewsWidget widget={widget} newTab={newTab} />;
     case 'github':

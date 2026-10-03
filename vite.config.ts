@@ -83,10 +83,58 @@ const pricingProxy: Record<string, ProxyOptions> = {
   }
 };
 
+/** The Agenda widget reads up to three calendars, one variable each (see .env.example). */
+const CALENDAR_VARIABLES = ['CALENDAR_ICAL_URL', 'CALENDAR_ICAL_URL_2', 'CALENDAR_ICAL_URL_3'];
+
+/**
+ * A calendar's secret iCal address is its key, so these relays hold it as
+ * nginx.conf does: /api/calendar/1 to /3 each fetch their one address, whatever
+ * the page asks for. A calendar with no address answers 204 (no content), which
+ * the widget reads as "not set up", without the browser logging an error.
+ */
+const calendarProxies = (env: Record<string, string>): Record<string, ProxyOptions> =>
+  Object.fromEntries(
+    CALENDAR_VARIABLES.map((name, index): [string, ProxyOptions] => {
+      let address: URL | null = null;
+
+      try {
+        address = new URL(env[name] ?? '');
+      } catch {
+        /* unset, or not an address: the relay says so below */
+      }
+
+      return [
+        `^/api/calendar/${index + 1}$`,
+        address
+          ? {
+              target: address.origin,
+              changeOrigin: true,
+              rewrite: () => `${address.pathname}${address.search}`
+            }
+          : {
+              bypass: (_request, response) => {
+                if (response) {
+                  response.statusCode = 204;
+                  response.end();
+                }
+
+                // A string tells Vite the request is handled; it stops once the response has ended.
+                return '/';
+              }
+            }
+      ];
+    })
+  );
+
 export default defineConfig(({ mode }) => {
   // Every variable, not only VITE_ ones; none of these are put in the bundle.
   const env = loadEnv(mode, process.cwd(), '');
-  const proxy = { ...marketsProxy, ...pricingProxy, ...keyedProxies(env) };
+  const proxy = {
+    ...marketsProxy,
+    ...pricingProxy,
+    ...keyedProxies(env),
+    ...calendarProxies(env)
+  };
 
   return {
     server: {

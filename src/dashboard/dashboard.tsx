@@ -955,7 +955,7 @@ export const Dashboard = ({
             // Most widgets want a word about what to show before they are useful.
             if (
               created.widget &&
-              !['calendar', 'hackernews', 'github', 'benchlm', 'tv'].includes(type)
+              !['calendar', 'agenda', 'hackernews', 'github', 'benchlm', 'tv'].includes(type)
             ) {
               setWidgetDialog(created.widget);
             }

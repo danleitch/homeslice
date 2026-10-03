@@ -1,4 +1,5 @@
 import {
+  CalendarClock,
   CalendarDays,
   Clock,
   CloudSun,
@@ -17,6 +18,7 @@ export const WIDGET_ICONS: Readonly<Record<WidgetType, LucideIcon>> = {
   markets: TrendingUp,
   clock: Clock,
   calendar: CalendarDays,
+  agenda: CalendarClock,
   hackernews: Newspaper,
   github: Star,
   benchlm: Trophy,
