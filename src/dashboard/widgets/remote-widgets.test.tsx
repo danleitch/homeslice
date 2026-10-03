@@ -167,6 +167,12 @@ describe('the widgets that fetch', () => {
       expect(document.querySelector('.wx-days')).toBeNull();
 
       unmount();
+      const almost = show(widgetOf('weather', { location: 'Almost', width: 5 }));
+      await screen.findByText('Cape Town, South Africa');
+
+      expect(document.querySelector('.wx-days')).toBeNull();
+
+      almost.unmount();
       show(widgetOf('weather', { location: 'Wide', width: 6 }));
       await screen.findByText('Cape Town, South Africa');
 
@@ -249,7 +255,7 @@ describe('the widgets that fetch', () => {
       const items = await screen.findAllByRole('listitem');
 
       expect(items).toHaveLength(2);
-      expect(items[0]).toHaveTextContent('1');
+      expect(items.map((item) => item.querySelector('.hn-rank')?.textContent)).toEqual(['1', '2']);
       expect(within(items[0]!).getByRole('link', { name: 'A fast new compiler' })).toHaveAttribute(
         'href',
         'https://example.com/compiler'
@@ -261,7 +267,6 @@ describe('the widgets that fetch', () => {
         'href',
         'https://news.ycombinator.com/item?id=101'
       );
-      expect(items[1]).toHaveTextContent('2');
       expect(items[1]).toHaveTextContent('20m');
       expect(fetchTopStories).toHaveBeenCalledWith(2, expect.any(AbortSignal));
     });

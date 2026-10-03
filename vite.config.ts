@@ -101,7 +101,17 @@ export default defineConfig(({ mode }) => {
           'src/test/**',
           'src/declarations.d.ts',
           'src/vendor/**'
-        ]
+        ],
+        reporter: ['text-summary', 'lcov'],
+        // A little under what the suite reaches, so a change that leaves new code
+        // untested fails `npm run coverage` (and CI) rather than slipping by. What is
+        // left is defensive: guards on refs that are always set, float fallbacks.
+        thresholds: {
+          lines: 99,
+          statements: 99,
+          functions: 99,
+          branches: 93
+        }
       }
     }
   };
