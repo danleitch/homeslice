@@ -1139,6 +1139,10 @@ body {
   text-transform: uppercase;
 }
 
+.wdg-title-sub {
+  color: var(--ink-soft);
+}
+
 .wdg-aside {
   color: var(--ink-faint);
   font-size: 0.72rem;

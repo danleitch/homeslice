@@ -8,6 +8,7 @@ import {
 } from 'react';
 import { GripVertical, Settings2, X } from 'lucide-react';
 import type { DraggableSyntheticListeners } from '@dnd-kit/core';
+import { presetTitle } from '../lib/benchlm';
 import { WIDGET_LABELS, type Widget } from '../lib/model';
 import { noDrag } from '../components/no-drag';
 
@@ -46,75 +47,87 @@ export const WidgetFrame = forwardRef<HTMLElement, WidgetFrameProps>(
       ...rest
     },
     ref
-  ) => (
-    <section
-      ref={ref}
-      className={[
-        'wdg',
-        'glass',
-        `wdg--${widget.type}`,
-        overlay && 'wdg--overlay',
-        placeholder && 'wdg--placeholder',
-        className
-      ]
-        .filter(Boolean)
-        .join(' ')}
-      style={
-        {
-          '--span': widget.width,
-          '--span-md': widget.width <= 6 ? 6 : 12,
-          ...style
-        } as CSSProperties
-      }
-      aria-label={WIDGET_LABELS[widget.type]}
-      data-dash=""
-      {...rest}
-    >
-      <header className="wdg-head" ref={handleRef} {...handleListeners}>
-        <GripVertical className="grp-grip" size={13} aria-hidden="true" />
-        <h2 className="wdg-title">{WIDGET_LABELS[widget.type]}</h2>
-        {aside && <span className="wdg-aside">{aside}</span>}
-        <span className="wdg-actions">
-          {onConfigure && (
-            <button
-              type="button"
-              className="icon-btn"
-              aria-label={`Configure ${WIDGET_LABELS[widget.type]}`}
-              title="Configure"
-              {...noDrag}
-              onClick={() => onConfigure(widget)}
-            >
-              <Settings2 size={14} />
-            </button>
-          )}
-          {editing && onRemove && (
-            <button
-              type="button"
-              className="icon-btn icon-btn--danger"
-              aria-label={`Remove ${WIDGET_LABELS[widget.type]}`}
-              title="Remove"
-              {...noDrag}
-              onClick={() => onRemove(widget)}
-            >
-              <X size={14} />
-            </button>
-          )}
-        </span>
-      </header>
-      <div className="wdg-body">{children}</div>
-      {editing && onResizeStart && (
-        <span
-          className="resize-grip"
-          role="separator"
-          aria-orientation="vertical"
-          aria-label={`Resize ${WIDGET_LABELS[widget.type]}`}
-          title="Drag to resize"
-          {...noDrag}
-          onPointerDown={onResizeStart}
-        />
-      )}
-    </section>
-  )
+  ) => {
+    const subtitle = widget.type === 'benchlm' ? presetTitle(widget) : null;
+
+    return (
+      <section
+        ref={ref}
+        className={[
+          'wdg',
+          'glass',
+          `wdg--${widget.type}`,
+          overlay && 'wdg--overlay',
+          placeholder && 'wdg--placeholder',
+          className
+        ]
+          .filter(Boolean)
+          .join(' ')}
+        style={
+          {
+            '--span': widget.width,
+            '--span-md': widget.width <= 6 ? 6 : 12,
+            ...style
+          } as CSSProperties
+        }
+        aria-label={WIDGET_LABELS[widget.type]}
+        data-dash=""
+        {...rest}
+      >
+        <header className="wdg-head" ref={handleRef} {...handleListeners}>
+          <GripVertical className="grp-grip" size={13} aria-hidden="true" />
+          <h2 className="wdg-title">
+            {WIDGET_LABELS[widget.type]}
+            {subtitle && (
+              <>
+                <span aria-hidden="true"> · </span>
+                <span className="wdg-title-sub">{subtitle}</span>
+              </>
+            )}
+          </h2>
+          {aside && <span className="wdg-aside">{aside}</span>}
+          <span className="wdg-actions">
+            {onConfigure && (
+              <button
+                type="button"
+                className="icon-btn"
+                aria-label={`Configure ${WIDGET_LABELS[widget.type]}`}
+                title="Configure"
+                {...noDrag}
+                onClick={() => onConfigure(widget)}
+              >
+                <Settings2 size={14} />
+              </button>
+            )}
+            {editing && onRemove && (
+              <button
+                type="button"
+                className="icon-btn icon-btn--danger"
+                aria-label={`Remove ${WIDGET_LABELS[widget.type]}`}
+                title="Remove"
+                {...noDrag}
+                onClick={() => onRemove(widget)}
+              >
+                <X size={14} />
+              </button>
+            )}
+          </span>
+        </header>
+        <div className="wdg-body">{children}</div>
+        {editing && onResizeStart && (
+          <span
+            className="resize-grip"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label={`Resize ${WIDGET_LABELS[widget.type]}`}
+            title="Drag to resize"
+            {...noDrag}
+            onPointerDown={onResizeStart}
+          />
+        )}
+      </section>
+    );
+  }
 );
 
 WidgetFrame.displayName = 'WidgetFrame';

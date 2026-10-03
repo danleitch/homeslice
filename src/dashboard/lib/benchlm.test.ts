@@ -6,6 +6,7 @@ import {
   fetchRankings,
   pickModels,
   presetOf,
+  presetTitle,
   priceKey,
   priceOf,
   readRankings,
@@ -165,6 +166,27 @@ describe('BenchLM', () => {
     expect(presetOf({ ...widget, surface: 'coding' })).toBe('custom');
     expect(presetOf({ ...widget, creator: 'Google' })).toBe('custom');
     expect(presetOf({ ...widget, maxPrice: 2 })).toBe('custom');
+  });
+
+  it('names the preset for the card’s title, and has no name for settings that match neither', () => {
+    const widget = {
+      id: 'w',
+      type: 'benchlm',
+      width: 4,
+      surface: 'overall',
+      creator: '',
+      count: 5,
+      maxPrice: 0
+    } satisfies BenchmarkWidget;
+
+    expect(presetTitle(widget)).toBe('Frontier');
+    expect(presetTitle({ ...widget, ...BENCH_PRESETS.budget })).toBe('Budget');
+    expect(presetTitle({ ...widget, surface: 'agentic' })).toBeNull();
+  });
+
+  it('makes the budget preset five models at two dollars, the frontier five with no limit', () => {
+    expect(BENCH_PRESETS.budget).toMatchObject({ surface: 'coding', count: 5, maxPrice: 2 });
+    expect(BENCH_PRESETS.top).toMatchObject({ surface: 'overall', count: 5, maxPrice: 0 });
   });
 
   describe('the price list', () => {

@@ -703,6 +703,26 @@ describe('The side bar and extensions', () => {
     expect(fetchMock.mock.calls.map(([url]) => url)).toContain('/api/benchlm/pricing?offset=0');
   });
 
+  it('says which preset an AI Leaderboard is on in its title, and nothing for custom settings', async () => {
+    seed({
+      widgets: [
+        { type: 'benchlm', surface: 'overall', maxPrice: 0 },
+        { type: 'benchlm', surface: 'coding', maxPrice: 2, count: 5 },
+        { type: 'benchlm', surface: 'agentic', maxPrice: 0 }
+      ]
+    });
+    render(<App />);
+
+    const cards = screen.getAllByRole('region', { name: 'AI Leaderboard' });
+    const titles = cards.map((card) => within(card).getByRole('heading', { level: 2 }));
+
+    expect(titles.map((title) => title.textContent)).toEqual([
+      'AI Leaderboard · Frontier',
+      'AI Leaderboard · Budget',
+      'AI Leaderboard'
+    ]);
+  });
+
   it('lists the TV everyone is watching, linked to TMDB', async () => {
     seed({ widgets: [{ type: 'tv', window: 'day', count: 3 }] });
     vi.stubGlobal(

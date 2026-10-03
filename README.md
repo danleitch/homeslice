@@ -141,9 +141,10 @@ people visit, which keeps BenchLM's free 1,000 reads a month in hand. The
 relays pass on only the ranking or the trending window, so a visitor can't
 spend reads by varying the address.
 
-The AI Leaderboard has two presets in its settings: **Top of the charts**
-(Overall, every lab) and **Budget coding** (Coding, at most $1 per million
-tokens, 15 models). Its **Max price** setting keeps only models at or under that
+The AI Leaderboard has two presets in its settings: **Frontier** (Overall,
+every lab, 5 models) and **Budget** (Coding, at most $2 per million tokens,
+5 models). While a widget's settings match one, its title says so, as "AI
+Leaderboard · Budget". Its **Max price** setting keeps only models at or under that
 price, counting three parts input to one part output, so a cheap input price
 can't hide an expensive output. Prices come from BenchLM's public price list,
 which needs no key but is licensed

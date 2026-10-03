@@ -32,10 +32,13 @@ export type BenchmarkWidget = {
   maxPrice: number;
 };
 
-/** The two ways most people read the board; each fills in the settings it names. */
+/**
+ * The two ways most people read the board; each fills in the settings it names,
+ * and its label is what the card's title says while the settings match it.
+ */
 export const BENCH_PRESETS = {
-  top: { label: 'Top of the charts', surface: 'overall', creator: '', count: 5, maxPrice: 0 },
-  budget: { label: 'Budget coding', surface: 'coding', creator: '', count: 15, maxPrice: 1 }
+  top: { label: 'Frontier', surface: 'overall', creator: '', count: 5, maxPrice: 0 },
+  budget: { label: 'Budget', surface: 'coding', creator: '', count: 5, maxPrice: 2 }
 } as const;
 
 export type BenchPreset = keyof typeof BENCH_PRESETS;
@@ -50,6 +53,12 @@ export const presetOf = (widget: BenchmarkWidget): BenchPreset | 'custom' =>
       widget.maxPrice === preset.maxPrice
     );
   }) ?? 'custom';
+
+/** The name of the preset a widget's settings amount to, for its card's title; none if they match neither. */
+export const presetTitle = (widget: BenchmarkWidget): string | null => {
+  const preset = presetOf(widget);
+  return preset === 'custom' ? null : BENCH_PRESETS[preset].label;
+};
 
 /** Dollars per million tokens, as BenchLM lists them. */
 export type ModelPrice = { input: number; output: number };

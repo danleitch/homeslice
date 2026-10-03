@@ -565,45 +565,45 @@ describe('WidgetDialog', () => {
       const { unmount } = render(
         <WidgetDialog widget={widgetOf('benchlm')} onSave={vi.fn()} onClose={vi.fn()} />
       );
-      expect(screen.getByRole('radio', { name: 'Top of the charts' })).toBeChecked();
-      expect(screen.getByRole('radio', { name: 'Budget coding' })).not.toBeChecked();
+      expect(screen.getByRole('radio', { name: 'Frontier' })).toBeChecked();
+      expect(screen.getByRole('radio', { name: 'Budget' })).not.toBeChecked();
       unmount();
 
-      open(widgetOf('benchlm', { surface: 'coding', maxPrice: 1, count: 9 }));
-      expect(screen.getByRole('radio', { name: 'Budget coding' })).toBeChecked();
+      open(widgetOf('benchlm', { surface: 'coding', maxPrice: 2, count: 9 }));
+      expect(screen.getByRole('radio', { name: 'Budget' })).toBeChecked();
     });
 
     it('marks neither preset once the settings are something else', () => {
       open(widgetOf('benchlm', { surface: 'agentic', creator: 'Google' }));
 
-      expect(screen.getByRole('radio', { name: 'Top of the charts' })).not.toBeChecked();
-      expect(screen.getByRole('radio', { name: 'Budget coding' })).not.toBeChecked();
+      expect(screen.getByRole('radio', { name: 'Frontier' })).not.toBeChecked();
+      expect(screen.getByRole('radio', { name: 'Budget' })).not.toBeChecked();
     });
 
     it('fills in the ranking, lab, count and price for the budget preset, width untouched', async () => {
       const { onSave } = open(widgetOf('benchlm', { creator: 'Anthropic', width: 6 }));
 
-      await choose('Preset', 'Budget coding');
+      await choose('Preset', 'Budget');
 
       expect(screen.getByRole('radio', { name: 'Coding' })).toBeChecked();
       expect(screen.getByLabelText(/Only from/)).toHaveValue('');
-      expect(screen.getByText('Models: 15')).toBeInTheDocument();
-      expect(screen.getByRole('radio', { name: '$1' })).toBeChecked();
+      expect(screen.getByText('Models: 5')).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: '$2' })).toBeChecked();
 
       await save();
       expect(saved(onSave)).toMatchObject({
         surface: 'coding',
         creator: '',
-        count: 15,
-        maxPrice: 1,
+        count: 5,
+        maxPrice: 2,
         width: 6
       });
     });
 
-    it('goes back to the top of the charts, with no price limit', async () => {
-      const { onSave } = open(widgetOf('benchlm', { surface: 'coding', maxPrice: 1, count: 15 }));
+    it('goes back to the frontier, with no price limit', async () => {
+      const { onSave } = open(widgetOf('benchlm', { surface: 'coding', maxPrice: 2, count: 5 }));
 
-      await choose('Preset', 'Top of the charts');
+      await choose('Preset', 'Frontier');
       await save();
 
       expect(saved(onSave)).toMatchObject({
