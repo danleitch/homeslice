@@ -80,6 +80,8 @@ export type SuggestedApp = {
   /** Where it usually runs; empty when each person hosts their own. */
   url: string;
   urlHint: string;
+  /** Shown with no title bar or border: just the app, and a click outside closes it. */
+  frameless?: boolean;
 };
 
 /** Apps offered in the Extensions view before they are installed. */
@@ -89,9 +91,15 @@ export const SUGGESTED_APPS: readonly SuggestedApp[] = [
     description: 'A word game: guess the hidden word on a 4, 5 or 6 letter board.',
     icon: Gamepad2,
     url: 'https://doddle.theleechies.co.za/',
-    urlHint: 'Where Doddle runs'
+    urlHint: 'Where Doddle runs',
+    frameless: true
   }
 ];
+
+/** Whether an app opens bare, as its suggestion says; any other app gets a title bar. */
+export const isFramelessApp = (app: Pick<AppExtension, 'name'>): boolean =>
+  SUGGESTED_APPS.find((suggested) => suggested.name.toLowerCase() === app.name.toLowerCase())
+    ?.frameless === true;
 
 export const iconForApp = (app: Pick<AppExtension, 'name'>): LucideIcon =>
   SUGGESTED_APPS.find((suggested) => suggested.name.toLowerCase() === app.name.toLowerCase())

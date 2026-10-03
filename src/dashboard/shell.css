@@ -403,6 +403,16 @@
   animation: modal-in 0.3s var(--ease) both;
 }
 
+.app-sheet--bare {
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+}
+
+.app-sheet--bare .app-frame-wrap {
+  background: transparent;
+}
+
 .app-head {
   display: flex;
   align-items: center;

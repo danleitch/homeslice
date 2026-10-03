@@ -10,6 +10,7 @@ import {
   enabledWidgetTypes,
   hostLabel,
   installApp,
+  isFramelessApp,
   isEnabled,
   setEnabled,
   uninstallApp,
@@ -91,5 +92,16 @@ describe('hostLabel', () => {
 
   it('gives back an address that is not one, as it was', () => {
     expect(hostLabel('not a url')).toBe('not a url');
+  });
+});
+
+describe('isFramelessApp', () => {
+  it('opens Doddle bare, whatever the case of its name', () => {
+    expect(isFramelessApp({ name: 'Doddle' })).toBe(true);
+    expect(isFramelessApp({ name: 'doddle' })).toBe(true);
+  });
+
+  it('gives any other app its title bar', () => {
+    expect(isFramelessApp({ name: 'Notes' })).toBe(false);
   });
 });

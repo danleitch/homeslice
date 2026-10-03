@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type JSX } from 'react';
 import { ExternalLink, RotateCw, X } from 'lucide-react';
 import type { AppExtension } from '../dashboard/lib/extensions-config';
-import { iconForApp } from './registry';
+import { iconForApp, isFramelessApp } from './registry';
 import '../dashboard/shell.css';
 
 /** Long enough for a slow app to paint; after it, the frame offers a way out in case it never will. */
@@ -23,6 +23,8 @@ export const AppSheet = ({
   const [nonce, setNonce] = useState(0);
   const closeRef = useRef<HTMLButtonElement>(null);
   const Icon = iconForApp(app);
+  const frameless = isFramelessApp(app);
+  const sheetRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     setLoaded(false);
@@ -33,7 +35,8 @@ export const AppSheet = ({
 
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
-    closeRef.current?.focus({ preventScroll: true });
+    // With no close button to land on, the sheet itself takes focus so Esc still works.
+    (closeRef.current ?? sheetRef.current)?.focus({ preventScroll: true });
 
     return () => {
       if (previous && document.contains(previous)) {
@@ -53,7 +56,10 @@ export const AppSheet = ({
       }}
     >
       <section
-        className="app-sheet glass"
+        ref={sheetRef}
+        tabIndex={-1}
+        className={frameless ? 'app-sheet app-sheet--bare' : 'app-sheet glass'}
+        data-frameless={frameless ? '' : undefined}
         role="dialog"
         aria-modal="true"
         aria-label={app.name}
@@ -64,44 +70,46 @@ export const AppSheet = ({
           }
         }}
       >
-        <header className="app-head">
-          <span className="app-title">
-            <Icon size={17} aria-hidden="true" />
-            {app.name}
-          </span>
-          <span className="app-url">{app.url.replace(/^https?:\/\//, '')}</span>
-          <div className="app-actions">
-            <button
-              type="button"
-              className="icon-btn"
-              aria-label={`Reload ${app.name}`}
-              title="Reload"
-              onClick={() => setNonce((value) => value + 1)}
-            >
-              <RotateCw size={15} />
-            </button>
-            <a
-              className="icon-btn"
-              href={app.url}
-              target="_blank"
-              rel="noreferrer noopener"
-              aria-label={`Open ${app.name} in a new tab`}
-              title="Open in a new tab"
-            >
-              <ExternalLink size={15} />
-            </a>
-            <button
-              ref={closeRef}
-              type="button"
-              className="icon-btn"
-              aria-label={`Close ${app.name}`}
-              title="Close (Esc)"
-              onClick={onClose}
-            >
-              <X size={16} />
-            </button>
-          </div>
-        </header>
+        {!frameless && (
+          <header className="app-head">
+            <span className="app-title">
+              <Icon size={17} aria-hidden="true" />
+              {app.name}
+            </span>
+            <span className="app-url">{app.url.replace(/^https?:\/\//, '')}</span>
+            <div className="app-actions">
+              <button
+                type="button"
+                className="icon-btn"
+                aria-label={`Reload ${app.name}`}
+                title="Reload"
+                onClick={() => setNonce((value) => value + 1)}
+              >
+                <RotateCw size={15} />
+              </button>
+              <a
+                className="icon-btn"
+                href={app.url}
+                target="_blank"
+                rel="noreferrer noopener"
+                aria-label={`Open ${app.name} in a new tab`}
+                title="Open in a new tab"
+              >
+                <ExternalLink size={15} />
+              </a>
+              <button
+                ref={closeRef}
+                type="button"
+                className="icon-btn"
+                aria-label={`Close ${app.name}`}
+                title="Close (Esc)"
+                onClick={onClose}
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </header>
+        )}
         <div className="app-frame-wrap">
           <iframe
             key={nonce}
