@@ -367,6 +367,68 @@ describe('KoiMarket', () => {
     await settled();
   });
 
+  it('leads from an empty pond to the goldfish too', async () => {
+    const user = userEvent.setup();
+    render(<Harness initial={accountWith(0)} />);
+    await settled();
+
+    await user.click(screen.getByRole('tab', { name: /Your pond/ }));
+    await user.click(screen.getByRole('button', { name: 'See the goldfish' }));
+
+    expect(screen.getByRole('tab', { name: /Goldfish/ })).toHaveAttribute('aria-selected', 'true');
+    await settled();
+  });
+
+  it('closes when the dim space around the panel is pressed, but not when the panel is', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(<Harness initial={accountWith(0)} onClose={onClose} />);
+    await settled();
+
+    await user.click(screen.getByRole('dialog', { name: 'Koi Market' }));
+    expect(onClose).not.toHaveBeenCalled();
+
+    await user.click(document.querySelector('.market-backdrop')!);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  describe('when a purchase is turned away after the button was pressed', () => {
+    const turnedAway = (): JSX.Element => (
+      <KoiMarket
+        account={accountWith(100_000)}
+        day={DAY}
+        onBuy={() => 'short'}
+        onBuyGoldfish={() => 'pond-full'}
+        onRelease={() => 0}
+        onReleaseGoldfish={() => 0}
+        onRestock={() => 'short'}
+        onDismissWelcome={() => undefined}
+        onClose={() => undefined}
+      />
+    );
+
+    it('says nothing of a koi that did not join the pond', async () => {
+      const user = userEvent.setup();
+      render(turnedAway());
+      await settled();
+
+      await user.click(screen.getAllByRole('button', { name: /^Buy .* for \d+ coins$/ })[0]!);
+
+      expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    });
+
+    it('says nothing of a goldfish that did not join it', async () => {
+      const user = userEvent.setup();
+      render(turnedAway());
+      await user.click(screen.getByRole('tab', { name: /Goldfish/ }));
+      await settled();
+
+      await user.click(screen.getAllByRole('button', { name: /^Buy .* for \d+ coins$/ })[0]!);
+
+      expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    });
+  });
+
   it('closes on Escape', async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();

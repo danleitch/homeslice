@@ -377,6 +377,10 @@ describe('outsideBody', () => {
     expect(outsideBody({ x: 40, y: 5 }, outline, 1)).toBeLessThanOrEqual(0);
   });
 
+  it('counts every point as far off the body of a fish that has none yet', () => {
+    expect(outsideBody({ x: 0, y: 0 }, { spine: [], girth: [] }, 1)).toBe(Infinity);
+  });
+
   it('measures how far off the body a point lies', () => {
     expect(outsideBody({ x: 50, y: 32 }, outline, 1)).toBeCloseTo(20);
     expect(outsideBody({ x: -30, y: 0 }, outline, 1)).toBeCloseTo(18);

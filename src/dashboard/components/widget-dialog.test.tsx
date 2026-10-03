@@ -398,6 +398,27 @@ describe('WidgetDialog', () => {
       ).toEqual(['UTC', 'Europe/London', 'America/New_York', 'Asia/Tokyo']);
     });
 
+    it('changes the label of the zone it was typed in, and no other', async () => {
+      const { onSave } = open(
+        widgetOf('clock', {
+          zones: [
+            { zone: 'Asia/Tokyo', label: 'Tokyo' },
+            { zone: 'Europe/Paris', label: '' }
+          ]
+        })
+      );
+
+      const labels = screen.getAllByLabelText('Label');
+      await userEvent.clear(labels[1]!);
+      await userEvent.type(labels[1]!, 'Paris');
+      await save();
+
+      expect((saved(onSave) as Of<'clock'>).zones).toEqual([
+        { zone: 'Asia/Tokyo', label: 'Tokyo' },
+        { zone: 'Europe/Paris', label: 'Paris' }
+      ]);
+    });
+
     it('adds a blank zone, and stops offering at eight', async () => {
       open(widgetOf('clock', { zones: [{ zone: 'UTC', label: '' }] }));
 

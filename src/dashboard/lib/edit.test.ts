@@ -47,6 +47,14 @@ describe('board edits', () => {
     ).toEqual([['GitLab', 'npm', 'GitHub'], ['HN']]);
   });
 
+  it('leaves the groups as they were when the bookmark to move is not there', () => {
+    const config = board();
+    const moved = moveBookmark(config.groups, 'no-such-bookmark', config.groups[1].id, 0);
+
+    expect(moved).toEqual(config.groups);
+    expect(moved).not.toBe(config.groups);
+  });
+
   it('carries a bookmark across to another group, at the place it was dropped', () => {
     const config = board();
     const npm = config.groups[0].bookmarks[2];
