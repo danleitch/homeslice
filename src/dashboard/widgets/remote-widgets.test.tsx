@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { fetchRankings } from '../lib/benchlm';
+import { fetchPrices, fetchRankings, priceKey } from '../lib/benchlm';
 import { fetchTrending } from '../lib/github';
 import { fetchTopStories, type Story } from '../lib/hackernews';
 import { createWidget, type HourFormat, type Widget, type WidgetType } from '../lib/model';
@@ -19,7 +19,8 @@ vi.mock('../lib/hackernews', async (importOriginal) => ({
 }));
 vi.mock('../lib/benchlm', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../lib/benchlm')>()),
-  fetchRankings: vi.fn()
+  fetchRankings: vi.fn(),
+  fetchPrices: vi.fn()
 }));
 vi.mock('../lib/github', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../lib/github')>()),
@@ -76,6 +77,7 @@ describe('the widgets that fetch', () => {
     vi.mocked(fetchWeather).mockReset().mockResolvedValue(report);
     vi.mocked(fetchTopStories).mockReset().mockResolvedValue([]);
     vi.mocked(fetchRankings).mockReset();
+    vi.mocked(fetchPrices).mockReset();
     vi.mocked(fetchTrending).mockReset();
     vi.mocked(fetchShows).mockReset();
   });
@@ -301,6 +303,118 @@ describe('the widgets that fetch', () => {
       expect(
         await screen.findByRole('link', { name: 'Why we left the cloud' })
       ).toBeInTheDocument();
+    });
+  });
+
+  describe('the AI Leaderboard on a budget', () => {
+    const rankings = {
+      asOf: '2026-10-02',
+      models: [
+        { rank: 1, name: 'Big One', creator: 'Acme', score: 90, low: null, high: null },
+        { rank: 2, name: 'Mid Model', creator: 'Acme', score: 80, low: null, high: null },
+        { rank: 3, name: 'Small Fry', creator: 'Beta', score: 70, low: null, high: null },
+        { rank: 4, name: 'Open Weights', creator: 'Beta', score: 60, low: null, high: null }
+      ]
+    };
+    const prices = {
+      [priceKey('Big One')]: { input: 10, output: 50 },
+      [priceKey('Mid Model')]: { input: 0.5, output: 2.5 },
+      [priceKey('Small Fry')]: { input: 0.075, output: 0.4 }
+    };
+    const budget = (patch: Partial<Extract<Widget, { type: 'benchlm' }>> = {}) =>
+      widgetOf('benchlm', { surface: 'coding', maxPrice: 1, count: 15, ...patch });
+
+    it('shows the models under the limit, with what they cost in and out', async () => {
+      vi.mocked(fetchRankings).mockResolvedValue(rankings);
+      vi.mocked(fetchPrices).mockResolvedValue(prices);
+      show(budget());
+
+      expect(await screen.findByText('Mid Model')).toBeInTheDocument();
+      expect(screen.getByText('Acme · $0.50 / $2.50')).toBeInTheDocument();
+      expect(screen.getByText('Beta · $0.075 / $0.40')).toBeInTheDocument();
+      expect(screen.queryByText('Big One')).not.toBeInTheDocument();
+      expect(screen.queryByText('Open Weights')).not.toBeInTheDocument();
+      expect(fetchRankings).toHaveBeenCalledWith('coding', expect.any(AbortSignal));
+    });
+
+    it('says what the prices are, and how many models have none', async () => {
+      vi.mocked(fetchRankings).mockResolvedValue(rankings);
+      vi.mocked(fetchPrices).mockResolvedValue(prices);
+      show(budget());
+
+      const foot = (await screen.findByText(/per million tokens/)).closest('p')!;
+      expect(foot).toHaveTextContent('$ per million tokens, in / out');
+      expect(foot).toHaveTextContent('1 of 4 have no listed price');
+    });
+
+    it('stays quiet about missing prices when every model has one', async () => {
+      vi.mocked(fetchRankings).mockResolvedValue({
+        ...rankings,
+        models: rankings.models.slice(1, 3)
+      });
+      vi.mocked(fetchPrices).mockResolvedValue(prices);
+      show(budget());
+
+      expect((await screen.findByText(/per million tokens/)).closest('p')).not.toHaveTextContent(
+        'no listed price'
+      );
+    });
+
+    it('shimmers while the prices come in', async () => {
+      vi.mocked(fetchRankings).mockResolvedValue(rankings);
+      vi.mocked(fetchPrices).mockReturnValue(new Promise(() => undefined));
+      show(budget());
+
+      // The rankings shimmer first; this is the shimmer that waits on the prices.
+      await waitFor(() => expect(fetchPrices).toHaveBeenCalled());
+      expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument();
+    });
+
+    it('says when the prices could not be had, and tries again on request', async () => {
+      vi.mocked(fetchRankings).mockResolvedValue(rankings);
+      vi.mocked(fetchPrices).mockRejectedValueOnce(new Error('BenchLM’s prices didn’t answer.'));
+      vi.mocked(fetchPrices).mockResolvedValueOnce(prices);
+      show(budget());
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('BenchLM’s prices didn’t answer.');
+
+      await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+      expect(await screen.findByText('Mid Model')).toBeInTheDocument();
+    });
+
+    it('says when the rankings could not be had', async () => {
+      vi.mocked(fetchRankings).mockRejectedValue(new Error('BenchLM didn’t answer.'));
+      show(budget());
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('BenchLM didn’t answer.');
+      expect(fetchPrices).not.toHaveBeenCalled();
+    });
+
+    it('says nothing is that cheap, and from which lab when one was asked for', async () => {
+      vi.mocked(fetchRankings).mockResolvedValue(rankings);
+      vi.mocked(fetchPrices).mockResolvedValue(prices);
+      const { unmount } = show(budget({ maxPrice: 0.01 }));
+
+      expect(
+        await screen.findByText('No ranked models cost under $0.01 per million tokens.')
+      ).toBeInTheDocument();
+      unmount();
+
+      show(budget({ creator: ' Acme ', maxPrice: 0.01 }));
+
+      expect(
+        await screen.findByText('No models from “Acme” are ranked under $0.01 per million tokens.')
+      ).toBeInTheDocument();
+    });
+
+    it('never asks for prices when there is no limit', async () => {
+      vi.mocked(fetchRankings).mockResolvedValue(rankings);
+      show(widgetOf('benchlm', { maxPrice: 0 }));
+
+      expect(await screen.findByText('Big One')).toBeInTheDocument();
+      expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
+      expect(fetchPrices).not.toHaveBeenCalled();
     });
   });
 

@@ -662,6 +662,44 @@ describe('The side bar and extensions', () => {
     expect(within(card).getByRole('link', { name: 'BenchLM.ai' })).toBeInTheDocument();
   });
 
+  it('ranks the best coding models under a dollar, from BenchLM’s rankings and prices', async () => {
+    seed({
+      widgets: [{ type: 'benchlm', surface: 'coding', maxPrice: 1, count: 15, creator: '' }]
+    });
+    const json = (body: unknown): Response =>
+      new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
+    const fetchMock = vi.fn(async (url: string) =>
+      url.startsWith('/api/benchlm/pricing')
+        ? json({
+            models: [
+              { model: 'Claude Opus 5.5', inputPrice: 4, outputPrice: 20 },
+              { model: 'Gemini Flash 3', inputPrice: 0.3, outputPrice: 2.5 },
+              { model: 'Qwen Coder', inputPrice: 0.2, outputPrice: 0.8 }
+            ]
+          })
+        : json({
+            dataAsOf: '2026-10-02',
+            items: [
+              { rank: 1, name: 'Claude Opus 5.5', creator: 'Anthropic', score: 87.78 },
+              { rank: 2, name: 'Gemini-Flash-3', creator: 'Google', score: 80.1 },
+              { rank: 3, name: 'Qwen Coder', creator: 'Alibaba', score: 75.5 }
+            ]
+          })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    render(<App />);
+
+    const card = screen.getByRole('region', { name: 'AI Leaderboard' });
+    expect(await within(card).findByText('Gemini-Flash-3')).toBeInTheDocument();
+    expect(within(card).getByText('Google · $0.30 / $2.50')).toBeInTheDocument();
+    expect(within(card).getByText('Qwen Coder')).toBeInTheDocument();
+    expect(within(card).queryByText('Claude Opus 5.5')).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.map(([url]) => url)).toContain(
+      '/api/benchlm/rankings?surface=coding'
+    );
+    expect(fetchMock.mock.calls.map(([url]) => url)).toContain('/api/benchlm/pricing?offset=0');
+  });
+
   it('lists the TV everyone is watching, linked to TMDB', async () => {
     seed({ widgets: [{ type: 'tv', window: 'day', count: 3 }] });
     vi.stubGlobal(

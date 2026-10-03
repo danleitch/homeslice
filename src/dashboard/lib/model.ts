@@ -480,7 +480,8 @@ const sanitizeWidget = (value: unknown): Widget | null => {
         width,
         surface: oneOf(value.surface, BENCH_SURFACES, 'overall'),
         creator: text(value.creator, '', 40),
-        count: Math.round(clampNumber(value.count, 3, 15, 5))
+        count: Math.round(clampNumber(value.count, 3, 15, 5)),
+        maxPrice: clampNumber(value.maxPrice, 0, 100, 0)
       };
     case 'tv':
       return {
@@ -576,7 +577,7 @@ export const createWidget = (type: WidgetType): Widget => {
     case 'github':
       return { id, type, width: 4, language: 'all', since: 'daily', count: 6 };
     case 'benchlm':
-      return { id, type, width: 4, surface: 'overall', creator: '', count: 5 };
+      return { id, type, width: 4, surface: 'overall', creator: '', count: 5, maxPrice: 0 };
     case 'tv':
       return { id, type, width: 4, window: 'week', count: 5 };
   }

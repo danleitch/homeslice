@@ -137,6 +137,19 @@ people visit, which keeps BenchLM's free 1,000 reads a month in hand. The
 relays pass on only the ranking or the trending window, so a visitor can't
 spend reads by varying the address.
 
+The AI Leaderboard has two presets in its settings: **Top of the charts**
+(Overall, every lab) and **Budget coding** (Coding, at most $1 per million
+tokens, 15 models). Its **Max price** setting keeps only models at or under that
+price, counting three parts input to one part output, so a cheap input price
+can't hide an expensive output. Prices come from BenchLM's public price list,
+which needs no key but is licensed
+[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/): fine for a
+personal dashboard, not for a commercial one without BenchLM's say-so. The page
+asks `/api/benchlm/pricing` (Nginx keeps it for 84 hours, like the rankings) and
+only does so when a price limit is set. Models are matched to prices by name; a
+model BenchLM lists no price for, or whose name differs, is left out of a
+capped list, and the footer says how many.
+
 ### Extensions
 
 The **Extensions** button in the side bar turns Branchify and each widget on or
