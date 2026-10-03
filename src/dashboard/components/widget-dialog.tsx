@@ -1,4 +1,4 @@
-import { useId, useMemo, useState, type FormEvent } from 'react';
+import { useId, useMemo, useState, type FormEvent, type JSX } from 'react';
 import { Plus, X } from 'lucide-react';
 import { BENCH_SURFACES, SURFACE_LABELS } from '../lib/benchlm';
 import { POPULAR_LANGUAGES, TRENDING_SINCE, languageSlug } from '../lib/github';

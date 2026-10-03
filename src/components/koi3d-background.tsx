@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { useEffect, useMemo, useRef, useState, type RefObject, type JSX } from 'react';
 import { createPondStage, pondFor, type KoiEntry, type PondStage } from '../lib/koi3d';
 import type { OwnedGoldfish, OwnedKoi } from '../lib/koi-account';
 import { distance, insidePond, isOpenWater, type PondPoint } from '../lib/koi-attention';
@@ -24,7 +24,7 @@ type Koi3dBackgroundProps = {
   /** Goldfish bought at the market, who swim with whichever koi are there. */
   ownedGoldfish?: readonly OwnedGoldfish[];
   /** The panel, which the koi lean away from so they stay in view around it. */
-  avoidRef?: RefObject<HTMLElement>;
+  avoidRef?: RefObject<HTMLElement | null>;
   /** Where the visitor has floated the lilies to. */
   lilyPlacements?: LilyPlacements;
   /** A lily has been dragged somewhere new. */

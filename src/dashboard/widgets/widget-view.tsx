@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import type { HourFormat, Widget } from '../lib/model';
 import { BenchmarkWidget } from './benchlm-widget';
 import { GithubTrendingWidget } from './github-widget';

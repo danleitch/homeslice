@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import type { RecentBranch } from '../types';
 import { CopyButton } from './copy-button';
 

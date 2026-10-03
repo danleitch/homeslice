@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react';
+import { memo, useMemo, type JSX } from 'react';
 import type { DreamsMode } from '../lib/storage';
 import './dreams-background.css';
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type JSX } from 'react';
 import { useAwake } from '../hooks/use-awake';
 import { ageAtLength, formatCm, growthOf, joinedLabel, koiAgeClass } from '../lib/fish-growth';
 import { goldfishOf } from '../lib/goldfish';

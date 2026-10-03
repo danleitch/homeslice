@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, JSX } from 'react';
 import { BookmarkPlus, Check, FileUp, FolderPlus, LayoutGrid, Plus, Sparkles } from 'lucide-react';
 import type { HourFormat } from '../lib/model';
 import { useNow } from '../hooks/use-now';

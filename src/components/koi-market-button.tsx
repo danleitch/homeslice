@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import type { KoiReward } from '../hooks/use-koi-account';
 import { CoinIcon } from './coin-icon';
 

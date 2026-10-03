@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useMemo, useState, type FormEvent, type ReactNode, type JSX } from 'react';
 import { ExternalLink, Plus, Search, Trash2 } from 'lucide-react';
 import { Drawer } from '../dashboard/components/ui';
 import { isAppUrl, type ExtensionsConfig } from '../dashboard/lib/extensions-config';

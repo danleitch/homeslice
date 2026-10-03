@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent,
+  type ReactNode,
+  type JSX
+} from 'react';
 import { Blocks, Check, Pencil, Plus, Settings } from 'lucide-react';
 import '../shell.css';
 
@@ -81,7 +89,7 @@ export const ActivityBar = ({
   const [shown, setShown] = useState(false);
   const barRef = useRef<HTMLElement>(null);
   const tabRef = useRef<HTMLButtonElement>(null);
-  const hideTimer = useRef<number>();
+  const hideTimer = useRef<number | undefined>(undefined);
   const revealed = pinned || shown;
 
   const show = useCallback((): void => {

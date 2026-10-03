@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { goldfishOf } from '../lib/goldfish';
 import { goldfishCounter, type GoldfishListing } from '../lib/goldfish-market';
 import {

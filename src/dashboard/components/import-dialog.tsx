@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import type { ImportPlan } from '../lib/yaml';
 import { Modal } from './ui';
 

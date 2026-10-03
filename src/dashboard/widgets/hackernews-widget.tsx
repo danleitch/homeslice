@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, type JSX } from 'react';
 import { MessageSquare, TrendingUp } from 'lucide-react';
 import { useRemote } from '../hooks/use-remote';
 import type { HackerNewsWidget as HackerNewsWidgetConfig } from '../lib/model';

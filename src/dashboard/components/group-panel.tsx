@@ -13,7 +13,7 @@ import type { Group } from '../lib/model';
 import { BookmarkIcon } from './bookmark-icon';
 import { noDrag } from './no-drag';
 
-type GroupPanelProps = Omit<HTMLAttributes<HTMLElement>, 'children'> & {
+type GroupPanelProps = Omit<HTMLAttributes<HTMLElement>, 'children' | 'onToggle'> & {
   group: Group;
   editing: boolean;
   children?: ReactNode;

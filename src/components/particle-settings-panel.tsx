@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useRef, type JSX } from 'react';
 import type { ReactNode } from 'react';
 import {
   MAX_EMOJI_LENGTH,

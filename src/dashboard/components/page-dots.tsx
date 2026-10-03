@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import type { CSSProperties, JSX } from 'react';
 import type { PageDirection } from '../hooks/use-page';
 
 type PageDotsProps = {

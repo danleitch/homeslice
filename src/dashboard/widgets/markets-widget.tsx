@@ -1,4 +1,4 @@
-import { useCallback, useId } from 'react';
+import { useCallback, useId, type JSX } from 'react';
 import { useRemote } from '../hooks/use-remote';
 import type { MarketsWidget as MarketsWidgetConfig } from '../lib/model';
 import { fetchQuotes, formatPrice, sparkline, type Quote } from '../lib/markets';

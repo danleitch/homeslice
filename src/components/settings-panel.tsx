@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type JSX } from 'react';
 import type { FormEvent } from 'react';
 import { AI_PROVIDERS, AI_PROVIDER_LABELS } from '../lib/ai-handoff';
 import { MAX_BRANCH_TYPE_LENGTH, sanitizeBranchType } from '../lib/branch-utils';

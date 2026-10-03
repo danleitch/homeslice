@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { formatTime } from '../lib/time';
 import { useNow } from '../hooks/use-now';
 import type {

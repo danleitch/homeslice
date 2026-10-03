@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import type { AiHandoffTarget } from '../lib/ai-handoff';
 import type { PersistedForm } from '../types';
 import { AiHandoffLinks } from './ai-handoff-links';

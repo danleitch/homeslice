@@ -6,7 +6,8 @@ import {
   type DragEvent,
   type MouseEvent,
   type ReactNode,
-  type RefObject
+  type RefObject,
+  type JSX
 } from 'react';
 import {
   DndContext,
@@ -176,7 +177,7 @@ type SortableGroupProps = {
   group: Group;
   editing: boolean;
   newTab: boolean;
-  gridRef: RefObject<HTMLDivElement>;
+  gridRef: RefObject<HTMLDivElement | null>;
   linkOver: boolean;
   freshId: string | null;
   actions: BoardActions;
@@ -281,7 +282,7 @@ type SortableWidgetProps = {
   widget: Widget;
   config: PageConfig;
   editing: boolean;
-  gridRef: RefObject<HTMLDivElement>;
+  gridRef: RefObject<HTMLDivElement | null>;
   actions: BoardActions;
   apply: ApplyToPage;
   onResizing: (resizing: boolean) => void;

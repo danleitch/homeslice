@@ -6,7 +6,8 @@ import {
   useState,
   type CSSProperties,
   type MouseEvent,
-  type ReactNode
+  type ReactNode,
+  type JSX
 } from 'react';
 import {
   ArrowLeft,

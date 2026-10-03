@@ -5,7 +5,8 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
-  type ReactNode
+  type ReactNode,
+  type JSX
 } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronRight, RotateCcw, X } from 'lucide-react';
@@ -41,7 +42,7 @@ const trapTab = (event: KeyboardEvent<HTMLElement>): void => {
 };
 
 /** Puts focus inside a dialog when it opens and hands it back when it closes. */
-const useDialogFocus = (ref: React.RefObject<HTMLElement>): void => {
+const useDialogFocus = (ref: React.RefObject<HTMLElement | null>): void => {
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     const element = ref.current;

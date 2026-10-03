@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type JSX } from 'react';
 import { ExternalLink, RotateCw, X } from 'lucide-react';
 import type { AppExtension } from '../dashboard/lib/extensions-config';
 import { iconForApp } from './registry';

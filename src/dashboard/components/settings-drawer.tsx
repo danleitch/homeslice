@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type JSX } from 'react';
 import { Check, ClipboardCopy, Download, FileUp, RotateCcw } from 'lucide-react';
 import {
   SEARCH_ENGINES,
