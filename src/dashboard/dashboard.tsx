@@ -777,6 +777,7 @@ export const Dashboard = ({
     return isEmpty ? (
       <EmptyBoard
         onAddBookmark={() => openAdd()}
+        onAddWidget={() => setPickerOpen(true)}
         onImport={() => fileRef.current?.click()}
         onExample={fillWithExample}
       />

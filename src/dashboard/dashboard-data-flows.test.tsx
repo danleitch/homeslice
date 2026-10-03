@@ -254,11 +254,12 @@ describe('Dashboard data flows', () => {
       seed({ name: 'Sam', groups: [], widgets: [] });
     });
 
-    it('invites a bookmark, an import, or the example', () => {
+    it('invites a bookmark, a widget, an import, or the example', () => {
       render(<App />);
 
       expect(screen.getByRole('heading', { name: 'Your board is empty' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Add a bookmark/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Add a widget/ })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Import bookmarks/ })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Use the example/ })).toBeInTheDocument();
     });
@@ -269,6 +270,24 @@ describe('Dashboard data flows', () => {
       await userEvent.click(screen.getByRole('button', { name: /Add a bookmark/ }));
 
       expect(screen.getByRole('dialog', { name: 'Add a bookmark' })).toBeInTheDocument();
+    });
+
+    it('starts a widget from its button', async () => {
+      render(<App />);
+
+      await userEvent.click(screen.getByRole('button', { name: /Add a widget/ }));
+
+      expect(screen.getByRole('dialog', { name: 'Add a widget' })).toBeInTheDocument();
+    });
+
+    it('points to GitHub for bugs and feature requests', () => {
+      render(<App />);
+
+      const link = screen.getByRole('link', { name: /Open an issue on GitHub/ });
+
+      expect(link).toHaveAttribute('href', 'https://github.com/danleitch/personaldash/issues/new');
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
     });
 
     it('opens the file chooser to import', async () => {
