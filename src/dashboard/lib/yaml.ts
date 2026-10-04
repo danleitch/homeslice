@@ -33,6 +33,9 @@ export const YAML_HEADER = `# Your dashboard: bookmarks, widgets and settings.
 #
 # An Agenda widget keeps its Google Calendar addresses here. Anyone with an
 # address can read that calendar, so keep this file private.
+#
+# A My PRs widget keeps its GitHub token here. Anyone with the token can read
+# whatever it is allowed to, so keep this file private.
 `;
 
 const bookmarkToYaml = (bookmark: Bookmark): Record<string, unknown> => ({
@@ -72,6 +75,8 @@ export const configToObject = (config: DashboardConfig): Record<string, unknown>
   clock: config.clock,
   glass: { blur: config.glass.blur, tint: config.glass.tint },
   ...(config.pinBar ? { pinBar: true } : {}),
+  ...(config.status.length ? { status: config.status } : {}),
+  ...(config.statusDegraded ? { statusDegraded: true } : {}),
   ...(extensionsToYaml(config.extensions)
     ? { extensions: extensionsToYaml(config.extensions) }
     : {}),

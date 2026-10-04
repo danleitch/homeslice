@@ -1,6 +1,7 @@
 /// <reference types="vitest/config" />
 import { Agent } from 'node:https';
 import { defineConfig, loadEnv, type ProxyOptions } from 'vite';
+import { STATUS_SERVICES } from './src/dashboard/lib/status-services.ts';
 import {
   CALENDAR_FEED_PATH,
   CALENDAR_HEADER,
@@ -126,6 +127,21 @@ export const calendarProxy = (
   }
 });
 
+/**
+ * The status bar's services: /api/status/<id> fetches that service's Statuspage
+ * summary from the one host listed for it, whatever the page asks for.
+ */
+const statusProxies: Record<string, ProxyOptions> = Object.fromEntries(
+  STATUS_SERVICES.map((service): [string, ProxyOptions] => [
+    `/api/status/${service.id}`,
+    {
+      target: `https://${service.host}`,
+      changeOrigin: true,
+      rewrite: () => '/api/v2/summary.json'
+    }
+  ])
+);
+
 export default defineConfig(({ mode }) => {
   // Every variable, not only VITE_ ones; none of these are put in the bundle.
   const env = loadEnv(mode, process.cwd(), '');
@@ -133,7 +149,8 @@ export default defineConfig(({ mode }) => {
     ...marketsProxy,
     ...pricingProxy,
     ...keyedProxies(env),
-    ...calendarProxy()
+    ...calendarProxy(),
+    ...statusProxies
   };
 
   return {
@@ -152,6 +169,9 @@ export default defineConfig(({ mode }) => {
       setupFiles: './src/test/setup.ts',
       // Only this app's tests; reference checkouts beside it bring their own.
       include: ['src/**/*.test.{ts,tsx}'],
+      // The pond tests type out whole lists of names: a few seconds on their own, and twice that
+      // with the rest of the suite running beside them, so vitest's 5 seconds is too tight.
+      testTimeout: 20_000,
       css: true,
       coverage: {
         provider: 'v8',

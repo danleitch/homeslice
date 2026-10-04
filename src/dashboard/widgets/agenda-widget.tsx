@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useNow } from '../hooks/use-now';
 import { useRemote } from '../hooks/use-remote';
+import { fingerprint } from '../lib/fingerprint';
 import {
   fetchAgenda,
   isAddress,
@@ -146,17 +147,6 @@ const AgendaRow = ({
       )}
     </li>
   );
-};
-
-/** A short stand-in for the addresses in a cache key, so the secrets aren't spelled out in it. */
-const fingerprint = (text: string): string => {
-  let hash = 5381;
-
-  for (let index = 0; index < text.length; index += 1) {
-    hash = ((hash * 33) ^ text.charCodeAt(index)) >>> 0;
-  }
-
-  return hash.toString(36);
 };
 
 export const AgendaWidget = ({
