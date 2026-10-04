@@ -1,5 +1,6 @@
 import { useId, useMemo, useState, type FormEvent, type JSX } from 'react';
 import { Plus, X } from 'lucide-react';
+import { MAX_ADDED_CALENDARS, type CalendarSource } from '../lib/agenda';
 import {
   BENCH_PRESETS,
   BENCH_SURFACES,
@@ -7,6 +8,7 @@ import {
   presetOf,
   type BenchPreset
 } from '../lib/benchlm';
+import { normaliseAddress } from '../lib/calendar-address';
 import { POPULAR_LANGUAGES, TRENDING_SINCE, languageSlug } from '../lib/github';
 import {
   WIDGET_BLURBS,
@@ -116,6 +118,21 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
       }
     }
 
+    if (draft.type === 'agenda') {
+      // Rows with no address are left out below, so only one that was typed can be wrong.
+      const bad = draft.calendars.find(
+        (calendar) => calendar.url.trim() && !normaliseAddress(calendar.url)
+      );
+
+      if (bad) {
+        const typed = bad.url.trim();
+        setError(
+          `“${typed.length > 40 ? `${typed.slice(0, 40)}…` : typed}” isn’t a Google Calendar address. Copy the “Secret address in iCal format” from the calendar’s settings.`
+        );
+        return;
+      }
+    }
+
     const cleaned: Widget =
       draft.type === 'markets'
         ? {
@@ -130,7 +147,24 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
             ? { ...draft, location: draft.location.trim() }
             : draft.type === 'github'
               ? { ...draft, language: languageSlug(draft.language) }
-              : draft;
+              : draft.type === 'agenda'
+                ? {
+                    ...draft,
+                    calendars: draft.calendars.flatMap((calendar): CalendarSource[] => {
+                      const url = normaliseAddress(calendar.url);
+
+                      return url
+                        ? [
+                            {
+                              name: calendar.name.trim(),
+                              description: calendar.description.trim(),
+                              url
+                            }
+                          ]
+                        : [];
+                    })
+                  }
+                : draft;
 
     onSave(cleaned);
   };
@@ -145,7 +179,7 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
           {WIDGET_LABELS[widget.type]}
         </span>
       }
-      size="sm"
+      size={widget.type === 'agenda' ? 'md' : 'sm'}
       onClose={onClose}
       footer={
         <>
@@ -480,13 +514,98 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
 
         {draft.type === 'agenda' && (
           <>
+            <div className="field">
+              <span className="field-label">Calendars</span>
+              <ul className="rows-editor rows-editor--calendars">
+                {draft.calendars.map((calendar, index) => {
+                  const change = (changes: Partial<CalendarSource>): void =>
+                    patch({
+                      calendars: draft.calendars.map((other, position) =>
+                        position === index ? { ...other, ...changes } : other
+                      )
+                    });
+
+                  return (
+                    <li key={index}>
+                      <input
+                        type="text"
+                        className="cal-name"
+                        aria-label="Calendar name"
+                        value={calendar.name}
+                        maxLength={60}
+                        placeholder="Name (optional)"
+                        data-autofocus={index === 0 ? '' : undefined}
+                        onChange={(event) => change({ name: event.target.value })}
+                      />
+                      <input
+                        type="text"
+                        className="cal-address"
+                        aria-label="Calendar address"
+                        value={calendar.url}
+                        placeholder="Secret address in iCal format"
+                        spellCheck={false}
+                        autoComplete="off"
+                        onChange={(event) => change({ url: event.target.value })}
+                      />
+                      <input
+                        type="text"
+                        className="cal-note"
+                        aria-label="Calendar description"
+                        value={calendar.description}
+                        maxLength={200}
+                        placeholder="What it’s for (optional)"
+                        onChange={(event) => change({ description: event.target.value })}
+                      />
+                      <button
+                        type="button"
+                        className="icon-btn cal-remove"
+                        aria-label={`Remove ${calendar.name || `calendar ${index + 1}`}`}
+                        onClick={() =>
+                          patch({
+                            calendars: draft.calendars.filter(
+                              (_other, position) => position !== index
+                            )
+                          })
+                        }
+                      >
+                        <X size={14} />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              {error && (
+                <span className="field-error" role="alert">
+                  {error}
+                </span>
+              )}
+              {draft.calendars.length < MAX_ADDED_CALENDARS && (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-small"
+                  onClick={() =>
+                    patch({
+                      calendars: [...draft.calendars, { name: '', description: '', url: '' }]
+                    })
+                  }
+                >
+                  <Plus size={14} aria-hidden="true" /> Add calendar
+                </button>
+              )}
+              <span className="field-hint">
+                In Google Calendar, open a calendar’s settings and copy its “Secret address in iCal
+                format” from Integrate calendar. Anyone with the address can read that calendar. It
+                is kept with this widget in this browser, and goes into the YAML you export, so keep
+                exports private. Calendars the server holds in its .env (CALENDAR_ICAL_URL) show
+                here too.
+              </span>
+            </div>
             <Field label={`Events: ${draft.count}`}>
               <input
                 type="range"
                 min={3}
                 max={12}
                 value={draft.count}
-                data-autofocus=""
                 onChange={(event) => patch({ count: Number(event.target.value) })}
               />
             </Field>
@@ -501,10 +620,6 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
                 ]}
                 onChange={(value) => patch({ month: value === 'month' })}
               />
-              <span className="field-hint">
-                Calendars come from this server’s CALENDAR_ICAL_URL settings: up to three, from
-                Google Calendar’s secret address in iCal format.
-              </span>
             </div>
           </>
         )}

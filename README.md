@@ -41,7 +41,9 @@ and you're free to spin up your own the same way (see
 - **Your Google Calendar.** The [Agenda](#agenda-your-google-calendar) widget
   shows the month with a dot under every day that has something on, and the
   days to come beneath it: what is on now, what is next and in how long, a
-  button to join the call, and a click for the details.
+  button to join the call, and a click for the details. Add as many calendars
+  as you like, each with a name and a note on what it is for, and switch any
+  of them off from the key under the widget.
 - **A side bar, as in VS Code.** Tools, apps and Extensions down the left edge,
   with Add, Edit and Settings at the foot. It tucks away behind a small tab
   until the pointer reaches the edge; Settings → General keeps it out.
@@ -172,31 +174,70 @@ more, the list moves to the right.
 - All-day and multi-day events say which day of how many it is, repeating
   events and the days taken out of them come out as Google has them, and
   cancelled events stay hidden.
-- Up to three calendars show in their own colours, with a key underneath.
+- **Many calendars at once.** Each shows in its own colour, with a key under
+  the widget. Press a calendar in the key to take its events off the list and
+  the month, and press it again to bring them back; rest the pointer on it to
+  read what it is for.
 - **List only** drops the month for a plain list of what is coming up.
 
 It needs no Google sign-in or Cloud project: Google gives every calendar a
 private web address that serves it as an iCal feed, and the dashboard reads
-that. Read-only, and it works with any calendar that has such an address.
+that. Read-only. Only Google Calendar's own addresses are read.
 
-1. In Google Calendar, open **Settings**, pick the calendar under **Settings
-   for my calendars**, and scroll to **Integrate calendar**.
-2. Copy **Secret address in iCal format**.
-3. Put it in `.env` as `CALENDAR_ICAL_URL`, with no quotes. For a second and a
-   third calendar use `CALENDAR_ICAL_URL_2` and `CALENDAR_ICAL_URL_3`.
-4. Restart the server, then add the **Agenda** widget.
+#### Adding calendars
 
-Like the BenchLM and TMDB keys, the addresses never reach the page, the YAML or
-git: the page asks this server at `/api/calendar/1` to `/3`, which fetches the
-address it holds. Nginx keeps each feed for five minutes, so Google is asked
-about that often however many people visit, and the page looks every ten.
-Changes in Google Calendar can take a few minutes to show.
+Open the widget's settings (the button with sliders on its header) and press
+**Add calendar**. Each calendar has three fields, so you can
+keep track of them:
 
-**This makes your calendar readable by anyone who can open the dashboard.**
+- **Name** (optional): what the widget calls it. Left empty, it uses the name the
+  calendar gives itself.
+- **Address**: Google Calendar's **Secret address in iCal format**. To find it,
+  open Google Calendar, then **Settings**, pick the calendar under **Settings for
+  my calendars**, and scroll to **Integrate calendar**. A calendar that is
+  shared publicly has a **Public address in iCal format** that works too.
+- **Description** (optional): what it is for, such as "Team calendar, shared with
+  Alex". It shows when the pointer rests on the calendar in the key, and under
+  the calendar's name in an event's details.
+
+A widget can add up to eight, and each Agenda widget keeps its own list, so one
+can show your work calendars and another your family's. The widget checks each
+address when you save, and says which one isn't a Google Calendar address.
+
+**What is kept where.** The addresses are kept with the widget in this browser,
+and go into the YAML that **Settings → Data & YAML** exports, because they are
+part of the widget. Keep exports as private as the calendars: anyone with an
+address can read that calendar. Resetting the secret address in Google Calendar
+makes the old one stop working.
+
+#### Calendars on the server
+
+A server can hold up to three calendars of its own, which every visitor sees
+and which never reach the page, the YAML or git. This is the way to go for a
+calendar that should show for everyone without anyone having its address:
+
+1. Copy **Secret address in iCal format** as above.
+2. Put it in `.env` as `CALENDAR_ICAL_URL`, with no quotes. For a second and a
+   third use `CALENDAR_ICAL_URL_2` and `CALENDAR_ICAL_URL_3`.
+3. Restart the server. These show in every Agenda widget, before the ones the
+   widget adds.
+
+#### How it is fetched
+
+The page asks this server for each calendar, and the server fetches it from
+Google: for the ones in `.env`, at `/api/calendar/1` to `/3`; for the ones added
+in a widget, at `/api/calendar/feed`, with the address in an `X-Calendar-Url`
+header so it stays out of URLs and access logs. The server fetches Google
+Calendar addresses (`https://calendar.google.com/calendar/ical/…/basic.ics`) and
+refuses anything else before it asks for a thing, so the dashboard can't be used
+to make the server fetch other addresses. Nginx keeps each feed for five minutes,
+so Google is asked about that often however many people visit, and the page looks
+every ten. Changes in Google Calendar can take a few minutes to show.
+
+**This makes your calendars readable by anyone who can open the dashboard.**
 That is fine on a home network, or behind a VPN or a reverse proxy with a
 login. If the dashboard is open to the internet, put a login in front of it,
-or leave the Agenda out. Reset the secret address in Google Calendar if it
-ever leaks.
+or leave the Agenda out.
 
 ```yaml
 widgets:
@@ -205,6 +246,12 @@ widgets:
     weekStart: 1 # 0 for Sunday
     count: 6 # events in the list, 3 to 12
     month: true # false for the list alone
+    calendars:
+      - name: Personal
+        description: My own diary, from Gmail
+        url: https://calendar.google.com/calendar/ical/you%40example.com/private-0123abcd/basic.ics
+      - name: Holidays
+        url: https://calendar.google.com/calendar/ical/en.usa%23holiday%40group.v.calendar.google.com/public/basic.ics
 ```
 
 ### Extensions
@@ -556,7 +603,12 @@ The Agenda's `/api/calendar/1` to `/api/calendar/3` relays work the same way for
 the calendar addresses in `.env`: each fetches only its own address, passes
 nothing the visitor sends, keeps the feed for five minutes and marks it
 `private`. A calendar with no address answers `204`, which the widget reads as
-not set up.
+not set up. `/api/calendar/feed` fetches a calendar added in a widget, whose
+address arrives in an `X-Calendar-Url` header; it fetches only Google Calendar
+addresses, answers `400` for any other, and tells browsers not to keep the
+answer, since every calendar shares that one URL. The rule for which addresses
+pass is written in `nginx.conf` and in `src/dashboard/lib/calendar-address.ts`,
+and a test keeps the two the same (add a host to both to allow it).
 
 ## GitHub Actions to Docker Hub
 

@@ -347,14 +347,16 @@ describe('Dashboard flows', () => {
       expect(stored).not.toBeNull();
     });
 
-    it('adds an agenda straight away, which says so when no calendar answers', async () => {
+    it('asks which calendars an agenda should show, and says so when none answers', async () => {
       render(<App />);
       key({ key: 'e' });
 
       await userEvent.click(screen.getByRole('button', { name: /Widget/ }));
       await userEvent.click(screen.getByRole('button', { name: /^Agenda/ }));
+      const dialog = screen.getByRole('dialog', { name: 'Agenda' });
+      expect(within(dialog).getByRole('button', { name: /Add calendar/ })).toBeInTheDocument();
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
 
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       expect(await screen.findByRole('alert')).toHaveTextContent('Google Calendar didn’t answer.');
       expect(screen.getByRole('region', { name: 'Agenda' })).toBeInTheDocument();
     });

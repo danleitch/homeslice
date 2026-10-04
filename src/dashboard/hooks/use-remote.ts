@@ -25,6 +25,15 @@ const writeCache = <T>(key: string, data: T): void => {
   }
 };
 
+/** Forgets one reading, for a widget whose settings have made it a different one. */
+export const dropRemoteCache = (key: string): void => {
+  try {
+    window.localStorage.removeItem(CACHE_PREFIX + key);
+  } catch {
+    /* nothing to forget */
+  }
+};
+
 /** Drops every cached widget reading; used when the visitor resets the dashboard. */
 export const clearRemoteCache = (): void => {
   try {

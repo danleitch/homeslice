@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchAgenda, type AgendaCalendar, type AgendaData, type AgendaEvent } from '../lib/agenda';
@@ -44,6 +44,8 @@ const allDay = (
 ): AgendaEvent => event(title, at(day), at(day + days), { allDay: true, ...rest });
 
 const MEET = 'https://meet.google.com/abc-defg-hij';
+const ADDED = 'https://calendar.google.com/calendar/ical/dan%40example.com/private-4f9a/basic.ics';
+const OTHER = 'https://calendar.google.com/calendar/ical/sam%40example.com/private-77c2/basic.ics';
 
 const events = (): AgendaEvent[] => [
   event('Morning run', at(3, 6, 30), at(3, 7, 15), { location: 'Sea Point Promenade' }),
@@ -61,8 +63,8 @@ const events = (): AgendaEvent[] => [
 ];
 
 const CALENDARS: AgendaCalendar[] = [
-  { slot: 1, name: 'Dan Leitch', ok: true },
-  { slot: 2, name: 'Work', ok: true }
+  { index: 0, origin: { kind: 'server', slot: 1 }, name: 'Dan Leitch', ok: true },
+  { index: 1, origin: { kind: 'server', slot: 2 }, name: 'Work', ok: true }
 ];
 
 const data = (rest: Partial<AgendaData> = {}): AgendaData => ({
@@ -136,10 +138,15 @@ describe('AgendaWidget', () => {
       expect(await screen.findByText('Design review')).toBeInTheDocument();
     });
 
-    it('asks for the calendars as of now', async () => {
-      await loaded();
+    it('asks for the calendars as of now, and for the ones added to the widget', async () => {
+      const calendars = [{ name: 'Home', description: '', url: ADDED }];
+      await loaded({ calendars });
 
-      expect(fetchAgenda).toHaveBeenCalledWith(expect.any(Date), expect.any(AbortSignal));
+      expect(fetchAgenda).toHaveBeenCalledWith(
+        expect.any(Date),
+        calendars,
+        expect.any(AbortSignal)
+      );
     });
   });
 
@@ -607,7 +614,12 @@ describe('AgendaWidget', () => {
 
     it('says which calendar did not answer, and tries again', async () => {
       vi.mocked(fetchAgenda).mockResolvedValueOnce(
-        data({ calendars: [CALENDARS[0], { slot: 2, name: 'Calendar 2', ok: false }] })
+        data({
+          calendars: [
+            CALENDARS[0],
+            { index: 1, origin: { kind: 'server', slot: 2 }, name: '', ok: false }
+          ]
+        })
       );
       vi.mocked(fetchAgenda).mockResolvedValueOnce(data());
       show();
@@ -625,7 +637,12 @@ describe('AgendaWidget', () => {
 
     it('keeps the last look when a refresh fails, and says so', async () => {
       vi.mocked(fetchAgenda).mockResolvedValueOnce(
-        data({ calendars: [CALENDARS[0], { slot: 2, name: 'Work', ok: false }] })
+        data({
+          calendars: [
+            CALENDARS[0],
+            { index: 1, origin: { kind: 'server', slot: 2 }, name: 'Work', ok: false }
+          ]
+        })
       );
       vi.mocked(fetchAgenda).mockRejectedValueOnce(new Error('Google Calendar didn’t answer.'));
       show();
@@ -637,6 +654,251 @@ describe('AgendaWidget', () => {
         await screen.findByText('Couldn’t refresh; showing the last look.')
       ).toBeInTheDocument();
       expect(screen.getByText('Design review')).toBeInTheDocument();
+    });
+  });
+
+  describe('the calendars that were added', () => {
+    /** Two calendars, both added in the widget, the first named for the feed and the second by hand. */
+    const added = (rest: Partial<AgendaData> = {}): AgendaData =>
+      data({
+        calendars: [
+          { index: 0, origin: { kind: 'added', position: 0 }, name: 'dan@example.com', ok: true },
+          { index: 1, origin: { kind: 'added', position: 1 }, name: '', ok: true }
+        ],
+        ...rest
+      });
+
+    const sources = [
+      { name: 'Personal', description: 'My own diary, from Gmail', url: ADDED },
+      { name: '', description: '', url: OTHER }
+    ];
+
+    it('goes by the name it was given, the feed’s own, or its place', async () => {
+      await loaded({ calendars: [sources[0], { ...sources[1], name: 'Sam' }] }, added());
+      expect(
+        within(screen.getByRole('list', { name: 'Calendars' })).getAllByRole('button')
+      ).toHaveLength(2);
+      expect(screen.getByRole('button', { name: 'Personal' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Sam' })).toBeInTheDocument();
+    });
+
+    it('falls back to the name the feed gives itself, and then to its number', async () => {
+      await loaded({ calendars: [{ ...sources[0], name: '' }, sources[1]] }, added());
+
+      expect(screen.getByRole('button', { name: 'dan@example.com' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Calendar 2' })).toBeInTheDocument();
+    });
+
+    it('says what each is for when the pointer rests on it in the key', async () => {
+      await loaded({ calendars: sources }, added());
+
+      expect(screen.getByRole('button', { name: 'Personal' })).toHaveAttribute(
+        'title',
+        'Personal: My own diary, from Gmail'
+      );
+      expect(screen.getByRole('button', { name: 'Calendar 2' })).toHaveAttribute(
+        'title',
+        'Calendar 2'
+      );
+    });
+
+    it('shows the name and note in an event’s details', async () => {
+      await loaded({ calendars: sources }, added());
+
+      await userEvent.click(within(row('Design review')).getByRole('button', { name: /Design/ }));
+
+      const detail = row('Design review').querySelector<HTMLElement>('.agenda-detail')!;
+      expect(detail).toHaveTextContent('Personal');
+      expect(within(detail).getByText('My own diary, from Gmail')).toBeInTheDocument();
+    });
+
+    it('leaves the note out when the calendar has none', async () => {
+      await loaded({ calendars: sources }, added());
+
+      await userEvent.click(within(row('Sprint planning')).getByRole('button', { name: /Sprint/ }));
+
+      expect(document.querySelector('.agenda-detail-note')).toBeNull();
+    });
+
+    it('names a calendar that did not answer as the widget does', async () => {
+      await loaded(
+        { calendars: sources },
+        added({
+          calendars: [
+            { index: 0, origin: { kind: 'added', position: 0 }, name: '', ok: true },
+            { index: 1, origin: { kind: 'added', position: 1 }, name: '', ok: false }
+          ]
+        })
+      );
+
+      expect(await screen.findByRole('status', { name: '' })).toHaveTextContent(
+        'Calendar 2 didn’t answer.'
+      );
+    });
+
+    it('is not named for a position that is no longer in the list', async () => {
+      await loaded({ calendars: [] }, added());
+
+      expect(screen.getByRole('button', { name: 'dan@example.com' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Calendar 2' })).toBeInTheDocument();
+    });
+  });
+
+  describe('switching calendars off in the key', () => {
+    const key = (name: string): HTMLElement => screen.getByRole('button', { name });
+
+    it('starts with every calendar on', async () => {
+      await loaded();
+
+      expect(key('Dan Leitch')).toHaveAttribute('aria-pressed', 'true');
+      expect(key('Work')).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('takes a calendar’s events off the list and the month, and puts them back', async () => {
+      await loaded();
+      const tones = (): string[] =>
+        Array.from(
+          day('Saturday, October 3').querySelectorAll<HTMLElement>('.agenda-dots span')
+        ).map((dot) => dot.style.getPropertyValue('--tone'));
+      expect(screen.getByText('Sprint planning')).toBeInTheDocument();
+      expect(tones()).toEqual(['var(--cal-1)', 'var(--cal-1)', 'var(--cal-2)']);
+
+      await userEvent.click(key('Work'));
+
+      expect(key('Work')).toHaveAttribute('aria-pressed', 'false');
+      expect(screen.queryByText('Sprint planning')).not.toBeInTheDocument();
+      expect(screen.getByText('Design review')).toBeInTheDocument();
+      expect(tones()).toEqual(['var(--cal-1)', 'var(--cal-1)', 'var(--cal-1)']);
+      expect(day('Saturday, October 3')).toHaveAccessibleName('Saturday, October 3, 3 events');
+
+      await userEvent.click(key('Work'));
+
+      expect(screen.getByText('Sprint planning')).toBeInTheDocument();
+      expect(tones()).toEqual(['var(--cal-1)', 'var(--cal-1)', 'var(--cal-2)']);
+    });
+
+    it('closes an open event when the list changes under it', async () => {
+      await loaded();
+      await userEvent.click(within(row('Design review')).getByRole('button', { name: /Design/ }));
+      expect(document.querySelectorAll('.agenda-detail')).toHaveLength(1);
+
+      await userEvent.click(key('Work'));
+
+      expect(document.querySelectorAll('.agenda-detail')).toHaveLength(0);
+    });
+
+    it('turns every calendar back on when the addresses change, which moves them about', async () => {
+      const { rerender } = await loaded({
+        calendars: [{ name: '', description: '', url: ADDED }]
+      });
+      await userEvent.click(key('Work'));
+      expect(key('Work')).toHaveAttribute('aria-pressed', 'false');
+
+      rerender(
+        <AgendaWidget
+          widget={widgetOf({ calendars: [{ name: '', description: '', url: OTHER }] })}
+          clock="24h"
+          newTab={false}
+        />
+      );
+
+      await waitFor(() => expect(key('Work')).toHaveAttribute('aria-pressed', 'true'));
+    });
+
+    it('says so when every calendar is off', async () => {
+      await loaded();
+
+      await userEvent.click(key('Dan Leitch'));
+      await userEvent.click(key('Work'));
+
+      expect(screen.getByText('Every calendar is hidden.')).toBeInTheDocument();
+      expect(screen.queryByText('Nothing planned, and nothing coming up.')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('keeping readings', () => {
+    const stored = (): string[] =>
+      Object.keys(window.localStorage).filter((name) => name.startsWith('dashboard-cache:agenda'));
+
+    it('keeps one reading for the same addresses, whatever the calendars are called', async () => {
+      const first = [{ name: 'Home', description: '', url: ADDED }];
+      const { rerender } = await loaded({ calendars: first });
+      const before = stored();
+
+      rerender(
+        <AgendaWidget
+          widget={widgetOf({
+            calendars: [{ name: 'Renamed', description: 'Now noted', url: ADDED }]
+          })}
+          clock="24h"
+          newTab={false}
+        />
+      );
+
+      expect(stored()).toEqual(before);
+      expect(fetchAgenda).toHaveBeenCalledTimes(1);
+    });
+
+    it('reads again, and forgets the old reading, when the addresses change', async () => {
+      const { rerender } = await loaded({ calendars: [{ name: '', description: '', url: ADDED }] });
+      const [before] = stored();
+      expect(before).toMatch(/^dashboard-cache:agenda:v2:/);
+
+      rerender(
+        <AgendaWidget
+          widget={widgetOf({ calendars: [{ name: '', description: '', url: OTHER }] })}
+          clock="24h"
+          newTab={false}
+        />
+      );
+
+      await waitFor(() => expect(fetchAgenda).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(stored()).toHaveLength(1));
+      expect(stored()[0]).not.toBe(before);
+      expect(stored()).not.toContain(before);
+    });
+
+    it('does not keep the address in the name of the reading', async () => {
+      await loaded({ calendars: [{ name: '', description: '', url: ADDED }] });
+
+      expect(stored().join()).not.toContain('private');
+      expect(stored().join()).not.toContain('example.com');
+    });
+
+    it('clears the reading kept before calendars could be added here', async () => {
+      window.localStorage.setItem('dashboard-cache:agenda', '{"at":1,"data":{}}');
+
+      await loaded();
+
+      expect(window.localStorage.getItem('dashboard-cache:agenda')).toBeNull();
+    });
+  });
+
+  describe('colours', () => {
+    it('gives each calendar its own, and starts again after the eighth', async () => {
+      const many = Array.from({ length: 9 }, (_unused, index) => ({
+        index,
+        origin: { kind: 'added' as const, position: index },
+        name: `Calendar ${index + 1}`,
+        ok: true
+      }));
+      await loaded({}, data({ calendars: many }));
+
+      const tones = within(screen.getByRole('list', { name: 'Calendars' }))
+        .getAllByRole('listitem')
+        .map((item) => item.style.getPropertyValue('--tone'));
+
+      expect(tones).toEqual([
+        'var(--cal-1)',
+        'var(--cal-2)',
+        'var(--cal-3)',
+        'var(--cal-4)',
+        'var(--cal-5)',
+        'var(--cal-6)',
+        'var(--cal-7)',
+        'var(--cal-8)',
+        'var(--cal-1)'
+      ]);
     });
   });
 

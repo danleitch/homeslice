@@ -6,13 +6,14 @@
  * a visitor exports and imports, so every field has a sanitiser: a hand-edited
  * file, an old export or a half-typed value must never break the page.
  */
-import type { AgendaWidget } from './agenda';
+import { MAX_ADDED_CALENDARS, type AgendaWidget, type CalendarSource } from './agenda';
+import { normaliseAddress } from './calendar-address';
 import { emptyExtensions, sanitizeExtensions, type ExtensionsConfig } from './extensions-config';
 import { BENCH_SURFACES, type BenchmarkWidget } from './benchlm';
 import { TRENDING_SINCE, languageSlug, type GithubTrendingWidget } from './github';
 import { TRENDING_WINDOWS, type PopularTvWidget } from './tmdb';
 
-export type { AgendaWidget } from './agenda';
+export type { AgendaWidget, CalendarSource } from './agenda';
 export type { AppExtension, ExtensionsConfig } from './extensions-config';
 export type { BenchmarkWidget, BenchSurface } from './benchlm';
 export type { GithubTrendingWidget, TrendingSince } from './github';
@@ -429,6 +430,27 @@ const sanitizeZones = (value: unknown): ClockZone[] =>
     .filter((item): item is ClockZone => item !== null)
     .slice(0, 8);
 
+/** The calendars an Agenda lists, each with an address Google Calendar's own; the rest are dropped. */
+const sanitizeCalendars = (value: unknown): CalendarSource[] =>
+  (Array.isArray(value) ? value : [])
+    .map((item): CalendarSource | null => {
+      if (!isRecord(item)) {
+        return null;
+      }
+
+      const url = normaliseAddress(text(item.url ?? item.href, '', 500));
+
+      return url
+        ? {
+            name: text(item.name ?? item.title, '', 60),
+            description: text(item.description, '', 200),
+            url
+          }
+        : null;
+    })
+    .filter((item): item is CalendarSource => item !== null)
+    .slice(0, MAX_ADDED_CALENDARS);
+
 const sanitizeWidget = (value: unknown): Widget | null => {
   if (!isRecord(value)) {
     return null;
@@ -477,7 +499,8 @@ const sanitizeWidget = (value: unknown): Widget | null => {
         width,
         weekStart: value.weekStart === 0 || value.weekStart === 'sunday' ? 0 : 1,
         count: Math.round(clampNumber(value.count, 3, 12, 5)),
-        month: value.month !== false
+        month: value.month !== false,
+        calendars: sanitizeCalendars(value.calendars)
       };
     case 'github':
       return {
@@ -590,7 +613,7 @@ export const createWidget = (type: WidgetType): Widget => {
     case 'calendar':
       return { id, type, width: 3, weekStart: 1 };
     case 'agenda':
-      return { id, type, width: 4, weekStart: 1, count: 5, month: true };
+      return { id, type, width: 4, weekStart: 1, count: 5, month: true, calendars: [] };
     case 'github':
       return { id, type, width: 4, language: 'all', since: 'daily', count: 6 };
     case 'benchlm':

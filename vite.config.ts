@@ -1,6 +1,11 @@
 /// <reference types="vitest/config" />
 import { Agent } from 'node:https';
-import { defineConfig, loadEnv, type ProxyOptions } from 'vite';
+import { defineConfig, loadEnv, type Connect, type Plugin, type ProxyOptions } from 'vite';
+import {
+  ADDRESS_HEADER,
+  ADDRESS_PATTERN,
+  FEED_RELAY
+} from './src/dashboard/lib/calendar-address.ts';
 
 /**
  * Yahoo turns away TLS handshakes that look like a script's (Node's default
@@ -126,6 +131,51 @@ const calendarProxies = (env: Record<string, string>): Record<string, ProxyOptio
     })
   );
 
+/**
+ * A calendar added in the Agenda's settings reaches the server as an address in
+ * a header, as it does nginx.conf, and only Google Calendar's own addresses are
+ * fetched: anything else is refused before the server asks for a thing.
+ */
+const calendarFeed = (): Plugin => {
+  const relay: Connect.NextHandleFunction = async (request, response) => {
+    const address = request.headers[ADDRESS_HEADER.toLowerCase()];
+
+    if (request.method !== 'GET') {
+      response.statusCode = 405;
+      response.end();
+      return;
+    }
+
+    if (typeof address !== 'string' || !ADDRESS_PATTERN.test(address)) {
+      response.statusCode = 400;
+      response.end();
+      return;
+    }
+
+    try {
+      const upstream = await fetch(address);
+      response.statusCode = upstream.status;
+      response.setHeader('content-type', upstream.headers.get('content-type') ?? 'text/calendar');
+      // The browser's own cache can't tell one calendar from another here: they share an address.
+      response.setHeader('cache-control', 'no-store');
+      response.end(Buffer.from(await upstream.arrayBuffer()));
+    } catch {
+      response.statusCode = 502;
+      response.end();
+    }
+  };
+
+  return {
+    name: 'calendar-feed',
+    configureServer: (server) => {
+      server.middlewares.use(FEED_RELAY, relay);
+    },
+    configurePreviewServer: (server) => {
+      server.middlewares.use(FEED_RELAY, relay);
+    }
+  };
+};
+
 export default defineConfig(({ mode }) => {
   // Every variable, not only VITE_ ones; none of these are put in the bundle.
   const env = loadEnv(mode, process.cwd(), '');
@@ -137,6 +187,7 @@ export default defineConfig(({ mode }) => {
   };
 
   return {
+    plugins: [calendarFeed()],
     server: {
       host: true,
       port: 5173,
