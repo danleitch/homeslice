@@ -93,14 +93,7 @@ describe('sanitizeConfig', () => {
       ]
     }).pages[0].widgets;
 
-    expect(plain).toMatchObject({
-      type: 'agenda',
-      width: 4,
-      weekStart: 1,
-      count: 5,
-      month: true,
-      calendars: []
-    });
+    expect(plain).toMatchObject({ type: 'agenda', width: 4, weekStart: 1, count: 5, month: true });
     expect(tuned).toMatchObject({ width: 8, weekStart: 0, count: 9, month: false });
     expect(sunday).toMatchObject({ weekStart: 0 });
     expect(bounded).toMatchObject({ count: 12, month: true });
@@ -109,6 +102,48 @@ describe('sanitizeConfig', () => {
     ).toMatchObject({
       count: 3
     });
+  });
+
+  it('reads the Agenda’s calendars, keeping only Google Calendar’s addresses, once each, up to eight', () => {
+    const a = 'https://calendar.google.com/calendar/ical/a%40x.com/private-aaa/basic.ics';
+    const b = 'https://calendar.google.com/calendar/ical/b%40x.com/private-bbb/basic.ics';
+    const c = 'https://calendar.google.com/calendar/ical/c%40x.com/public/basic.ics';
+    const source = (url: string, name = '', description = '') => ({ name, description, url });
+    const [none, single, named, messy, odd, many] = sanitizeConfig({
+      widgets: [
+        { type: 'agenda' },
+        { type: 'agenda', calendars: a.replace('https:', 'webcal:') },
+        {
+          type: 'agenda',
+          calendars: [
+            { name: ' Personal ', description: 'My own diary', url: a },
+            { title: 'Club', href: b }
+          ]
+        },
+        {
+          type: 'agenda',
+          calendars: ['nonsense', 'https://example.com/x.ics', 7, null, a, a, ' ' + b]
+        },
+        { type: 'agenda', calendars: { a } },
+        {
+          type: 'agenda',
+          calendars: Array.from({ length: 12 }, (_unused, index) =>
+            c.replace('c%40x.com', `c${index}%40x.com`)
+          )
+        }
+      ]
+    }).pages[0].widgets;
+
+    expect(none).toMatchObject({ calendars: [] });
+    expect(single).toMatchObject({ calendars: [source(a)] });
+    expect(named).toMatchObject({
+      calendars: [source(a, 'Personal', 'My own diary'), source(b, 'Club')]
+    });
+    // Saved before calendars had names, an address stood on its own.
+    expect(messy).toMatchObject({ calendars: [source(a), source(b)] });
+    expect(odd).toMatchObject({ calendars: [] });
+    expect((many as { calendars: unknown[] }).calendars).toHaveLength(8);
+    expect(createWidget('agenda')).toMatchObject({ calendars: [] });
   });
 
   it('reads the AI Leaderboard’s price limit, keeping it to a sensible range', () => {
@@ -130,70 +165,61 @@ describe('sanitizeConfig', () => {
     expect(createWidget('benchlm')).toMatchObject({ maxPrice: 0 });
   });
 
-  describe('the calendars an Agenda lists', () => {
-    const PRIVATE =
-      'https://calendar.google.com/calendar/ical/dan%40example.com/private-4f9a8c1d/basic.ics';
-    const PUBLIC = 'https://calendar.google.com/calendar/ical/dan%40example.com/public/basic.ics';
-    const calendarsOf = (calendars: unknown) =>
-      (
-        sanitizeConfig({ widgets: [{ type: 'agenda', calendars }] }).pages[0].widgets[0] as {
-          calendars: unknown;
-        }
-      ).calendars;
-
-    it('reads each one’s name, description and address', () => {
-      expect(
-        calendarsOf([
-          { name: '  Personal ', description: ' My own diary ', url: PRIVATE },
-          { title: 'Holidays', url: PUBLIC },
-          { href: PRIVATE }
-        ])
-      ).toEqual([
-        { name: 'Personal', description: 'My own diary', url: PRIVATE },
-        { name: 'Holidays', description: '', url: PUBLIC },
-        { name: '', description: '', url: PRIVATE }
-      ]);
+  it('reads which services the status bar watches, and whether it tells of slow service', () => {
+    const watched = sanitizeConfig({
+      status: ['npm', 'nonsense', 'github', 'npm', 5],
+      statusDegraded: true
     });
 
-    it('reads the webcal form as the https address it stands for', () => {
-      expect(calendarsOf([{ url: PRIVATE.replace('https://', 'webcal://') }])).toEqual([
-        { name: '', description: '', url: PRIVATE }
-      ]);
-    });
+    expect(watched.status).toEqual(['github', 'npm']);
+    expect(watched.statusDegraded).toBe(true);
+    expect(sanitizeConfig({ status: 'vercel' }).status).toEqual(['vercel']);
+    expect(sanitizeConfig({ statusDegraded: 'yes' }).statusDegraded).toBe(false);
 
-    it('drops what is not a Google Calendar address, rather than breaking the page', () => {
-      expect(
-        calendarsOf([
-          { name: 'Other site', url: 'https://example.com/calendar.ics' },
-          { name: 'No address' },
-          { name: 'A number', url: 42 },
-          'a string',
-          null,
-          ['a list'],
-          { name: 'Kept', url: PUBLIC }
-        ])
-      ).toEqual([{ name: 'Kept', description: '', url: PUBLIC }]);
-    });
+    const none = sanitizeConfig({});
+    expect(none.status).toEqual([]);
+    expect(none.statusDegraded).toBe(false);
+  });
 
-    it('has none when there is no list', () => {
-      expect(calendarsOf(undefined)).toEqual([]);
-      expect(calendarsOf('everything')).toEqual([]);
-      expect(calendarsOf({ url: PRIVATE })).toEqual([]);
-    });
+  it('reads My PRs, keeping its settings within range and anything but a token out', () => {
+    const token = 'github_pat_11ABCDEFG0abcdefghijklmnopqrstuvwxyz';
+    const [plain, tuned, junk, bounded, low] = sanitizeConfig({
+      widgets: [
+        { type: 'prs' },
+        { type: 'prs', token: `  ${token} `, show: 'review', count: '8', width: 6 },
+        { type: 'prs', token: 'not a token at all', show: 'everything' },
+        { type: 'prs', count: 99 },
+        { type: 'prs', count: 1 }
+      ]
+    }).pages[0].widgets;
 
-    it('keeps names and descriptions to a sensible length, and eight calendars', () => {
-      const many = Array.from({ length: 12 }, (_unused, index) => ({
-        name: 'N'.repeat(100),
-        description: 'D'.repeat(500),
-        url: PRIVATE.replace('4f9a8c1d', `token${index}`)
-      }));
-      const kept = calendarsOf(many) as { name: string; description: string; url: string }[];
+    expect(plain).toMatchObject({ type: 'prs', width: 4, token: '', show: 'both', count: 5 });
+    expect(tuned).toMatchObject({ token, show: 'review', count: 8, width: 6 });
+    expect(junk).toMatchObject({ token: '', show: 'both' });
+    expect(bounded).toMatchObject({ count: 10 });
+    expect(low).toMatchObject({ count: 3 });
+    expect(createWidget('prs')).toMatchObject({ type: 'prs', token: '', show: 'both', count: 5 });
+  });
 
-      expect(kept).toHaveLength(8);
-      expect(kept[0].name).toHaveLength(60);
-      expect(kept[0].description).toHaveLength(200);
-      expect(kept[7].url).toContain('token7');
-    });
+  it('reads the Focus timer, keeping its lengths in range and its chime on unless turned off', () => {
+    const [plain, tuned, long, short, text, quiet] = sanitizeConfig({
+      widgets: [
+        { type: 'focus' },
+        { type: 'focus', focus: 50, rest: 10, sound: false, width: 6 },
+        { type: 'focus', focus: 500, rest: 500 },
+        { type: 'focus', focus: 1, rest: 0 },
+        { type: 'focus', focus: '40', rest: 'long' },
+        { type: 'focus', sound: 'no' }
+      ]
+    }).pages[0].widgets;
+
+    expect(plain).toMatchObject({ type: 'focus', width: 4, focus: 25, rest: 5, sound: true });
+    expect(tuned).toMatchObject({ focus: 50, rest: 10, sound: false, width: 6 });
+    expect(long).toMatchObject({ focus: 90, rest: 30 });
+    expect(short).toMatchObject({ focus: 5, rest: 1 });
+    expect(text).toMatchObject({ focus: 40, rest: 5 });
+    expect(quiet).toMatchObject({ sound: true });
+    expect(createWidget('focus')).toMatchObject({ type: 'focus', focus: 25, rest: 5, sound: true });
   });
 
   it('keeps the glass within its range', () => {
@@ -208,8 +234,7 @@ describe('sanitizeConfig', () => {
       width: 4,
       weekStart: 1,
       count: 5,
-      month: true,
-      calendars: []
+      month: true
     });
   });
 

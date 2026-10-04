@@ -1,22 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  agendaCacheKey,
   agendaWindow,
   fetchAgenda,
   findMeetingLink,
   isAddress,
   plainText,
   readCalendar,
+  readCalendarSources,
   type AgendaEvent,
   type CalendarSource
 } from './agenda';
 
 const signal = new AbortController().signal;
-
-const ADDRESS_A =
-  'https://calendar.google.com/calendar/ical/a%40example.com/private-aaaa1111/basic.ics';
-const ADDRESS_B =
-  'https://calendar.google.com/calendar/ical/b%40example.com/private-bbbb2222/basic.ics';
 
 /** The suite runs in UTC, so 8:00 below is 8:00 on the clock too. */
 const at = (day: number, hour = 0, minute = 0): number =>
@@ -50,11 +45,11 @@ const feed = (name: string, ...events: string[]): string =>
 
 const read = async (
   text: string,
-  key = 's1',
+  slot = 1,
   window = WINDOW
 ): Promise<{ name: string; events: AgendaEvent[] }> => {
   const library = (await import('ical.js')).default;
-  return readCalendar(library, text, key, window.from, window.to);
+  return readCalendar(library, text, slot, window.from, window.to);
 };
 
 const titles = (events: AgendaEvent[]): string[] => events.map((item) => item.title);
@@ -158,7 +153,7 @@ describe('readCalendar', () => {
     expect(name).toBe('Dan Leitch');
     expect(events).toEqual([
       {
-        id: `s1:one@google.com:${at(3, 8)}`,
+        id: `1:one@google.com:${at(3, 8)}`,
         calendar: 0,
         title: 'Planning',
         allDay: false,
@@ -415,61 +410,102 @@ describe('readCalendar', () => {
     expect(events).toHaveLength(600);
   });
 
-  it('tells one feed’s events from another’s by the key it was read under', async () => {
-    const feedOf = feed('', event('UID:a@x', 'DTSTART:20261003T080000Z'));
-    const [first, second] = await Promise.all([read(feedOf, 's3'), read(feedOf, 'a0')]);
-
-    expect(first.events[0].id.startsWith('s3:')).toBe(true);
-    expect(second.events[0].id.startsWith('a0:')).toBe(true);
-    expect(first.events[0].calendar).toBe(0);
+  it('numbers the calendar by its slot', async () => {
+    const { events } = await read(feed('', event('UID:a@x', 'DTSTART:20261003T080000Z')), 3);
+    expect(events[0].calendar).toBe(2);
+    expect(events[0].id.startsWith('3:')).toBe(true);
   });
 });
 
-describe('agendaCacheKey', () => {
-  const source = (name: string, url: string, description = ''): CalendarSource => ({
-    name,
-    description,
-    url
+describe('readCalendarSources', () => {
+  const ONE =
+    'https://calendar.google.com/calendar/ical/sam%40example.com/private-aaa111/basic.ics';
+  const TWO = 'https://calendar.google.com/calendar/ical/club%40example.com/public/basic.ics';
+
+  it('reads each calendar’s name, description and address', () => {
+    expect(
+      readCalendarSources([
+        { name: '  Personal ', description: ' My own diary ', url: ONE },
+        { title: 'Club', href: TWO }
+      ])
+    ).toEqual([
+      { name: 'Personal', description: 'My own diary', url: ONE },
+      { name: 'Club', description: '', url: TWO }
+    ]);
   });
 
-  it('is one key when no calendar was added', () => {
-    expect(agendaCacheKey([])).toBe('agenda:v2');
+  it('reads an address on its own, as the widget kept them before they had names', () => {
+    expect(readCalendarSources([ONE, TWO])).toEqual([
+      { name: '', description: '', url: ONE },
+      { name: '', description: '', url: TWO }
+    ]);
+    expect(readCalendarSources(ONE)).toEqual([{ name: '', description: '', url: ONE }]);
   });
 
-  it('is the same for the same addresses, whatever the calendars are called', () => {
-    const one = agendaCacheKey([source('Home', ADDRESS_A, 'Mine'), source('Work', ADDRESS_B)]);
-    const other = agendaCacheKey([source('Renamed', ADDRESS_A), source('', ADDRESS_B, 'Shared')]);
-
-    expect(one).toBe(other);
+  it('reads the webcal form as the https address it stands for', () => {
+    expect(readCalendarSources([{ url: ONE.replace('https:', 'webcal:') }])).toEqual([
+      { name: '', description: '', url: ONE }
+    ]);
   });
 
-  it('differs for other addresses, and for the same ones in another order', () => {
-    const keys = [
-      agendaCacheKey([source('', ADDRESS_A)]),
-      agendaCacheKey([source('', ADDRESS_B)]),
-      agendaCacheKey([source('', ADDRESS_A), source('', ADDRESS_B)]),
-      agendaCacheKey([source('', ADDRESS_B), source('', ADDRESS_A)])
-    ];
-
-    expect(new Set(keys).size).toBe(4);
+  it('drops what is not a Google Calendar address, rather than breaking the page', () => {
+    expect(
+      readCalendarSources([
+        { name: 'Other site', url: 'https://example.com/calendar/ical/a/public/basic.ics' },
+        { name: 'No address' },
+        { name: 'A number', url: 42 },
+        'nonsense',
+        42,
+        null,
+        ['a list'],
+        { name: 'Kept', url: TWO }
+      ])
+    ).toEqual([{ name: 'Kept', description: '', url: TWO }]);
   });
 
-  it('keeps the address out of the key', () => {
-    const key = agendaCacheKey([source('', ADDRESS_A)]);
+  it('has none when there is nothing to read', () => {
+    expect(readCalendarSources(undefined)).toEqual([]);
+    expect(readCalendarSources('')).toEqual([]);
+    expect(readCalendarSources({ url: ONE })).toEqual([]);
+  });
 
-    expect(key).toMatch(/^agenda:v2:[0-9a-z]+$/);
-    expect(key).not.toContain('private');
+  it('lists a calendar once, under the first name it was given', () => {
+    expect(
+      readCalendarSources([
+        { name: 'First', url: ONE },
+        { name: 'Again', url: ONE.replace('https:', 'webcal:') }
+      ])
+    ).toEqual([{ name: 'First', description: '', url: ONE }]);
+  });
+
+  it('keeps names and descriptions to a sensible length, and eight calendars', () => {
+    const many = Array.from({ length: 12 }, (_unused, index) => ({
+      name: 'N'.repeat(100),
+      description: 'D'.repeat(500),
+      url: ONE.replace('aaa111', `token${index}`)
+    }));
+    const kept = readCalendarSources(many);
+
+    expect(kept).toHaveLength(8);
+    expect(kept[0].name).toHaveLength(60);
+    expect(kept[0].description).toHaveLength(200);
+    expect(kept[7].url).toContain('token7');
   });
 });
 
 describe('fetchAgenda', () => {
   const now = new Date(2026, 9, 3, 12);
-  const source = (name: string, url: string, description = ''): CalendarSource => ({
+  const src = (url: string, name = '', description = ''): CalendarSource => ({
     name,
     description,
     url
   });
-  const none: CalendarSource[] = [];
+
+  const home =
+    'https://calendar.google.com/calendar/ical/sam%40example.com/private-aaa111/basic.ics';
+  const work =
+    'https://calendar.google.com/calendar/ical/work%40example.com/private-bbb222/basic.ics';
+  const club = 'https://calendar.google.com/calendar/ical/club%40example.com/public/basic.ics';
 
   const reply = (body: string, init: ResponseInit = {}): Response =>
     new Response(body, {
@@ -478,26 +514,13 @@ describe('fetchAgenda', () => {
       ...init
     });
 
-  type Answer = Response | (() => Response);
-
-  /**
-   * Answers /api/calendar/1, /2 and /3 from `server`, in turn, and the feed relay from `added`,
-   * by the address in the header; a function answer can throw.
-   */
-  const serve = (
-    server: Answer[] = [],
-    added: Record<string, Answer> = {}
-  ): ReturnType<typeof vi.fn> => {
-    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
-      const address = (init?.headers as Record<string, string> | undefined)?.['X-Calendar-Url'];
-      const answer =
-        url === '/api/calendar/feed'
-          ? (added[address ?? ''] ?? new Response(null, { status: 404 }))
-          : (server[Number(url.split('/').pop()) - 1] ?? new Response(null, { status: 204 }));
-
+  /** Answers /api/calendar/1, /2 and /3 in turn; a function answer can throw. */
+  const serve = (...answers: Array<Response | (() => Response)>): ReturnType<typeof vi.fn> => {
+    const fetchMock = vi.fn((url: string) => {
+      const answer = answers[Number(url.split('/').pop()) - 1];
       return typeof answer === 'function'
         ? Promise.resolve().then(answer)
-        : Promise.resolve(answer.clone());
+        : Promise.resolve(answer ?? reply('', { status: 500 }));
     });
     vi.stubGlobal('fetch', fetchMock);
     return fetchMock;
@@ -511,222 +534,157 @@ describe('fetchAgenda', () => {
     '',
     event('UID:b@x', 'DTSTART:20261004T150000Z', 'DTEND:20261004T160000Z', 'SUMMARY:Review')
   );
-  const standup = feed(
-    'Work',
-    event('UID:c@x', 'DTSTART:20261005T073000Z', 'DTEND:20261005T080000Z', 'SUMMARY:Standup')
-  );
 
-  describe('the calendars the server holds', () => {
-    it('asks the relay for each of the three, and nothing else when none was added', async () => {
-      const fetchMock = serve([reply(planning)]);
-      await fetchAgenda(now, none, signal);
+  it('asks the relay for each address it is given, naming the feed by its path in a header', async () => {
+    const fetchMock = serve(reply(planning), reply(review));
+    await fetchAgenda(now, [src(home), src(work)], signal);
 
-      expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
-        '/api/calendar/1',
-        '/api/calendar/2',
-        '/api/calendar/3'
-      ]);
-    });
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      '/api/calendar/1',
+      '/api/calendar/2'
+    ]);
+    expect(fetchMock.mock.calls.map(([, init]) => init.headers)).toEqual([
+      { 'X-Calendar-Feed': '/calendar/ical/sam%40example.com/private-aaa111/basic.ics' },
+      { 'X-Calendar-Feed': '/calendar/ical/work%40example.com/private-bbb222/basic.ics' }
+    ]);
+  });
 
-    it.each([204, 401, 403])('leaves out a slot the relay answers %i for', async (status) => {
-      serve([reply(planning), new Response(null, { status })]);
-      const data = await fetchAgenda(now, none, signal);
+  it('never puts an address in the URL it asks for, or lets a cache keep the answer', async () => {
+    const fetchMock = serve(reply(planning));
+    await fetchAgenda(now, [src(home)], signal);
 
-      expect(data.calendars.map((calendar) => calendar.origin)).toEqual([
-        { kind: 'server', slot: 1 }
-      ]);
-    });
+    expect(fetchMock.mock.calls[0]![0]).not.toContain('private');
+    expect(fetchMock.mock.calls[0]![1]).toMatchObject({ cache: 'no-store', signal });
+  });
 
-    it('reads one calendar, leaving out the slots that are not set up', async () => {
-      serve([reply(planning)]);
+  it('asks for no more than eight calendars', async () => {
+    const sources = Array.from({ length: 10 }, (_unused, index) =>
+      src(`https://calendar.google.com/calendar/ical/c${index}%40example.com/public/basic.ics`)
+    );
+    const fetchMock = serve(...sources.map(() => reply(planning)));
+    await fetchAgenda(now, sources, signal);
 
-      await expect(fetchAgenda(now, none, signal)).resolves.toMatchObject({
-        calendars: [{ index: 0, origin: { kind: 'server', slot: 1 }, name: 'Home', ok: true }],
-        events: [{ title: 'Planning', calendar: 0 }]
-      });
-    });
+    expect(fetchMock).toHaveBeenCalledTimes(8);
+  });
 
-    it('numbers the calendars that are there, whichever slots they have', async () => {
-      serve([reply(planning), reply('', { status: 401 }), reply(review)]);
-      const data = await fetchAgenda(now, none, signal);
+  it('keeps a calendar’s name and note to itself, asking for nothing but its feed', async () => {
+    const fetchMock = serve(reply(planning));
+    await fetchAgenda(now, [src(home, 'Personal', 'My own diary')], signal);
 
-      expect(data.calendars).toEqual([
-        { index: 0, origin: { kind: 'server', slot: 1 }, name: 'Home', ok: true },
-        { index: 1, origin: { kind: 'server', slot: 3 }, name: '', ok: true }
-      ]);
-      expect(data.events.map((item) => [item.title, item.calendar])).toEqual([
-        ['Planning', 0],
-        ['Review', 1]
-      ]);
+    expect(JSON.stringify(fetchMock.mock.calls)).not.toMatch(/Personal|My own diary/);
+  });
+
+  it('reads one calendar', async () => {
+    serve(reply(planning));
+
+    await expect(fetchAgenda(now, [src(home)], signal)).resolves.toMatchObject({
+      calendars: [{ slot: 1, name: 'Home', ok: true }],
+      events: [{ title: 'Planning', calendar: 0 }]
     });
   });
 
-  describe('the calendars added in the widget', () => {
-    it('asks the feed relay for each, with the address in a header and not the URL', async () => {
-      const fetchMock = serve([], { [ADDRESS_A]: reply(planning), [ADDRESS_B]: reply(standup) });
-      await fetchAgenda(now, [source('', ADDRESS_A), source('', ADDRESS_B)], signal);
+  it('merges several calendars, naming an unnamed one by its slot', async () => {
+    serve(reply(planning), reply(review));
+    const data = await fetchAgenda(now, [src(home), src(work)], signal);
 
-      const feeds = fetchMock.mock.calls.filter(([url]) => url === '/api/calendar/feed');
+    expect(data.calendars).toEqual([
+      { slot: 1, name: 'Home', ok: true },
+      { slot: 2, name: 'Calendar 2', ok: true }
+    ]);
+    expect(data.events.map((item) => [item.title, item.calendar])).toEqual([
+      ['Planning', 0],
+      ['Review', 1]
+    ]);
+  });
 
-      expect(feeds.map(([, init]) => init.headers)).toEqual([
-        { 'X-Calendar-Url': ADDRESS_A },
-        { 'X-Calendar-Url': ADDRESS_B }
+  it.each([400, 401, 403, 404])(
+    'keeps the calendars that answered when Google or the relay refuses another with %i',
+    async (status) => {
+      serve(reply(planning), reply('', { status }));
+      const data = await fetchAgenda(now, [src(home), src(work)], signal);
+
+      expect(data.calendars).toEqual([
+        { slot: 1, name: 'Home', ok: true },
+        { slot: 2, name: 'Calendar 2', ok: false }
       ]);
-      expect(JSON.stringify(fetchMock.mock.calls.map(([url]) => url))).not.toContain('private');
+      expect(titles(data.events)).toEqual(['Planning']);
+    }
+  );
+
+  it('keeps the calendars that answered when another does not', async () => {
+    serve(reply(planning), reply('', { status: 502 }), () => {
+      throw new TypeError('Failed to fetch');
     });
+    const data = await fetchAgenda(now, [src(home), src(work), src(club)], signal);
 
-    it('reads them with no calendar on the server at all', async () => {
-      serve([], { [ADDRESS_A]: reply(planning) });
-      const data = await fetchAgenda(now, [source('Mine', ADDRESS_A)], signal);
+    expect(data.calendars).toEqual([
+      { slot: 1, name: 'Home', ok: true },
+      { slot: 2, name: 'Calendar 2', ok: false },
+      { slot: 3, name: 'Calendar 3', ok: false }
+    ]);
+    expect(titles(data.events)).toEqual(['Planning']);
+  });
 
-      expect(data).toMatchObject({
-        calendars: [{ index: 0, origin: { kind: 'added', position: 0 }, name: 'Home', ok: true }],
-        events: [{ title: 'Planning', calendar: 0 }]
-      });
-    });
+  it('counts a feed it cannot read as one that did not answer', async () => {
+    serve(
+      reply(planning),
+      reply('BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nEND:VCALENDAR'),
+      reply('<html>an error page</html>', { headers: { 'content-type': 'text/plain' } })
+    );
+    const data = await fetchAgenda(now, [src(home), src(work), src(club)], signal);
 
-    it('puts them after the server’s, in the order they were added', async () => {
-      serve([reply(planning)], { [ADDRESS_A]: reply(review), [ADDRESS_B]: reply(standup) });
-      const data = await fetchAgenda(now, [source('', ADDRESS_A), source('', ADDRESS_B)], signal);
+    expect(data.calendars.map((calendar) => calendar.ok)).toEqual([true, false, false]);
+  });
 
-      expect(data.calendars.map((calendar) => [calendar.index, calendar.origin])).toEqual([
-        [0, { kind: 'server', slot: 1 }],
-        [1, { kind: 'added', position: 0 }],
-        [2, { kind: 'added', position: 1 }]
-      ]);
-      expect(data.events.map((item) => [item.title, item.calendar])).toEqual([
-        ['Planning', 0],
-        ['Review', 1],
-        ['Standup', 2]
-      ]);
-    });
+  it('turns away an address that is not Google Calendar’s without asking the relay', async () => {
+    const fetchMock = serve(reply(planning));
 
-    it('keeps events of different calendars apart even when their ids would match', async () => {
-      serve([reply(planning)], { [ADDRESS_A]: reply(planning) });
-      const data = await fetchAgenda(now, [source('', ADDRESS_A)], signal);
+    await expect(
+      fetchAgenda(now, [src('https://example.com/calendar/ical/a/public/basic.ics')], signal)
+    ).rejects.toThrow('Google Calendar didn’t accept the address.');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 
-      expect(new Set(data.events.map((item) => item.id)).size).toBe(2);
-    });
+  it('asks for an address when there are none', async () => {
+    const fetchMock = serve();
 
-    it('does not take an answer of no content as a calendar that is not set up', async () => {
-      serve([reply(planning)], { [ADDRESS_A]: new Response(null, { status: 204 }) });
-      const data = await fetchAgenda(now, [source('Work', ADDRESS_A)], signal);
+    await expect(fetchAgenda(now, [], signal)).rejects.toThrow(
+      'Add a calendar address in this widget’s settings.'
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 
-      expect(data.calendars.map((calendar) => [calendar.origin.kind, calendar.ok])).toEqual([
-        ['server', true],
-        ['added', false]
-      ]);
-    });
+  it('says the host has no relay when it answers with its own page', async () => {
+    serve(reply('<!doctype html>', { headers: { 'content-type': 'text/html' } }));
 
-    it.each([401, 403, 500])(
-      'counts a relay answer of %i as one that did not answer',
-      async (status) => {
-        serve([reply(planning)], { [ADDRESS_A]: new Response(null, { status }) });
-        const data = await fetchAgenda(now, [source('', ADDRESS_A)], signal);
-
-        expect(data.calendars[1]).toMatchObject({
-          origin: { kind: 'added', position: 0 },
-          ok: false
-        });
-      }
+    await expect(fetchAgenda(now, [src(home)], signal)).rejects.toThrow(
+      'The Agenda goes through this dashboard’s server, which this host doesn’t provide.'
     );
   });
 
-  describe('when some do not answer', () => {
-    it('keeps the calendars that answered', async () => {
-      serve([
-        reply(planning),
-        reply('', { status: 502 }),
-        () => {
-          throw new TypeError('Failed to fetch');
-        }
-      ]);
-      const data = await fetchAgenda(now, none, signal);
+  it('says when Google does not know the address, as after a reset', async () => {
+    serve(reply('', { status: 404 }));
 
-      expect(data.calendars).toEqual([
-        { index: 0, origin: { kind: 'server', slot: 1 }, name: 'Home', ok: true },
-        { index: 1, origin: { kind: 'server', slot: 2 }, name: '', ok: false },
-        { index: 2, origin: { kind: 'server', slot: 3 }, name: '', ok: false }
-      ]);
-      expect(titles(data.events)).toEqual(['Planning']);
-    });
-
-    it('keeps them when one that was added fails', async () => {
-      serve([reply(planning)], {
-        [ADDRESS_A]: () => {
-          throw new TypeError('Failed to fetch');
-        },
-        [ADDRESS_B]: reply(standup)
-      });
-      const data = await fetchAgenda(now, [source('', ADDRESS_A), source('', ADDRESS_B)], signal);
-
-      expect(data.calendars.map((calendar) => calendar.ok)).toEqual([true, false, true]);
-      expect(titles(data.events)).toEqual(['Planning', 'Standup']);
-    });
-
-    it('counts a feed it cannot read as one that did not answer', async () => {
-      serve([
-        reply(planning),
-        reply('BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nEND:VCALENDAR'),
-        reply('<html>an error page</html>', { headers: { 'content-type': 'text/plain' } })
-      ]);
-      const data = await fetchAgenda(now, none, signal);
-
-      expect(data.calendars.map((calendar) => calendar.ok)).toEqual([true, false, false]);
-    });
+    await expect(fetchAgenda(now, [src(home)], signal)).rejects.toThrow(
+      'Google Calendar didn’t accept the address. If you reset the secret address, paste the new one in this widget’s settings.'
+    );
   });
 
-  describe('when none answers', () => {
-    it('asks for a calendar to be added, or set up on the server', async () => {
-      serve();
+  it('says when Google does not answer at all', async () => {
+    serve(reply('', { status: 500 }));
 
-      await expect(fetchAgenda(now, none, signal)).rejects.toThrow(
-        'No calendar yet. Add one in this widget’s settings, or set CALENDAR_ICAL_URL on the server.'
-      );
+    await expect(fetchAgenda(now, [src(home)], signal)).rejects.toThrow(
+      'Google Calendar didn’t answer.'
+    );
+  });
+
+  it('passes an abort on rather than calling it a failure', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    serve(() => {
+      throw new DOMException('Aborted', 'AbortError');
     });
 
-    it('says the host has no relay when it answers with its own page', async () => {
-      serve([reply('<!doctype html>', { headers: { 'content-type': 'text/html' } })]);
-
-      await expect(fetchAgenda(now, none, signal)).rejects.toThrow(
-        'The Agenda goes through this dashboard’s server, which this host doesn’t provide.'
-      );
-    });
-
-    it('says so when the server will not fetch an address that was added', async () => {
-      serve([], { [ADDRESS_A]: reply('', { status: 400 }) });
-
-      await expect(fetchAgenda(now, [source('', ADDRESS_A)], signal)).rejects.toThrow(
-        'This server only fetches Google Calendar’s iCal addresses. Check the ones added here.'
-      );
-    });
-
-    it('says when Google does not know the address, as after a reset', async () => {
-      serve([reply('', { status: 404 })]);
-
-      await expect(fetchAgenda(now, none, signal)).rejects.toThrow(
-        'Google Calendar didn’t accept the address. If you reset the secret address, copy the new one.'
-      );
-    });
-
-    it('says when Google does not answer at all', async () => {
-      serve([reply('', { status: 500 })]);
-
-      await expect(fetchAgenda(now, none, signal)).rejects.toThrow(
-        'Google Calendar didn’t answer.'
-      );
-    });
-
-    it('passes an abort on rather than calling it a failure', async () => {
-      const controller = new AbortController();
-      controller.abort();
-      serve([
-        () => {
-          throw new DOMException('Aborted', 'AbortError');
-        }
-      ]);
-
-      await expect(fetchAgenda(now, none, controller.signal)).rejects.toThrow('Aborted');
-    });
+    await expect(fetchAgenda(now, [src(home)], controller.signal)).rejects.toThrow('Aborted');
   });
 });

@@ -1,20 +1,18 @@
 /**
- * The Agenda widget's data: Google Calendars, read from the "secret address in
- * iCal format" each one offers. They come from two places. A server can hold up
- * to three in its .env, which, like the BenchLM and TMDB keys, never reach the
- * page: the page asks this site's /api/calendar relay, which fetches the feed.
- * And any number the widget's own settings list (up to eight): those addresses
- * are kept with the widget, and the page hands each to the server to fetch,
- * which fetches Google Calendar addresses and nothing else.
+ * The Agenda widget's data: up to eight Google Calendars, read from the
+ * "secret address in iCal format" each one offers. Google's feeds can't be read
+ * from a page on another site, so the page asks this site's /api/calendar relay,
+ * naming the feed's path in a header; the relay fetches it from Google Calendar
+ * alone and keeps it for a few minutes.
  *
- * A feed holds a calendar's whole history, so it is read once, expanded into
+ * The feed holds a calendar's whole history, so it is read once, expanded into
  * the months the widget can show, and only that is kept in the page's cache.
  * The iCal parser is a sizeable library and loads the first time it is needed.
  */
 import type ICAL from 'ical.js';
-import { ADDRESS_HEADER, FEED_RELAY } from './calendar-address';
+import { CALENDAR_HEADER, calendarFeedPath, normalizeCalendarAddress } from './calendar-address';
 
-/** A calendar added in the widget's settings: its address, and a name and note to tell it by. */
+/** A calendar in the widget's settings: its address, and a name and note to tell it by. */
 export type CalendarSource = {
   /** What the widget calls it; empty to use the name the calendar gives itself. */
   name: string;
@@ -34,15 +32,46 @@ export type AgendaWidget = {
   count: number;
   /** Whether the month shows above the list. */
   month: boolean;
-  /** The calendars added here, besides any the server has in its .env. */
+  /** The calendars it shows, up to CALENDAR_SLOTS; none until one is added. */
   calendars: CalendarSource[];
 };
 
-/** The server's relay serves /api/calendar/1 to /api/calendar/3, one per address in its .env. */
-export const CALENDAR_SLOTS = 3;
+/** How many calendars the widget can show; the relay serves /api/calendar/1 up to this number. */
+export const CALENDAR_SLOTS = 8;
 
-/** How many calendars one widget can add for itself. */
-export const MAX_ADDED_CALENDARS = 8;
+/**
+ * The calendars a hand-edited or older file holds: each a name, a description and an address
+ * Google Calendar's own. An address on its own is a calendar with no name yet, as the widget
+ * saved them before they had names. Anything else is dropped, and so is a calendar already listed.
+ */
+export const readCalendarSources = (value: unknown): CalendarSource[] => {
+  const given = Array.isArray(value) ? value : typeof value === 'string' ? [value] : [];
+  const found: CalendarSource[] = [];
+
+  for (const item of given) {
+    const record: Record<string, unknown> =
+      typeof item === 'string'
+        ? { url: item }
+        : typeof item === 'object' && item !== null && !Array.isArray(item)
+          ? (item as Record<string, unknown>)
+          : {};
+    const address = record.url ?? record.href;
+    const url = typeof address === 'string' ? normalizeCalendarAddress(address) : null;
+
+    if (url && !found.some((source) => source.url === url)) {
+      const clip = (text: unknown, max: number): string =>
+        typeof text === 'string' ? text.trim().slice(0, max) : '';
+
+      found.push({
+        name: clip(record.name ?? record.title, 60),
+        description: clip(record.description, 200),
+        url
+      });
+    }
+  }
+
+  return found.slice(0, CALENDAR_SLOTS);
+};
 
 /** The widget browses from this many months back to this many ahead. */
 export const MONTHS_BACK = 1;
@@ -51,7 +80,7 @@ export const MONTHS_AHEAD = 4;
 export type AgendaEvent = {
   /** Unique to this occurrence, so a repeating event has one per day it happens. */
   id: string;
-  /** Which calendar it came from, by its `index`; each has its own colour. */
+  /** Which calendar it came from, counting from 0; each has its own colour. */
   calendar: number;
   title: string;
   allDay: boolean;
@@ -67,11 +96,7 @@ export type AgendaEvent = {
 };
 
 export type AgendaCalendar = {
-  /** Its place among the calendars shown, from 0: the server's first, then the widget's own. */
-  index: number;
-  /** Where it came from: an address in the server's .env, or this widget's own list by position. */
-  origin: { kind: 'server'; slot: number } | { kind: 'added'; position: number };
-  /** The name the calendar gives itself, or empty. */
+  slot: number;
   name: string;
   /** False when the calendar is set up but didn't answer this time. */
   ok: boolean;
@@ -79,23 +104,8 @@ export type AgendaCalendar = {
 
 export type AgendaData = {
   events: AgendaEvent[];
+  /** The calendars the widget has an address for, in slot order. */
   calendars: AgendaCalendar[];
-};
-
-/**
- * What the page keeps a reading under: the same for the same addresses, so
- * editing a calendar's name or note doesn't fetch again, and a different set
- * of addresses never shows another's events. (A short hash; the addresses are
- * secrets and aren't left in the page's storage names.)
- */
-export const agendaCacheKey = (sources: readonly CalendarSource[]): string => {
-  let hash = 0x811c9dc5;
-
-  for (const character of sources.map((source) => source.url).join('\n')) {
-    hash = Math.imul(hash ^ character.charCodeAt(0), 0x01000193) >>> 0;
-  }
-
-  return sources.length ? `agenda:v2:${hash.toString(36)}` : 'agenda:v2';
 };
 
 const RELAY = '/api/calendar';
@@ -181,7 +191,7 @@ const occurrence = (
   item: IcalEvent,
   start: IcalTime,
   end: IcalTime,
-  key: string,
+  slot: number,
   from: number,
   to: number
 ): AgendaEvent | null => {
@@ -206,8 +216,8 @@ const occurrence = (
   const conference = clip(item.component.getFirstPropertyValue('x-google-conference'), 500);
 
   return {
-    id: `${key}:${item.uid}:${startsAt}`,
-    calendar: 0,
+    id: `${slot}:${item.uid}:${startsAt}`,
+    calendar: slot - 1,
     title: clip(item.summary, 200) || '(No title)',
     allDay: start.isDate,
     start: startsAt,
@@ -224,14 +234,11 @@ const occurrence = (
   };
 };
 
-/**
- * Expands a feed into the events that fall in a window, with repeats and changes applied.
- * `key` tells this feed's events from another's; their calendar is set once the feeds are put together.
- */
+/** Expands a feed into the events that fall in a window, with repeats and changes applied. */
 export const readCalendar = (
   library: Ical,
   text: string,
-  key: string,
+  slot: number,
   from: number,
   to: number
 ): { name: string; events: AgendaEvent[] } => {
@@ -279,7 +286,7 @@ export const readCalendar = (
 
   for (const event of [...masters.values(), ...loose]) {
     if (!event.isRecurring()) {
-      keep(occurrence(event, event.startDate, event.endDate, key, from, to));
+      keep(occurrence(event, event.startDate, event.endDate, slot, from, to));
       continue;
     }
 
@@ -295,7 +302,7 @@ export const readCalendar = (
       }
 
       const details = event.getOccurrenceDetails(next);
-      keep(occurrence(details.item, details.startDate, details.endDate, key, from, to));
+      keep(occurrence(details.item, details.startDate, details.endDate, slot, from, to));
     }
   }
 
@@ -311,27 +318,33 @@ export const readCalendar = (
 /* Fetching                                                                   */
 /* -------------------------------------------------------------------------- */
 
-type Origin = AgendaCalendar['origin'];
-
-type FeedResult =
+type SlotResult =
   | { kind: 'ok'; name: string; events: AgendaEvent[] }
-  | { kind: 'unset' | 'no-relay' | 'rejected' | 'blocked' | 'failed' };
+  | { kind: 'no-relay' | 'rejected' | 'failed' };
 
-/** Reads one calendar: a numbered address the server holds, or one this widget added. */
-const fetchFeed = async (
+const fetchSlot = async (
   library: Ical,
-  origin: Origin,
-  source: CalendarSource | undefined,
+  slot: number,
+  address: string,
   window: { from: number; to: number },
   signal: AbortSignal
-): Promise<FeedResult> => {
-  const server = origin.kind === 'server';
+): Promise<SlotResult> => {
+  const path = calendarFeedPath(address);
+
+  // Settings only keep addresses that pass, but a hand-edited file can hold anything.
+  if (!path) {
+    return { kind: 'rejected' };
+  }
+
   let response: Response;
 
   try {
-    response = server
-      ? await fetch(`${RELAY}/${origin.slot}`, { signal })
-      : await fetch(FEED_RELAY, { signal, headers: { [ADDRESS_HEADER]: source?.url ?? '' } });
+    // The feed is private and the address is in a header, which a cache doesn't tell apart.
+    response = await fetch(`${RELAY}/${slot}`, {
+      signal,
+      cache: 'no-store',
+      headers: { [CALENDAR_HEADER]: path }
+    });
   } catch (error) {
     if (signal.aborted) {
       throw error;
@@ -340,17 +353,9 @@ const fetchFeed = async (
     return { kind: 'failed' };
   }
 
-  // The relay answers 204 for a numbered address it doesn't have, which is the usual case for
-  // the second and third. A calendar that was added is expected to answer.
-  if (server && (response.status === 204 || response.status === 401 || response.status === 403)) {
-    return { kind: 'unset' };
-  }
-
-  if (response.status === 400) {
-    return { kind: 'blocked' };
-  }
-
-  if (response.status === 404) {
+  // The relay turns away an address that isn't Google Calendar's (400), and Google says it doesn't
+  // know one that was reset (404) or that isn't shared with the page (401 or 403).
+  if ([400, 401, 403, 404].includes(response.status)) {
     return { kind: 'rejected' };
   }
 
@@ -368,8 +373,7 @@ const fetchFeed = async (
   }
 
   try {
-    const key = server ? `s${origin.slot}` : `a${origin.position}`;
-    return { kind: 'ok', ...readCalendar(library, text, key, window.from, window.to) };
+    return { kind: 'ok', ...readCalendar(library, text, slot, window.from, window.to) };
   } catch {
     return { kind: 'failed' };
   }
@@ -382,26 +386,14 @@ export const fetchAgenda = async (
 ): Promise<AgendaData> => {
   const library = (await import('ical.js')).default;
   const window = agendaWindow(now);
-  const origins: Origin[] = [
-    ...Array.from({ length: CALENDAR_SLOTS }, (_unused, index): Origin => ({
-      kind: 'server',
-      slot: index + 1
-    })),
-    ...sources.map((_source, position): Origin => ({ kind: 'added', position }))
-  ];
   const results = await Promise.all(
-    origins.map((origin) =>
-      fetchFeed(
-        library,
-        origin,
-        origin.kind === 'added' ? sources[origin.position] : undefined,
-        window,
-        signal
-      )
-    )
+    sources
+      .slice(0, CALENDAR_SLOTS)
+      .map((source, index) => fetchSlot(library, index + 1, source.url, window, signal))
   );
+  const answered = results.filter((result) => result.kind === 'ok');
 
-  if (!results.some((result) => result.kind === 'ok')) {
+  if (answered.length === 0) {
     const kinds = results.map((result) => result.kind);
 
     if (kinds.includes('no-relay')) {
@@ -410,15 +402,9 @@ export const fetchAgenda = async (
       );
     }
 
-    if (kinds.includes('blocked')) {
-      throw new Error(
-        'This server only fetches Google Calendar’s iCal addresses. Check the ones added here.'
-      );
-    }
-
     if (kinds.includes('rejected')) {
       throw new Error(
-        'Google Calendar didn’t accept the address. If you reset the secret address, copy the new one.'
+        'Google Calendar didn’t accept the address. If you reset the secret address, paste the new one in this widget’s settings.'
       );
     }
 
@@ -426,29 +412,22 @@ export const fetchAgenda = async (
       throw new Error('Google Calendar didn’t answer.');
     }
 
-    throw new Error(
-      'No calendar yet. Add one in this widget’s settings, or set CALENDAR_ICAL_URL on the server.'
-    );
+    throw new Error('Add a calendar address in this widget’s settings.');
   }
 
   const calendars: AgendaCalendar[] = [];
   const events: AgendaEvent[] = [];
 
-  results.forEach((result, position) => {
-    if (result.kind === 'unset') {
-      return;
-    }
-
-    const index = calendars.length;
+  results.forEach((result, index) => {
+    const slot = index + 1;
     calendars.push({
-      index,
-      origin: origins[position],
-      name: result.kind === 'ok' ? result.name : '',
+      slot,
+      name: result.kind === 'ok' ? result.name || `Calendar ${slot}` : `Calendar ${slot}`,
       ok: result.kind === 'ok'
     });
 
     if (result.kind === 'ok') {
-      events.push(...result.events.map((event) => ({ ...event, calendar: index })));
+      events.push(...result.events);
     }
   });
 

@@ -41,9 +41,11 @@ and you're free to spin up your own the same way (see
 - **Your Google Calendar.** The [Agenda](#agenda-your-google-calendar) widget
   shows the month with a dot under every day that has something on, and the
   days to come beneath it: what is on now, what is next and in how long, a
-  button to join the call, and a click for the details. Add as many calendars
-  as you like, each with a name and a note on what it is for, and switch any
-  of them off from the key under the widget.
+  button to join the call, and a click for the details.
+- **For developers.** A [status bar](#status-alerts) that appears across the top
+  only while a service you depend on is down, a [My PRs](#my-prs-reviews-and-ci)
+  widget for the reviews waiting on you and your own pull requests with their
+  checks, and a [focus timer](#focus-timer) that counts down in the tab's title.
 - **A side bar, as in VS Code.** Tools, apps and Extensions down the left edge,
   with Add, Edit and Settings at the foot. It tucks away behind a small tab
   until the pointer reaches the edge; Settings → General keeps it out.
@@ -157,6 +159,97 @@ only does so when a price limit is set. Models are matched to prices by name; a
 model BenchLM lists no price for, or whose name differs, is left out of a
 capped list, and the footer says how many.
 
+### Status alerts
+
+A strip across the top of the page that appears **only while a service you
+depend on is down**, and goes away when it recovers. Choose the services in
+**Settings → General → Status alerts**: GitHub, npm, Cloudflare, Vercel,
+Netlify, Docker, Anthropic, Discord and DigitalOcean. Nothing shows while they
+are all well.
+
+- It names the service and the incident, links to the service's own status page,
+  and folds a second or third incident behind **N more**.
+- **Dismiss** hides it until something changes: a new incident, or one that gets
+  worse, brings it back.
+- By default it is for outages. Turn on **Also tell me about slow or partly
+  broken service** to hear about degraded service too.
+- A service that can't be reached is left out quietly. The bar never raises an
+  alarm of its own, and with nothing chosen it doesn't even ask.
+
+Each of these services publishes an Atlassian Statuspage. The page asks
+`/api/status/<id>` on its own server, and Nginx (or the Vite dev server) fetches
+that one service's summary from the one host listed for its id in `nginx.conf`,
+so the page can't point it anywhere else, and keeps each answer for two minutes.
+A host without the relay (a plain static host) shows no bar. Adding a service is
+one line in `src/dashboard/lib/status-services.ts` and one in `nginx.conf`; a test
+fails if the two lists differ.
+
+```yaml
+status: # in the YAML next to the other settings
+  - github
+  - npm
+statusDegraded: false # true to hear about slow service too
+```
+
+### My PRs: reviews and CI
+
+The **My PRs** widget lists the pull requests **waiting for your review** and
+**your own open ones**, each with a dot for how its checks are going: green
+passing, red failing, amber running, hollow for none. Your own show where they
+stand with reviewers (Approved, Changes requested, Needs review) and which are
+drafts, and failing ones come first. **See all** goes to the rest on GitHub.
+
+It needs a GitHub token, entered in the widget's settings:
+
+1. Make a **read-only** token at
+   [github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new)
+   with read access to **Pull requests**, **Commit statuses** and **Checks** on
+   the repositories you want. (A classic token with the `repo` scope also works,
+   but it can do far more than this needs.)
+2. Open the widget's settings (the sliders icon) and paste it under **GitHub
+   token**.
+
+Treat the token like a password. It is saved with your dashboard in this browser,
+and **it is in the YAML export too**, so an exported file carries it; the export
+says so at the top. The page sends it to `api.github.com` and nowhere else
+(GitHub's API answers browsers on other sites, so there is no relay), and the
+widget's cache key holds only a fingerprint of it. It looks for new news every
+two minutes. Revoke the token on GitHub if it ever leaks.
+
+```yaml
+widgets:
+  - type: prs
+    width: 6
+    token: github_pat_… # read-only; keep this file private
+    show: both # or review, or mine
+    count: 5 # pull requests per list, 3 to 10
+```
+
+### Focus timer
+
+A **Focus timer** widget: a ring that fills as a stretch goes, with **Start /
+Pause**, **Reset** and **Skip**. A focus stretch is 25 minutes by default, then a
+5-minute break, and the widget counts the focus stretches you finish today.
+
+- The countdown shows in the **tab's title** while it runs (`24:31 · Focus`), so
+  you can see it from another tab, and the title comes back when it stops.
+- A soft chime marks the end of each stretch; turn it off in the widget's
+  settings. When a stretch ends, the next one waits for you to press Start.
+- It counts down to a moment, not by ticks, so it keeps time in a sleeping tab and
+  **survives a reload**. A stretch that ran out while the page was closed is
+  counted if it was just now, and let go if it was long ago.
+- There is one timer per browser, shared by every Focus widget and every open
+  tab of the dashboard, and it lives apart from the YAML (a running timer is not
+  something to export).
+
+```yaml
+widgets:
+  - type: focus
+    focus: 25 # minutes of focus, 5 to 90
+    rest: 5 # minutes of break, 1 to 30
+    sound: true # false for no chime
+```
+
 ### Agenda: your Google Calendar
 
 The **Agenda** widget reads your Google Calendar. It is a month, with a dot
@@ -174,70 +267,56 @@ more, the list moves to the right.
 - All-day and multi-day events say which day of how many it is, repeating
   events and the days taken out of them come out as Google has them, and
   cancelled events stay hidden.
-- **Many calendars at once.** Each shows in its own colour, with a key under
-  the widget. Press a calendar in the key to take its events off the list and
+- **Up to eight calendars at once**, each in its own colour, with a key
+  underneath. Press a calendar in the key to take its events off the list and
   the month, and press it again to bring them back; rest the pointer on it to
   read what it is for.
 - **List only** drops the month for a plain list of what is coming up.
 
 It needs no Google sign-in or Cloud project: Google gives every calendar a
 private web address that serves it as an iCal feed, and the dashboard reads
-that. Read-only. Only Google Calendar's own addresses are read.
+that. Read-only, and it works with any Google calendar you can open the settings of.
 
-#### Adding calendars
+1. In Google Calendar, open **Settings**, pick the calendar under **Settings
+   for my calendars**, and scroll to **Integrate calendar**.
+2. Copy **Secret address in iCal format**.
+3. Add the **Agenda** widget, open its settings (the sliders icon), press **Add
+   calendar** under **Calendars** and paste the address. There is room for
+   eight, each in its own colour. Only Google Calendar's own feed addresses
+   are accepted.
 
-Open the widget's settings (the button with sliders on its header) and press
-**Add calendar**. Each calendar has three fields, so you can
-keep track of them:
+Each calendar has three fields, so you can keep track of them:
 
-- **Name** (optional): what the widget calls it. Left empty, it uses the name the
-  calendar gives itself.
-- **Address**: Google Calendar's **Secret address in iCal format**. To find it,
-  open Google Calendar, then **Settings**, pick the calendar under **Settings for
-  my calendars**, and scroll to **Integrate calendar**. A calendar that is
-  shared publicly has a **Public address in iCal format** that works too.
-- **Description** (optional): what it is for, such as "Team calendar, shared with
-  Alex". It shows when the pointer rests on the calendar in the key, and under
-  the calendar's name in an event's details.
+- **Name** (optional): what the widget calls it. Left empty, it uses the name
+  the calendar gives itself.
+- **Address**: the secret address above. A calendar that is shared publicly has
+  a **Public address in iCal format** that works too.
+- **Description** (optional): what it is for, such as "Team calendar, shared
+  with Alex". It shows when the pointer rests on the calendar in the key, and
+  under the calendar's name in an event's details.
 
-A widget can add up to eight, and each Agenda widget keeps its own list, so one
-can show your work calendars and another your family's. The widget checks each
-address when you save, and says which one isn't a Google Calendar address.
+Each Agenda widget keeps its own list, so one can show your work calendars and
+another your family's.
 
-**What is kept where.** The addresses are kept with the widget in this browser,
-and go into the YAML that **Settings → Data & YAML** exports, because they are
-part of the widget. Keep exports as private as the calendars: anyone with an
-address can read that calendar. Resetting the secret address in Google Calendar
-makes the old one stop working.
+The address is the key to your calendar, so treat it like a password:
 
-#### Calendars on the server
-
-A server can hold up to three calendars of its own, which every visitor sees
-and which never reach the page, the YAML or git. This is the way to go for a
-calendar that should show for everyone without anyone having its address:
-
-1. Copy **Secret address in iCal format** as above.
-2. Put it in `.env` as `CALENDAR_ICAL_URL`, with no quotes. For a second and a
-   third use `CALENDAR_ICAL_URL_2` and `CALENDAR_ICAL_URL_3`.
-3. Restart the server. These show in every Agenda widget, before the ones the
-   widget adds.
-
-#### How it is fetched
-
-The page asks this server for each calendar, and the server fetches it from
-Google: for the ones in `.env`, at `/api/calendar/1` to `/3`; for the ones added
-in a widget, at `/api/calendar/feed`, with the address in an `X-Calendar-Url`
-header so it stays out of URLs and access logs. The server fetches Google
-Calendar addresses (`https://calendar.google.com/calendar/ical/…/basic.ics`) and
-refuses anything else before it asks for a thing, so the dashboard can't be used
-to make the server fetch other addresses. Nginx keeps each feed for five minutes,
-so Google is asked about that often however many people visit, and the page looks
-every ten. Changes in Google Calendar can take a few minutes to show.
-
-**This makes your calendars readable by anyone who can open the dashboard.**
-That is fine on a home network, or behind a VPN or a reverse proxy with a
-login. If the dashboard is open to the internet, put a login in front of it,
-or leave the Agenda out.
+- It is saved with your dashboard in this browser, and **it is in the YAML
+  export too**, so an exported file carries your calendar with it. That is what
+  lets you import the file on another device and have the Agenda just work, and
+  also why that file is not for sharing or committing. The export says so at
+  the top.
+- It is never put in a web address or a log: the page sends the feed's path to
+  this server in a header, and the server fetches it from `calendar.google.com`
+  and from nowhere else. Nginx keeps each feed for five minutes, so Google is
+  asked about that often, and the page looks every ten. Changes in Google
+  Calendar can take a few minutes to show.
+- Other people who open the dashboard on the same server don't see your
+  calendar: the address lives in your browser, not on the server, and they
+  would have to paste their own. The server's cache does hold a copy of each
+  feed for five minutes, so keep the server itself behind your VPN or a reverse
+  proxy with a login if it can be reached from outside your home.
+- Reset the secret address in Google Calendar if it ever leaks, then paste the
+  new one. The old one stops working at once.
 
 ```yaml
 widgets:
@@ -246,13 +325,16 @@ widgets:
     weekStart: 1 # 0 for Sunday
     count: 6 # events in the list, 3 to 12
     month: true # false for the list alone
-    calendars:
+    calendars: # up to eight, each with its secret address in iCal format
       - name: Personal
         description: My own diary, from Gmail
         url: https://calendar.google.com/calendar/ical/you%40example.com/private-0123abcd/basic.ics
       - name: Holidays
         url: https://calendar.google.com/calendar/ical/en.usa%23holiday%40group.v.calendar.google.com/public/basic.ics
 ```
+
+An address on its own (`- https://calendar.google.com/…`) is read as a calendar
+with no name, as the widget saved them before calendars had names.
 
 ### Extensions
 
@@ -568,9 +650,8 @@ docker build -t blades/homeslice:latest .
 The Dockerfile builds the site with Node 24 and serves it from Nginx. Then run
 it as above.
 
-`--env-file .env` gives the AI Leaderboard and Popular TV widgets their keys and
-the Agenda its calendar addresses; leave it out and those widgets say they
-aren't set up.
+`--env-file .env` gives the AI Leaderboard and Popular TV widgets their keys;
+leave it out and those widgets say they aren't set up.
 
 App will be available at `http://localhost:8080`.
 
@@ -585,7 +666,7 @@ This starts one service:
 - `homeslice` (serves the static app on internal container port `80`)
 
 It reads `.env` beside `docker-compose.yml` when there is one, for the
-BenchLM and TMDB keys and the calendar addresses.
+BenchLM and TMDB keys.
 
 If you ran an earlier version of this project, its service was called
 `branchify`. Add `--remove-orphans` once, so Compose removes the old container
@@ -599,16 +680,15 @@ so Nginx resolves Yahoo with the container's own DNS servers per request, which
 means the container starts even if DNS isn't up yet. Yahoo turns away TLS
 handshakes that look scripted, so the relay offers a browser-like cipher order.
 
-The Agenda's `/api/calendar/1` to `/api/calendar/3` relays work the same way for
-the calendar addresses in `.env`: each fetches only its own address, passes
-nothing the visitor sends, keeps the feed for five minutes and marks it
-`private`. A calendar with no address answers `204`, which the widget reads as
-not set up. `/api/calendar/feed` fetches a calendar added in a widget, whose
-address arrives in an `X-Calendar-Url` header; it fetches only Google Calendar
-addresses, answers `400` for any other, and tells browsers not to keep the
-answer, since every calendar shares that one URL. The rule for which addresses
-pass is written in `nginx.conf` and in `src/dashboard/lib/calendar-address.ts`,
-and a test keeps the two the same (add a host to both to allow it).
+The Agenda's `/api/calendar/1` to `/api/calendar/8` relays fetch one Google
+Calendar feed each. The page names the feed's path in an `X-Calendar-Feed`
+header, and Nginx only accepts a path shaped like a Google Calendar "secret
+address in iCal format" (`/calendar/ical/<id>/private-<key>/basic.ics`, or
+`.../public/basic.ics`), then fetches it from `calendar.google.com`: the host is
+fixed in the config, so the relay can't be pointed anywhere else, such as at
+other machines on your network. It keeps the feed for five minutes and marks it
+`private`. No header answers `204`, which the widget reads as no calendar yet,
+and a header that is not a Google Calendar path answers `400`.
 
 ## GitHub Actions to Docker Hub
 

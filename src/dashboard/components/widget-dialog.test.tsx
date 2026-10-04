@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { CalendarSource } from '../lib/agenda';
 import {
   WIDGET_BLURBS,
   WIDGET_LABELS,
@@ -636,6 +637,121 @@ describe('WidgetDialog', () => {
     });
   });
 
+  describe('Focus timer', () => {
+    it('shows the lengths and whether it chimes', () => {
+      open(widgetOf('focus', { focus: 50, rest: 10, sound: false }));
+
+      const focus = slider(/Focus: 50 minutes/);
+      expect(focus).toHaveAttribute('min', '5');
+      expect(focus).toHaveAttribute('max', '90');
+      expect(focus).toHaveAttribute('step', '5');
+      const rest = slider(/Break: 10 minutes/);
+      expect(rest).toHaveAttribute('min', '1');
+      expect(rest).toHaveAttribute('max', '30');
+      expect(screen.getByRole('switch', { name: /Chime when time is up/ })).not.toBeChecked();
+    });
+
+    it('says the timer is shared, and shows in the tab’s title', () => {
+      open(widgetOf('focus'));
+
+      expect(
+        screen.getByText(/shared by every Focus widget and every open tab/)
+      ).toBeInTheDocument();
+      expect(screen.getByText(/countdown shows in the tab's title/)).toBeInTheDocument();
+    });
+
+    it('saves different lengths and a chime turned off', async () => {
+      const { onSave } = open(widgetOf('focus'));
+
+      fireEvent.change(slider(/Focus: /), { target: { value: '45' } });
+      fireEvent.change(slider(/Break: /), { target: { value: '12' } });
+      await userEvent.click(screen.getByRole('switch', { name: /Chime when time is up/ }));
+      await save();
+
+      expect(saved(onSave)).toMatchObject({ type: 'focus', focus: 45, rest: 12, sound: false });
+    });
+
+    it('shows the new lengths as the sliders move', () => {
+      open(widgetOf('focus'));
+
+      fireEvent.change(slider(/Focus: /), { target: { value: '30' } });
+
+      expect(screen.getByText('Focus: 30 minutes')).toBeInTheDocument();
+    });
+  });
+
+  describe('My PRs', () => {
+    const TOKEN = 'github_pat_11ABCDEFG0abcdefghijklmnopqrstuvwxyz';
+    const field = (): HTMLInputElement => screen.getByLabelText(/GitHub token/) as HTMLInputElement;
+
+    it('asks for a token in a masked field, and says what kind to make and where it goes', () => {
+      open(widgetOf('prs'));
+
+      expect(field()).toHaveAttribute('type', 'password');
+      expect(field()).toHaveAttribute('autocomplete', 'off');
+      expect(field()).toHaveValue('');
+      expect(screen.getByRole('link', { name: 'read-only token' })).toHaveAttribute(
+        'href',
+        'https://github.com/settings/personal-access-tokens/new'
+      );
+      expect(screen.getByText(/saved in this browser and in the YAML export/)).toBeInTheDocument();
+    });
+
+    it('shows the token it has, what is shown and how many', () => {
+      open(widgetOf('prs', { token: TOKEN, show: 'review', count: 7 }));
+
+      expect(field()).toHaveValue(TOKEN);
+      expect(screen.getByRole('radio', { name: 'To review' })).toBeChecked();
+      expect(slider(/Pull requests: 7/)).toHaveAttribute('max', '10');
+      expect(slider(/Pull requests: 7/)).toHaveAttribute('min', '3');
+    });
+
+    it('saves a token, a different list and number', async () => {
+      const { onSave } = open(widgetOf('prs'));
+
+      await userEvent.type(field(), `  ${TOKEN} `);
+      await choose('Show', 'Mine');
+      fireEvent.change(slider(/Pull requests: \d+/), { target: { value: '9' } });
+      await save();
+
+      expect(saved(onSave)).toMatchObject({ type: 'prs', token: TOKEN, show: 'mine', count: 9 });
+    });
+
+    it('saves without a token, and leaves it empty', async () => {
+      const { onSave } = open(widgetOf('prs'));
+      await save();
+
+      expect(saved(onSave)).toMatchObject({ token: '' });
+    });
+
+    it('turns away something that is not a token, without saving or repeating it', async () => {
+      const { onSave } = open(widgetOf('prs'));
+
+      await userEvent.type(field(), 'my password is hunter2 hunter2');
+      await save();
+
+      expect(onSave).not.toHaveBeenCalled();
+      const alert = screen.getByRole('alert');
+      expect(alert).toHaveTextContent('That doesn’t look like a GitHub token.');
+      expect(alert).not.toHaveTextContent('hunter2');
+    });
+
+    it('lets the mistake be mended', async () => {
+      const { onSave } = open(widgetOf('prs'));
+
+      await userEvent.type(field(), 'nope');
+      await save();
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+
+      await userEvent.clear(field());
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      await userEvent.type(field(), TOKEN);
+      await save();
+
+      expect(saved(onSave)).toMatchObject({ token: TOKEN });
+    });
+  });
+
   describe('Popular TV', () => {
     it('shows the window and how many shows, on a slider from 3 to 12', () => {
       open(widgetOf('tv', { window: 'day', count: 4 }));
@@ -731,18 +847,19 @@ describe('WidgetDialog', () => {
       expect(screen.getByRole('radio', { name: 'Monday' })).toBeChecked();
     });
 
-    it('says where its calendars come from', () => {
-      open(widgetOf('agenda'));
-
-      expect(screen.getByText(/CALENDAR_ICAL_URL/)).toBeInTheDocument();
-    });
-
     describe('its calendars', () => {
-      const PRIVATE =
-        'https://calendar.google.com/calendar/ical/dan%40example.com/private-4f9a8c1d/basic.ics';
-      const PUBLIC = 'https://calendar.google.com/calendar/ical/dan%40example.com/public/basic.ics';
+      const HOME =
+        'https://calendar.google.com/calendar/ical/sam%40example.com/private-aaa111/basic.ics';
+      const WORK = 'https://calendar.google.com/calendar/ical/work%40example.com/public/basic.ics';
+      const source = (url: string, name = '', description = ''): CalendarSource => ({
+        name,
+        description,
+        url
+      });
       const addresses = (): HTMLInputElement[] =>
         screen.queryAllByLabelText('Calendar address') as HTMLInputElement[];
+      const values = (label: string): string[] =>
+        screen.queryAllByLabelText(label).map((input) => (input as HTMLInputElement).value);
       const add = (): Promise<void> =>
         userEvent.click(screen.getByRole('button', { name: /Add calendar/ }));
 
@@ -753,96 +870,90 @@ describe('WidgetDialog', () => {
         expect(screen.getByRole('button', { name: /Add calendar/ })).toBeInTheDocument();
       });
 
-      it('says how to find the address, and where it is kept', () => {
+      it('says where to find an address, and that it is private and goes with the YAML', () => {
         open(widgetOf('agenda'));
 
-        expect(screen.getByText(/Secret address in iCal/)).toBeInTheDocument();
-        expect(screen.getByText(/goes into the YAML you export/)).toBeInTheDocument();
+        expect(
+          screen.getByText(/Secret address in iCal format/, { selector: 'span' })
+        ).toBeInTheDocument();
+        expect(screen.getByText(/YAML export too/)).toBeInTheDocument();
+        expect(screen.queryByText(/CALENDAR_ICAL_URL/)).not.toBeInTheDocument();
       });
 
-      it('shows the calendars it already has, with their notes', () => {
+      it('shows the calendars it already has, with their names and descriptions', () => {
         open(
           widgetOf('agenda', {
-            calendars: [
-              { name: 'Personal', description: 'My own diary', url: PRIVATE },
-              { name: '', description: '', url: PUBLIC }
-            ]
+            calendars: [source(HOME, 'Personal', 'My own diary'), source(WORK)]
           })
         );
 
-        expect(
-          screen
-            .getAllByLabelText('Calendar name')
-            .map((input) => (input as HTMLInputElement).value)
-        ).toEqual(['Personal', '']);
-        expect(
-          screen
-            .getAllByLabelText('Calendar description')
-            .map((input) => (input as HTMLInputElement).value)
-        ).toEqual(['My own diary', '']);
-        expect(addresses().map((input) => input.value)).toEqual([PRIVATE, PUBLIC]);
+        expect(values('Calendar name')).toEqual(['Personal', '']);
+        expect(values('Calendar description')).toEqual(['My own diary', '']);
+        expect(values('Calendar address')).toEqual([HOME, WORK]);
       });
 
-      it('adds a calendar with a name, an address and a note, and saves it', async () => {
+      it('adds a calendar with a name, an address and a description, and saves it', async () => {
         const { onSave } = open(widgetOf('agenda'));
 
         await add();
         await userEvent.type(screen.getByLabelText('Calendar name'), '  Personal ');
-        await userEvent.type(screen.getByLabelText('Calendar address'), `  ${PRIVATE}  `);
+        await userEvent.type(screen.getByLabelText('Calendar address'), `  ${HOME}  `);
         await userEvent.type(screen.getByLabelText('Calendar description'), ' My own diary ');
         await save();
 
         expect(saved(onSave)).toMatchObject({
           type: 'agenda',
-          calendars: [{ name: 'Personal', description: 'My own diary', url: PRIVATE }]
+          calendars: [{ name: 'Personal', description: 'My own diary', url: HOME }]
         });
       });
 
-      it('saves the address Apple’s webcal form stands for', async () => {
+      it('saves an address in the form it is kept in, whatever it was typed as', async () => {
         const { onSave } = open(widgetOf('agenda'));
 
         await add();
         await userEvent.type(
           screen.getByLabelText('Calendar address'),
-          PUBLIC.replace('https://', 'webcal://')
+          `  ${HOME.replace('https:', 'webcal:')}?hl=en `
         );
         await save();
 
-        expect(saved(onSave)).toMatchObject({ calendars: [{ url: PUBLIC }] });
+        expect(saved(onSave)).toMatchObject({ calendars: [{ url: HOME }] });
+      });
+
+      it('saves none when none are given', async () => {
+        const { onSave } = open(widgetOf('agenda', { calendars: [] }));
+        await save();
+
+        expect(saved(onSave)).toMatchObject({ calendars: [] });
       });
 
       it('adds several, and takes one away', async () => {
         const { onSave } = open(
-          widgetOf('agenda', {
-            calendars: [
-              { name: 'Personal', description: '', url: PRIVATE },
-              { name: 'Holidays', description: '', url: PUBLIC }
-            ]
-          })
+          widgetOf('agenda', { calendars: [source(HOME, 'Personal'), source(WORK, 'Club')] })
         );
 
         await userEvent.click(screen.getByRole('button', { name: 'Remove Personal' }));
         await add();
-        await userEvent.type(screen.getAllByLabelText('Calendar address')[1], PRIVATE);
+        await userEvent.type(screen.getAllByLabelText('Calendar address')[1], HOME);
         await save();
 
         expect(saved(onSave)).toMatchObject({
           calendars: [
-            { name: 'Holidays', url: PUBLIC },
-            { name: '', url: PRIVATE }
+            { name: 'Club', url: WORK },
+            { name: '', url: HOME }
           ]
         });
       });
 
       it('names an unnamed row by its number, to take it away', async () => {
-        open(widgetOf('agenda', { calendars: [{ name: '', description: '', url: PRIVATE }] }));
+        open(widgetOf('agenda', { calendars: [source(HOME)] }));
 
         await userEvent.click(screen.getByRole('button', { name: 'Remove calendar 1' }));
 
         expect(addresses()).toHaveLength(0);
       });
 
-      it('leaves out a row that was added and never filled in', async () => {
+      it('leaves out a row that was added and never given an address', async () => {
         const { onSave } = open(widgetOf('agenda'));
 
         await add();
@@ -852,36 +963,37 @@ describe('WidgetDialog', () => {
         expect(saved(onSave)).toMatchObject({ calendars: [] });
       });
 
-      it('refuses an address that is not Google Calendar’s, and says so', async () => {
+      it('keeps an address once when it is typed twice', async () => {
+        const { onSave } = open(widgetOf('agenda'));
+
+        await add();
+        await add();
+        await userEvent.type(screen.getAllByLabelText('Calendar address')[0], HOME);
+        await userEvent.type(screen.getAllByLabelText('Calendar address')[1], HOME);
+        await save();
+
+        expect(saved(onSave)).toMatchObject({ calendars: [{ url: HOME }] });
+      });
+
+      it('turns away an address that is not Google Calendar’s, without saving or repeating it', async () => {
         const { onSave } = open(widgetOf('agenda'));
 
         await add();
         await userEvent.type(
           screen.getByLabelText('Calendar address'),
-          'https://example.com/a.ics'
+          'https://example.com/private/basic.ics'
         );
         await save();
 
         expect(onSave).not.toHaveBeenCalled();
-        expect(screen.getByRole('alert')).toHaveTextContent(
-          '“https://example.com/a.ics” isn’t a Google Calendar address.'
+        const alert = screen.getByRole('alert');
+        expect(alert).toHaveTextContent(
+          'That isn’t a Google Calendar secret address in iCal format.'
         );
+        expect(alert).not.toHaveTextContent('example.com');
       });
 
-      it('shortens a long address it refuses', async () => {
-        open(widgetOf('agenda'));
-
-        await add();
-        await userEvent.type(
-          screen.getByLabelText('Calendar address'),
-          `https://example.com/${'a'.repeat(80)}`
-        );
-        await save();
-
-        expect(screen.getByRole('alert')).toHaveTextContent(/“https:\/\/example\.com\/a+…”/);
-      });
-
-      it('lets it be put right, and saved', async () => {
+      it('lets the mistake be mended, and saves once it is', async () => {
         const { onSave } = open(widgetOf('agenda'));
 
         await add();
@@ -890,21 +1002,19 @@ describe('WidgetDialog', () => {
         expect(screen.getByRole('alert')).toBeInTheDocument();
 
         await userEvent.clear(screen.getByLabelText('Calendar address'));
-        await userEvent.type(screen.getByLabelText('Calendar address'), PRIVATE);
         expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+        await userEvent.type(screen.getByLabelText('Calendar address'), HOME);
         await save();
 
-        expect(saved(onSave)).toMatchObject({ calendars: [{ url: PRIVATE }] });
+        expect(saved(onSave)).toMatchObject({ calendars: [{ url: HOME }] });
       });
 
       it('stops offering to add at eight', async () => {
         open(
           widgetOf('agenda', {
-            calendars: Array.from({ length: 7 }, () => ({
-              name: '',
-              description: '',
-              url: PRIVATE
-            }))
+            calendars: Array.from({ length: 7 }, (_unused, index) =>
+              source(HOME.replace('aaa111', `token${index}`))
+            )
           })
         );
 

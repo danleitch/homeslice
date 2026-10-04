@@ -1,81 +1,79 @@
 import { describe, expect, it } from 'vitest';
-import nginx from '../../../nginx.conf?raw';
-import { ADDRESS_PATTERN, normaliseAddress } from './calendar-address';
+import { calendarFeedPath, normalizeCalendarAddress } from './calendar-address';
 
-const PRIVATE =
-  'https://calendar.google.com/calendar/ical/dan%40example.com/private-4f9a8c1d2e3b4a5c6d7e8f9a0b1c2d3e/basic.ics';
-const PUBLIC = 'https://calendar.google.com/calendar/ical/dan%40example.com/public/basic.ics';
-const HOLIDAYS =
-  'https://calendar.google.com/calendar/ical/en.usa%23holiday%40group.v.calendar.google.com/public/basic.ics';
+const SECRET =
+  'https://calendar.google.com/calendar/ical/sam%40example.com/private-a1b2c3d4e5f6/basic.ics';
+const SECRET_PATH = '/calendar/ical/sam%40example.com/private-a1b2c3d4e5f6/basic.ics';
 
-describe('normaliseAddress', () => {
-  it.each([PRIVATE, PUBLIC, HOLIDAYS])('accepts %s', (address) => {
-    expect(normaliseAddress(address)).toBe(address);
+describe('calendarFeedPath', () => {
+  it('gives the path of a secret address, keeping its encoding', () => {
+    expect(calendarFeedPath(SECRET)).toBe(SECRET_PATH);
   });
 
-  it('trims what was pasted', () => {
-    expect(normaliseAddress(`  ${PRIVATE}\n`)).toBe(PRIVATE);
+  it('takes a public address, a group calendar and a holiday calendar', () => {
+    expect(
+      calendarFeedPath('https://calendar.google.com/calendar/ical/abc123/public/basic.ics')
+    ).toBe('/calendar/ical/abc123/public/basic.ics');
+    expect(
+      calendarFeedPath(
+        'https://calendar.google.com/calendar/ical/c_x1y2%40group.calendar.google.com/private-0f0f/basic.ics'
+      )
+    ).toBe('/calendar/ical/c_x1y2%40group.calendar.google.com/private-0f0f/basic.ics');
+    expect(
+      calendarFeedPath(
+        'https://calendar.google.com/calendar/ical/en.usa%23holiday%40group.v.calendar.google.com/public/basic.ics'
+      )
+    ).toBe('/calendar/ical/en.usa%23holiday%40group.v.calendar.google.com/public/basic.ics');
   });
 
-  it('reads the webcal form as the https address it stands for', () => {
-    expect(normaliseAddress(PRIVATE.replace('https://', 'webcal://'))).toBe(PRIVATE);
-    expect(normaliseAddress(PUBLIC.replace('https://', 'WEBCALS://'))).toBe(PUBLIC);
+  it('forgives spaces round it, a webcal:// scheme and a query', () => {
+    expect(calendarFeedPath(`  ${SECRET}\n`)).toBe(SECRET_PATH);
+    expect(calendarFeedPath(SECRET.replace('https:', 'webcal:'))).toBe(SECRET_PATH);
+    expect(calendarFeedPath(`${SECRET}?hl=en`)).toBe(SECRET_PATH);
   });
 
   it.each([
     ['nothing', ''],
-    ['a word', 'my calendar'],
-    ['the calendar’s page', 'https://calendar.google.com/calendar/u/0/r'],
-    ['the embed address', 'https://calendar.google.com/calendar/embed?src=dan%40example.com'],
-    ['plain http', PRIVATE.replace('https:', 'http:')],
-    ['another site', PRIVATE.replace('calendar.google.com', 'example.com')],
-    ['a lookalike host', PRIVATE.replace('calendar.google.com', 'calendar.google.com.example.com')],
+    ['words', 'my calendar'],
+    ['a path with no host', '/calendar/ical/sam/public/basic.ics'],
+    ['plain http', SECRET.replace('https:', 'http:')],
+    ['another host', SECRET.replace('calendar.google.com', 'example.com')],
     [
-      'a host with a login in front',
-      PRIVATE.replace('https://', 'https://calendar.google.com@example.com/#')
+      'a host that only starts with Google’s',
+      SECRET.replace('calendar.google.com', 'calendar.google.com.evil.test')
     ],
-    ['another path', PRIVATE.replace('/basic.ics', '/other.ics')],
-    ['a trailing query', `${PRIVATE}?x=1`],
-    ['a second address', `${PRIVATE} ${PUBLIC}`],
-    ['a line break in the middle', PRIVATE.replace('/private', '\n/private')],
-    ['a script', 'javascript:alert(1)']
-  ])('refuses %s', (_name, address) => {
-    expect(normaliseAddress(address)).toBeNull();
+    ['a host Google’s is only a prefix of', SECRET.replace('https://', 'https://evil.test/')],
+    ['a port', SECRET.replace('google.com', 'google.com:8443')],
+    ['a login in front', SECRET.replace('https://', 'https://user:pass@')],
+    [
+      'an address for the calendar page, not the feed',
+      'https://calendar.google.com/calendar/u/0/r'
+    ],
+    [
+      'an .ics that is not a feed',
+      'https://calendar.google.com/calendar/ical/sam/private-ab/other.ics'
+    ],
+    [
+      'a key with a slash in it',
+      'https://calendar.google.com/calendar/ical/sam/private-a/b/basic.ics'
+    ],
+    [
+      'a calendar id with a slash in it',
+      'https://calendar.google.com/calendar/ical/a/b/public/basic.ics'
+    ],
+    ['no key', 'https://calendar.google.com/calendar/ical/sam/private-/basic.ics'],
+    [
+      'a private feed with no key word',
+      'https://calendar.google.com/calendar/ical/sam/secret-ab/basic.ics'
+    ]
+  ])('turns away %s', (_what, input) => {
+    expect(calendarFeedPath(input)).toBeNull();
   });
 });
 
-describe('the rule nginx.conf holds', () => {
-  /** The pattern in nginx's map, as a JavaScript one. */
-  const inNginx = (): RegExp => {
-    const line = nginx.split('\n').find((text) => text.trim().startsWith('"~^https://calendar'));
-    const source = line
-      ?.trim()
-      .replace(/^"~/, '')
-      .replace(/"\s+1;$/, '');
-
-    if (!source) {
-      throw new Error('nginx.conf has no calendar address rule');
-    }
-
-    return new RegExp(source);
-  };
-
-  it('is the same rule as the page’s', () => {
-    // JavaScript escapes the slashes in a pattern's source; nginx does not.
-    expect(inNginx().source.replace(/\\\//g, '/')).toBe(
-      ADDRESS_PATTERN.source.replace(/\\\//g, '/')
-    );
-  });
-
-  it('answers the same for any address', () => {
-    for (const address of [
-      PRIVATE,
-      PUBLIC,
-      HOLIDAYS,
-      `${PRIVATE}?x=1`,
-      'https://example.com/x.ics'
-    ]) {
-      expect(inNginx().test(address)).toBe(ADDRESS_PATTERN.test(address));
-    }
+describe('normalizeCalendarAddress', () => {
+  it('keeps an address in one form, whatever it was typed as', () => {
+    expect(normalizeCalendarAddress(`  ${SECRET.replace('https:', 'webcal:')}?x=1 `)).toBe(SECRET);
+    expect(normalizeCalendarAddress('https://example.com')).toBeNull();
   });
 });

@@ -18,8 +18,8 @@ import {
 } from 'lucide-react';
 import { useNow } from '../hooks/use-now';
 import { dropRemoteCache, useRemote } from '../hooks/use-remote';
+import { fingerprint } from '../lib/fingerprint';
 import {
-  agendaCacheKey,
   fetchAgenda,
   isAddress,
   type AgendaCalendar,
@@ -69,15 +69,9 @@ const calendarLabel = (
   calendar: AgendaCalendar,
   sources: readonly CalendarSource[]
 ): { name: string; note: string } => {
-  const added = calendar.origin.kind === 'added' ? sources[calendar.origin.position] : undefined;
+  const source = sources[calendar.slot - 1];
 
-  return {
-    name:
-      added?.name ||
-      calendar.name ||
-      `Calendar ${calendar.origin.kind === 'server' ? calendar.origin.slot : calendar.index + 1}`,
-    note: added?.description ?? ''
-  };
+  return { name: source?.name || calendar.name, note: source?.description ?? '' };
 };
 
 const AgendaRow = ({
@@ -179,14 +173,30 @@ export const AgendaWidget = ({
   widget: AgendaWidgetConfig;
   clock: HourFormat;
   newTab: boolean;
+}): JSX.Element =>
+  widget.calendars.length === 0 ? (
+    <WidgetState>Add a calendar address in this widget’s settings.</WidgetState>
+  ) : (
+    <AgendaBoard widget={widget} clock={clock} newTab={newTab} />
+  );
+
+const AgendaBoard = ({
+  widget,
+  clock,
+  newTab
+}: {
+  widget: AgendaWidgetConfig;
+  clock: HourFormat;
+  newTab: boolean;
 }): JSX.Element => {
-  const { weekStart, count, month } = widget;
+  const { weekStart, count, month, calendars } = widget;
   const now = useNow();
-  const sources = widget.calendars;
-  const cacheKey = agendaCacheKey(sources);
+  // The addresses are the reading's identity: other addresses are another reading altogether,
+  // while a calendar's name or note changing is not.
+  const cacheKey = `agenda:${fingerprint(calendars.map((calendar) => calendar.url).join('\n'))}`;
   const load = useCallback(
-    (signal: AbortSignal) => fetchAgenda(new Date(), sources, signal),
-    [sources]
+    (signal: AbortSignal) => fetchAgenda(new Date(), calendars, signal),
+    [calendars]
   );
   const { data, error, refresh } = useRemote(cacheKey, AGENDA_TTL_MS, load);
   // Calendars switched off in the key under the list, by their place; not kept past the page.
@@ -205,8 +215,8 @@ export const AgendaWidget = ({
   const selected = month ? clampDay(picked ?? today, range) : today;
   const target = newTab ? '_blank' : undefined;
 
-  // Other addresses are a different reading: forget the one this has replaced, and the one kept
-  // before calendars could be added here, so the page's storage doesn't fill with old ones.
+  // Other addresses are a different reading: forget the one this has replaced, so the page's
+  // storage doesn't fill with old ones, and the one kept before the widget had calendars of its own.
   const lastKey = useRef(cacheKey);
 
   useEffect(() => {
@@ -282,11 +292,12 @@ export const AgendaWidget = ({
   };
 
   const labels = new Map(
-    data.calendars.map((calendar) => [calendar.index, calendarLabel(calendar, sources)])
+    data.calendars.map((calendar) => [calendar.slot - 1, calendarLabel(calendar, calendars)])
   );
   const answered = data.calendars.filter((calendar) => calendar.ok);
   const several = answered.length > 1;
-  const allHidden = answered.length > 0 && answered.every((calendar) => hidden.has(calendar.index));
+  const allHidden =
+    answered.length > 0 && answered.every((calendar) => hidden.has(calendar.slot - 1));
   const groups = upcoming(days, selected, count);
   const nowMs = now.getTime();
   const shown = dayFromKey(selected);
@@ -468,16 +479,16 @@ export const AgendaWidget = ({
         {several && (
           <ul className="agenda-legend" aria-label="Calendars">
             {answered.map((calendar) => {
-              const label = labels.get(calendar.index)!;
+              const label = labels.get(calendar.slot - 1)!;
 
               return (
-                <li key={calendar.index} style={toneOf(calendar.index)}>
+                <li key={calendar.slot} style={toneOf(calendar.slot - 1)}>
                   <button
                     type="button"
                     className="agenda-key"
-                    aria-pressed={!hidden.has(calendar.index)}
+                    aria-pressed={!hidden.has(calendar.slot - 1)}
                     title={label.note ? `${label.name}: ${label.note}` : label.name}
-                    onClick={() => toggleCalendar(calendar.index)}
+                    onClick={() => toggleCalendar(calendar.slot - 1)}
                   >
                     <i aria-hidden="true" />
                     {label.name}
@@ -491,7 +502,7 @@ export const AgendaWidget = ({
           <span className="agenda-warn" role="status">
             {error
               ? 'Couldn’t refresh; showing the last look.'
-              : `${unanswered.map((calendar) => labels.get(calendar.index)!.name).join(' and ')} didn’t answer.`}{' '}
+              : `${unanswered.map((calendar) => labels.get(calendar.slot - 1)!.name).join(' and ')} didn’t answer.`}{' '}
             <button type="button" className="link-btn" onClick={refresh}>
               Try again
             </button>
