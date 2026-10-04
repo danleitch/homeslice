@@ -7,6 +7,8 @@ import {
   presetOf,
   type BenchPreset
 } from '../lib/benchlm';
+import { CALENDAR_SLOTS } from '../lib/agenda';
+import { normalizeCalendarAddress, readCalendarAddresses } from '../lib/calendar-address';
 import { FOCUS_LIMITS } from '../lib/focus';
 import { POPULAR_LANGUAGES, TRENDING_SINCE, languageSlug } from '../lib/github';
 import { isToken, readToken } from '../lib/pulls';
@@ -125,6 +127,18 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
       return;
     }
 
+    if (draft.type === 'agenda') {
+      // Blank rows are left out below, so only an address that was actually typed can be wrong.
+      const typed = draft.calendars.map((address) => address.trim()).filter(Boolean);
+
+      if (typed.some((address) => !normalizeCalendarAddress(address))) {
+        setError(
+          'That isn’t a Google Calendar secret address in iCal format. It starts with https://calendar.google.com/calendar/ical/ and ends in /basic.ics.'
+        );
+        return;
+      }
+    }
+
     const cleaned: Widget =
       draft.type === 'markets'
         ? {
@@ -141,7 +155,9 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
               ? { ...draft, language: languageSlug(draft.language) }
               : draft.type === 'prs'
                 ? { ...draft, token: readToken(draft.token) }
-                : draft;
+                : draft.type === 'agenda'
+                  ? { ...draft, calendars: readCalendarAddresses(draft.calendars, CALENDAR_SLOTS) }
+                  : draft;
 
     onSave(cleaned);
   };
@@ -578,6 +594,39 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
 
         {draft.type === 'agenda' && (
           <>
+            <div className="field">
+              <span className="field-label">Calendars</span>
+              {Array.from({ length: CALENDAR_SLOTS }, (_unused, index) => (
+                <input
+                  key={index}
+                  type="text"
+                  value={draft.calendars[index] ?? ''}
+                  aria-label={`Calendar ${index + 1} address`}
+                  placeholder={index === 0 ? 'Secret address in iCal format' : 'Another calendar'}
+                  spellCheck={false}
+                  autoComplete="off"
+                  onChange={(event) => {
+                    const next = Array.from(
+                      { length: CALENDAR_SLOTS },
+                      (_slot, slot) => draft.calendars[slot] ?? ''
+                    );
+                    next[index] = event.target.value;
+                    patch({ calendars: next });
+                  }}
+                />
+              ))}
+              {error && (
+                <span className="field-error" role="alert">
+                  {error}
+                </span>
+              )}
+              <span className="field-hint">
+                From Google Calendar: Settings, the calendar under “Settings for my calendars”, then
+                Integrate calendar, and copy the Secret address in iCal format. Anyone with the
+                address can read the calendar, and it is saved with this dashboard, in its YAML
+                export too, so keep both private.
+              </span>
+            </div>
             <Field label={`Events: ${draft.count}`}>
               <input
                 type="range"
@@ -599,10 +648,6 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
                 ]}
                 onChange={(value) => patch({ month: value === 'month' })}
               />
-              <span className="field-hint">
-                Calendars come from this server’s CALENDAR_ICAL_URL settings: up to three, from
-                Google Calendar’s secret address in iCal format.
-              </span>
             </div>
           </>
         )}

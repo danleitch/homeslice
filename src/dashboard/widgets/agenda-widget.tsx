@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useNow } from '../hooks/use-now';
 import { useRemote } from '../hooks/use-remote';
+import { fingerprint } from '../lib/fingerprint';
 import {
   fetchAgenda,
   isAddress,
@@ -156,11 +157,35 @@ export const AgendaWidget = ({
   widget: AgendaWidgetConfig;
   clock: HourFormat;
   newTab: boolean;
+}): JSX.Element =>
+  widget.calendars.length === 0 ? (
+    <WidgetState>Add a calendar address in this widget’s settings.</WidgetState>
+  ) : (
+    <AgendaBoard widget={widget} clock={clock} newTab={newTab} />
+  );
+
+const AgendaBoard = ({
+  widget,
+  clock,
+  newTab
+}: {
+  widget: AgendaWidgetConfig;
+  clock: HourFormat;
+  newTab: boolean;
 }): JSX.Element => {
-  const { weekStart, count, month } = widget;
+  const { weekStart, count, month, calendars } = widget;
   const now = useNow();
-  const load = useCallback((signal: AbortSignal) => fetchAgenda(new Date(), signal), []);
-  const { data, error, refresh } = useRemote('agenda', AGENDA_TTL_MS, load);
+  // The addresses are the reading's identity: other addresses are another reading altogether.
+  const addresses = calendars.join('\n');
+  const load = useCallback(
+    (signal: AbortSignal) => fetchAgenda(new Date(), addresses.split('\n'), signal),
+    [addresses]
+  );
+  const { data, error, refresh } = useRemote(
+    `agenda:${fingerprint(addresses)}`,
+    AGENDA_TTL_MS,
+    load
+  );
   // Null follows today, so the widget is on the right day after midnight too.
   const [picked, setPicked] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);

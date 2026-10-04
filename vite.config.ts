@@ -2,6 +2,11 @@
 import { Agent } from 'node:https';
 import { defineConfig, loadEnv, type ProxyOptions } from 'vite';
 import { STATUS_SERVICES } from './src/dashboard/lib/status-services.ts';
+import {
+  CALENDAR_FEED_PATH,
+  CALENDAR_HEADER,
+  CALENDAR_HOST
+} from './src/dashboard/lib/calendar-address.ts';
 
 /**
  * Yahoo turns away TLS handshakes that look like a script's (Node's default
@@ -84,48 +89,43 @@ const pricingProxy: Record<string, ProxyOptions> = {
   }
 };
 
-/** The Agenda widget reads up to three calendars, one variable each (see .env.example). */
-const CALENDAR_VARIABLES = ['CALENDAR_ICAL_URL', 'CALENDAR_ICAL_URL_2', 'CALENDAR_ICAL_URL_3'];
-
 /**
- * A calendar's secret iCal address is its key, so these relays hold it as
- * nginx.conf does: /api/calendar/1 to /3 each fetch their one address, whatever
- * the page asks for. A calendar with no address answers 204 (no content), which
- * the widget reads as "not set up", without the browser logging an error.
+ * The Agenda widget's calendars. The page names its feed by path in a header
+ * and these relays fetch it from Google Calendar alone, as nginx.conf does:
+ * a header that isn't the path of a Google Calendar feed is turned away (400),
+ * and none at all answers 204 (no content), which the widget reads as "none
+ * yet", without the browser logging an error.
  */
-const calendarProxies = (env: Record<string, string>): Record<string, ProxyOptions> =>
-  Object.fromEntries(
-    CALENDAR_VARIABLES.map((name, index): [string, ProxyOptions] => {
-      let address: URL | null = null;
+export const calendarProxy = (
+  target = `https://${CALENDAR_HOST}`
+): Record<string, ProxyOptions> => ({
+  '^/api/calendar/[123]$': {
+    target,
+    changeOrigin: true,
+    bypass: (request, response) => {
+      const header = request.headers[CALENDAR_HEADER.toLowerCase()];
+      const feed = typeof header === 'string' ? header : '';
 
-      try {
-        address = new URL(env[name] ?? '');
-      } catch {
-        /* unset, or not an address: the relay says so below */
+      if (feed && CALENDAR_FEED_PATH.test(feed)) {
+        return undefined;
       }
 
-      return [
-        `^/api/calendar/${index + 1}$`,
-        address
-          ? {
-              target: address.origin,
-              changeOrigin: true,
-              rewrite: () => `${address.pathname}${address.search}`
-            }
-          : {
-              bypass: (_request, response) => {
-                if (response) {
-                  response.statusCode = 204;
-                  response.end();
-                }
+      if (response) {
+        response.statusCode = feed ? 400 : 204;
+        response.end();
+      }
 
-                // A string tells Vite the request is handled; it stops once the response has ended.
-                return '/';
-              }
-            }
-      ];
-    })
-  );
+      // A string tells Vite the request is handled; it stops once the response has ended.
+      return '/';
+    },
+    configure: (proxy) => {
+      proxy.on('proxyReq', (proxyReq, request) => {
+        proxyReq.path = String(request.headers[CALENDAR_HEADER.toLowerCase()]);
+        proxyReq.removeHeader(CALENDAR_HEADER);
+      });
+    }
+  }
+});
 
 /**
  * The status bar's services: /api/status/<id> fetches that service's Statuspage
@@ -149,7 +149,7 @@ export default defineConfig(({ mode }) => {
     ...marketsProxy,
     ...pricingProxy,
     ...keyedProxies(env),
-    ...calendarProxies(env),
+    ...calendarProxy(),
     ...statusProxies
   };
 
@@ -169,6 +169,9 @@ export default defineConfig(({ mode }) => {
       setupFiles: './src/test/setup.ts',
       // Only this app's tests; reference checkouts beside it bring their own.
       include: ['src/**/*.test.{ts,tsx}'],
+      // The pond tests type out whole lists of names: a few seconds on their own, and twice that
+      // with the rest of the suite running beside them, so vitest's 5 seconds is too tight.
+      testTimeout: 20_000,
       css: true,
       coverage: {
         provider: 'v8',

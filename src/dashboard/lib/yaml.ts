@@ -31,6 +31,9 @@ export const YAML_HEADER = `# Your dashboard: bookmarks, widgets and settings.
 # Each of the three pages has its own widgets and groups, in order.
 # Widths are columns of a 12-column board, from 3 to 12.
 #
+# An Agenda widget keeps its Google Calendar addresses here. Anyone with an
+# address can read that calendar, so keep this file private.
+#
 # A My PRs widget keeps its GitHub token here. Anyone with the token can read
 # whatever it is allowed to, so keep this file private.
 `;
