@@ -17,14 +17,15 @@ import {
   Video
 } from 'lucide-react';
 import { useNow } from '../hooks/use-now';
-import { useRemote } from '../hooks/use-remote';
+import { dropRemoteCache, useRemote } from '../hooks/use-remote';
 import { fingerprint } from '../lib/fingerprint';
 import {
   fetchAgenda,
   isAddress,
   type AgendaCalendar,
   type AgendaEvent,
-  type AgendaWidget as AgendaWidgetConfig
+  type AgendaWidget as AgendaWidgetConfig,
+  type CalendarSource
 } from '../lib/agenda';
 import {
   addMonths,
@@ -57,9 +58,21 @@ import '../agenda.css';
 /** The relay keeps a feed for five minutes; the page looks twice as seldom. */
 const AGENDA_TTL_MS = 10 * 60 * 1000;
 
-/** Each calendar has its own colour, set in agenda.css. */
+/** Each calendar has its own colour, set in agenda.css; past the palette's end they begin again. */
+const PALETTE = 8;
+
 const toneOf = (calendar: number): CSSProperties =>
-  ({ '--tone': `var(--cal-${(calendar % 3) + 1})` }) as CSSProperties;
+  ({ '--tone': `var(--cal-${(calendar % PALETTE) + 1})` }) as CSSProperties;
+
+/** What the widget calls a calendar, and the note it was given to tell it by. */
+const calendarLabel = (
+  calendar: AgendaCalendar,
+  sources: readonly CalendarSource[]
+): { name: string; note: string } => {
+  const source = sources[calendar.slot - 1];
+
+  return { name: source?.name || calendar.name, note: source?.description ?? '' };
+};
 
 const AgendaRow = ({
   event,
@@ -68,6 +81,7 @@ const AgendaRow = ({
   now,
   clock,
   calendarName,
+  calendarNote,
   open,
   target,
   onToggle
@@ -77,8 +91,9 @@ const AgendaRow = ({
   phase: Phase;
   now: number;
   clock: HourFormat;
-  /** Shown in the details when there is more than one calendar. */
+  /** Shown in the details when there is more than one calendar, with the note it was given. */
   calendarName: string;
+  calendarNote: string;
   open: boolean;
   target: string | undefined;
   onToggle: () => void;
@@ -131,6 +146,7 @@ const AgendaRow = ({
             {spanLabel(event, clock)}
             {calendarName && <span className="agenda-detail-calendar"> · {calendarName}</span>}
           </p>
+          {calendarNote && <p className="agenda-detail-note">{calendarNote}</p>}
           {place && (
             <a
               className="agenda-detail-line"
@@ -175,27 +191,46 @@ const AgendaBoard = ({
 }): JSX.Element => {
   const { weekStart, count, month, calendars } = widget;
   const now = useNow();
-  // The addresses are the reading's identity: other addresses are another reading altogether.
-  const addresses = calendars.join('\n');
+  // The addresses are the reading's identity: other addresses are another reading altogether,
+  // while a calendar's name or note changing is not.
+  const cacheKey = `agenda:${fingerprint(calendars.map((calendar) => calendar.url).join('\n'))}`;
   const load = useCallback(
-    (signal: AbortSignal) => fetchAgenda(new Date(), addresses.split('\n'), signal),
-    [addresses]
+    (signal: AbortSignal) => fetchAgenda(new Date(), calendars, signal),
+    [calendars]
   );
-  const { data, error, refresh } = useRemote(
-    `agenda:${fingerprint(addresses)}`,
-    AGENDA_TTL_MS,
-    load
-  );
+  const { data, error, refresh } = useRemote(cacheKey, AGENDA_TTL_MS, load);
+  // Calendars switched off in the key under the list, by their place; not kept past the page.
+  const [hidden, setHidden] = useState<ReadonlySet<number>>(() => new Set());
   // Null follows today, so the widget is on the right day after midnight too.
   const [picked, setPicked] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const refocus = useRef(false);
-  const days = useMemo(() => groupByDay(data?.events ?? []), [data]);
+  const days = useMemo(
+    () => groupByDay((data?.events ?? []).filter((event) => !hidden.has(event.calendar))),
+    [data, hidden]
+  );
   const today = dayKey(now);
   const range = browseRange(today);
   const selected = month ? clampDay(picked ?? today, range) : today;
   const target = newTab ? '_blank' : undefined;
+
+  // Other addresses are a different reading: forget the one this has replaced, so the page's
+  // storage doesn't fill with old ones, and the one kept before the widget had calendars of its own.
+  const lastKey = useRef(cacheKey);
+
+  useEffect(() => {
+    if (lastKey.current !== cacheKey) {
+      dropRemoteCache(lastKey.current);
+      lastKey.current = cacheKey;
+      // Calendars are switched off by their place in the list, which these addresses have changed.
+      setHidden(new Set());
+    }
+  }, [cacheKey]);
+
+  useEffect(() => {
+    dropRemoteCache('agenda');
+  }, []);
 
   // Moving the selection with the keyboard takes focus to the new day once it has rendered.
   useEffect(() => {
@@ -229,6 +264,19 @@ const AgendaBoard = ({
     setOpenId(null);
   };
 
+  const toggleCalendar = (index: number): void => {
+    setHidden((current) => {
+      const next = new Set(current);
+
+      if (!next.delete(index)) {
+        next.add(index);
+      }
+
+      return next;
+    });
+    setOpenId(null);
+  };
+
   const stepMonth = (delta: number): void => {
     const landing = addMonths(monthStart(selected), delta);
     choose(monthStart(landing) === monthStart(today) ? today : landing);
@@ -243,11 +291,13 @@ const AgendaBoard = ({
     }
   };
 
-  const names = new Map<number, AgendaCalendar>(
-    data.calendars.map((calendar) => [calendar.slot - 1, calendar])
+  const labels = new Map(
+    data.calendars.map((calendar) => [calendar.slot - 1, calendarLabel(calendar, calendars)])
   );
   const answered = data.calendars.filter((calendar) => calendar.ok);
   const several = answered.length > 1;
+  const allHidden =
+    answered.length > 0 && answered.every((calendar) => hidden.has(calendar.slot - 1));
   const groups = upcoming(days, selected, count);
   const nowMs = now.getTime();
   const shown = dayFromKey(selected);
@@ -283,6 +333,8 @@ const AgendaBoard = ({
               <p className="agenda-none">
                 {groups.length > 1 ? (
                   'Nothing planned'
+                ) : allHidden ? (
+                  'Every calendar is hidden.'
                 ) : (
                   <>
                     <CalendarCheck size={14} aria-hidden="true" /> Nothing planned, and nothing
@@ -300,7 +352,8 @@ const AgendaBoard = ({
                     phase={phases[index] ?? 'later'}
                     now={nowMs}
                     clock={clock}
-                    calendarName={several ? (names.get(event.calendar)?.name ?? '') : ''}
+                    calendarName={several ? (labels.get(event.calendar)?.name ?? '') : ''}
+                    calendarNote={several ? (labels.get(event.calendar)?.note ?? '') : ''}
                     open={openId === `${group.key}:${event.id}`}
                     target={target}
                     onToggle={() =>
@@ -425,19 +478,31 @@ const AgendaBoard = ({
       <div className="agenda-foot">
         {several && (
           <ul className="agenda-legend" aria-label="Calendars">
-            {answered.map((calendar) => (
-              <li key={calendar.slot} style={toneOf(calendar.slot - 1)}>
-                <i aria-hidden="true" />
-                {calendar.name}
-              </li>
-            ))}
+            {answered.map((calendar) => {
+              const label = labels.get(calendar.slot - 1)!;
+
+              return (
+                <li key={calendar.slot} style={toneOf(calendar.slot - 1)}>
+                  <button
+                    type="button"
+                    className="agenda-key"
+                    aria-pressed={!hidden.has(calendar.slot - 1)}
+                    title={label.note ? `${label.name}: ${label.note}` : label.name}
+                    onClick={() => toggleCalendar(calendar.slot - 1)}
+                  >
+                    <i aria-hidden="true" />
+                    {label.name}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
         {(error || unanswered.length > 0) && (
           <span className="agenda-warn" role="status">
             {error
               ? 'Couldn’t refresh; showing the last look.'
-              : `${unanswered.map((calendar) => calendar.name).join(' and ')} didn’t answer.`}{' '}
+              : `${unanswered.map((calendar) => labels.get(calendar.slot - 1)!.name).join(' and ')} didn’t answer.`}{' '}
             <button type="button" className="link-btn" onClick={refresh}>
               Try again
             </button>

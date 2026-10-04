@@ -1,5 +1,5 @@
 /**
- * The Agenda widget's data: up to three Google Calendars, read from the
+ * The Agenda widget's data: up to eight Google Calendars, read from the
  * "secret address in iCal format" each one offers. Google's feeds can't be read
  * from a page on another site, so the page asks this site's /api/calendar relay,
  * naming the feed's path in a header; the relay fetches it from Google Calendar
@@ -10,7 +10,17 @@
  * The iCal parser is a sizeable library and loads the first time it is needed.
  */
 import type ICAL from 'ical.js';
-import { CALENDAR_HEADER, calendarFeedPath } from './calendar-address';
+import { CALENDAR_HEADER, calendarFeedPath, normalizeCalendarAddress } from './calendar-address';
+
+/** A calendar in the widget's settings: its address, and a name and note to tell it by. */
+export type CalendarSource = {
+  /** What the widget calls it; empty to use the name the calendar gives itself. */
+  name: string;
+  /** What it is for, to keep track of it. */
+  description: string;
+  /** Google Calendar's secret address in iCal format. */
+  url: string;
+};
 
 export type AgendaWidget = {
   id: string;
@@ -22,12 +32,46 @@ export type AgendaWidget = {
   count: number;
   /** Whether the month shows above the list. */
   month: boolean;
-  /** Each calendar's secret address in iCal format; up to CALENDAR_SLOTS, none until one is given. */
-  calendars: string[];
+  /** The calendars it shows, up to CALENDAR_SLOTS; none until one is added. */
+  calendars: CalendarSource[];
 };
 
 /** How many calendars the widget can show; the relay serves /api/calendar/1 up to this number. */
-export const CALENDAR_SLOTS = 3;
+export const CALENDAR_SLOTS = 8;
+
+/**
+ * The calendars a hand-edited or older file holds: each a name, a description and an address
+ * Google Calendar's own. An address on its own is a calendar with no name yet, as the widget
+ * saved them before they had names. Anything else is dropped, and so is a calendar already listed.
+ */
+export const readCalendarSources = (value: unknown): CalendarSource[] => {
+  const given = Array.isArray(value) ? value : typeof value === 'string' ? [value] : [];
+  const found: CalendarSource[] = [];
+
+  for (const item of given) {
+    const record: Record<string, unknown> =
+      typeof item === 'string'
+        ? { url: item }
+        : typeof item === 'object' && item !== null && !Array.isArray(item)
+          ? (item as Record<string, unknown>)
+          : {};
+    const address = record.url ?? record.href;
+    const url = typeof address === 'string' ? normalizeCalendarAddress(address) : null;
+
+    if (url && !found.some((source) => source.url === url)) {
+      const clip = (text: unknown, max: number): string =>
+        typeof text === 'string' ? text.trim().slice(0, max) : '';
+
+      found.push({
+        name: clip(record.name ?? record.title, 60),
+        description: clip(record.description, 200),
+        url
+      });
+    }
+  }
+
+  return found.slice(0, CALENDAR_SLOTS);
+};
 
 /** The widget browses from this many months back to this many ahead. */
 export const MONTHS_BACK = 1;
@@ -337,15 +381,15 @@ const fetchSlot = async (
 
 export const fetchAgenda = async (
   now: Date,
-  addresses: readonly string[],
+  sources: readonly CalendarSource[],
   signal: AbortSignal
 ): Promise<AgendaData> => {
   const library = (await import('ical.js')).default;
   const window = agendaWindow(now);
   const results = await Promise.all(
-    addresses
+    sources
       .slice(0, CALENDAR_SLOTS)
-      .map((address, index) => fetchSlot(library, index + 1, address, window, signal))
+      .map((source, index) => fetchSlot(library, index + 1, source.url, window, signal))
   );
   const answered = results.filter((result) => result.kind === 'ok');
 

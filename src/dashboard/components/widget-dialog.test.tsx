@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { CalendarSource } from '../lib/agenda';
 import {
   WIDGET_BLURBS,
   WIDGET_LABELS,
@@ -846,98 +847,182 @@ describe('WidgetDialog', () => {
       expect(screen.getByRole('radio', { name: 'Monday' })).toBeChecked();
     });
 
-    const HOME =
-      'https://calendar.google.com/calendar/ical/sam%40example.com/private-aaa111/basic.ics';
-    const WORK =
-      'https://calendar.google.com/calendar/ical/work%40example.com/private-bbb222/basic.ics';
-    const address = (n: number): HTMLInputElement =>
-      screen.getByLabelText(`Calendar ${n} address`) as HTMLInputElement;
+    describe('its calendars', () => {
+      const HOME =
+        'https://calendar.google.com/calendar/ical/sam%40example.com/private-aaa111/basic.ics';
+      const WORK = 'https://calendar.google.com/calendar/ical/work%40example.com/public/basic.ics';
+      const source = (url: string, name = '', description = ''): CalendarSource => ({
+        name,
+        description,
+        url
+      });
+      const addresses = (): HTMLInputElement[] =>
+        screen.queryAllByLabelText('Calendar address') as HTMLInputElement[];
+      const values = (label: string): string[] =>
+        screen.queryAllByLabelText(label).map((input) => (input as HTMLInputElement).value);
+      const add = (): Promise<void> =>
+        userEvent.click(screen.getByRole('button', { name: /Add calendar/ }));
 
-    it('has room for three calendar addresses, filled in with the ones it has', () => {
-      open(widgetOf('agenda', { calendars: [HOME, WORK] }));
+      it('starts with none, and offers to add one', () => {
+        open(widgetOf('agenda'));
 
-      expect(address(1)).toHaveValue(HOME);
-      expect(address(2)).toHaveValue(WORK);
-      expect(address(3)).toHaveValue('');
-      expect(screen.queryByLabelText('Calendar 4 address')).not.toBeInTheDocument();
-    });
+        expect(addresses()).toHaveLength(0);
+        expect(screen.getByRole('button', { name: /Add calendar/ })).toBeInTheDocument();
+      });
 
-    it('says where to find an address, and that it is private and goes with the YAML', () => {
-      open(widgetOf('agenda'));
+      it('says where to find an address, and that it is private and goes with the YAML', () => {
+        open(widgetOf('agenda'));
 
-      expect(
-        screen.getByText(/Secret address in iCal format/, { selector: 'span' })
-      ).toBeInTheDocument();
-      expect(screen.getByText(/YAML export too/)).toBeInTheDocument();
-      expect(screen.queryByText(/CALENDAR_ICAL_URL/)).not.toBeInTheDocument();
-    });
+        expect(
+          screen.getByText(/Secret address in iCal format/, { selector: 'span' })
+        ).toBeInTheDocument();
+        expect(screen.getByText(/YAML export too/)).toBeInTheDocument();
+        expect(screen.queryByText(/CALENDAR_ICAL_URL/)).not.toBeInTheDocument();
+      });
 
-    it('saves the addresses typed, in the form they are kept in', async () => {
-      const { onSave } = open(widgetOf('agenda'));
+      it('shows the calendars it already has, with their names and descriptions', () => {
+        open(
+          widgetOf('agenda', {
+            calendars: [source(HOME, 'Personal', 'My own diary'), source(WORK)]
+          })
+        );
 
-      await userEvent.type(address(1), `  ${HOME.replace('https:', 'webcal:')}?hl=en `);
-      await userEvent.type(address(3), WORK);
-      await save();
+        expect(values('Calendar name')).toEqual(['Personal', '']);
+        expect(values('Calendar description')).toEqual(['My own diary', '']);
+        expect(values('Calendar address')).toEqual([HOME, WORK]);
+      });
 
-      // The gap between them closes, so the second is the second.
-      expect(saved(onSave)).toMatchObject({ type: 'agenda', calendars: [HOME, WORK] });
-    });
+      it('adds a calendar with a name, an address and a description, and saves it', async () => {
+        const { onSave } = open(widgetOf('agenda'));
 
-    it('saves none when none are given', async () => {
-      const { onSave } = open(widgetOf('agenda', { calendars: [] }));
-      await save();
+        await add();
+        await userEvent.type(screen.getByLabelText('Calendar name'), '  Personal ');
+        await userEvent.type(screen.getByLabelText('Calendar address'), `  ${HOME}  `);
+        await userEvent.type(screen.getByLabelText('Calendar description'), ' My own diary ');
+        await save();
 
-      expect(saved(onSave)).toMatchObject({ calendars: [] });
-    });
+        expect(saved(onSave)).toMatchObject({
+          type: 'agenda',
+          calendars: [{ name: 'Personal', description: 'My own diary', url: HOME }]
+        });
+      });
 
-    it('keeps an address once when it is typed twice', async () => {
-      const { onSave } = open(widgetOf('agenda'));
+      it('saves an address in the form it is kept in, whatever it was typed as', async () => {
+        const { onSave } = open(widgetOf('agenda'));
 
-      await userEvent.type(address(1), HOME);
-      await userEvent.type(address(2), HOME);
-      await save();
+        await add();
+        await userEvent.type(
+          screen.getByLabelText('Calendar address'),
+          `  ${HOME.replace('https:', 'webcal:')}?hl=en `
+        );
+        await save();
 
-      expect(saved(onSave)).toMatchObject({ calendars: [HOME] });
-    });
+        expect(saved(onSave)).toMatchObject({ calendars: [{ url: HOME }] });
+      });
 
-    it('lets an address be changed or cleared', async () => {
-      const { onSave } = open(widgetOf('agenda', { calendars: [HOME, WORK] }));
+      it('saves none when none are given', async () => {
+        const { onSave } = open(widgetOf('agenda', { calendars: [] }));
+        await save();
 
-      await userEvent.clear(address(1));
-      await userEvent.clear(address(2));
-      await userEvent.type(address(2), HOME);
-      await save();
+        expect(saved(onSave)).toMatchObject({ calendars: [] });
+      });
 
-      expect(saved(onSave)).toMatchObject({ calendars: [HOME] });
-    });
+      it('adds several, and takes one away', async () => {
+        const { onSave } = open(
+          widgetOf('agenda', { calendars: [source(HOME, 'Personal'), source(WORK, 'Club')] })
+        );
 
-    it('turns away an address that is not Google Calendar’s, without saving or repeating it', async () => {
-      const { onSave } = open(widgetOf('agenda'));
+        await userEvent.click(screen.getByRole('button', { name: 'Remove Personal' }));
+        await add();
+        await userEvent.type(screen.getAllByLabelText('Calendar address')[1], HOME);
+        await save();
 
-      await userEvent.type(address(1), 'https://example.com/private/basic.ics');
-      await save();
+        expect(saved(onSave)).toMatchObject({
+          calendars: [
+            { name: 'Club', url: WORK },
+            { name: '', url: HOME }
+          ]
+        });
+      });
 
-      expect(onSave).not.toHaveBeenCalled();
-      const alert = screen.getByRole('alert');
-      expect(alert).toHaveTextContent(
-        'That isn’t a Google Calendar secret address in iCal format.'
-      );
-      expect(alert).not.toHaveTextContent('example.com');
-    });
+      it('names an unnamed row by its number, to take it away', async () => {
+        open(widgetOf('agenda', { calendars: [source(HOME)] }));
 
-    it('lets the mistake be mended, and saves once it is', async () => {
-      const { onSave } = open(widgetOf('agenda'));
+        await userEvent.click(screen.getByRole('button', { name: 'Remove calendar 1' }));
 
-      await userEvent.type(address(1), 'nonsense');
-      await save();
-      expect(screen.getByRole('alert')).toBeInTheDocument();
+        expect(addresses()).toHaveLength(0);
+      });
 
-      await userEvent.clear(address(1));
-      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-      await userEvent.type(address(1), HOME);
-      await save();
+      it('leaves out a row that was added and never given an address', async () => {
+        const { onSave } = open(widgetOf('agenda'));
 
-      expect(saved(onSave)).toMatchObject({ calendars: [HOME] });
+        await add();
+        await userEvent.type(screen.getByLabelText('Calendar name'), 'Nothing yet');
+        await save();
+
+        expect(saved(onSave)).toMatchObject({ calendars: [] });
+      });
+
+      it('keeps an address once when it is typed twice', async () => {
+        const { onSave } = open(widgetOf('agenda'));
+
+        await add();
+        await add();
+        await userEvent.type(screen.getAllByLabelText('Calendar address')[0], HOME);
+        await userEvent.type(screen.getAllByLabelText('Calendar address')[1], HOME);
+        await save();
+
+        expect(saved(onSave)).toMatchObject({ calendars: [{ url: HOME }] });
+      });
+
+      it('turns away an address that is not Google Calendar’s, without saving or repeating it', async () => {
+        const { onSave } = open(widgetOf('agenda'));
+
+        await add();
+        await userEvent.type(
+          screen.getByLabelText('Calendar address'),
+          'https://example.com/private/basic.ics'
+        );
+        await save();
+
+        expect(onSave).not.toHaveBeenCalled();
+        const alert = screen.getByRole('alert');
+        expect(alert).toHaveTextContent(
+          'That isn’t a Google Calendar secret address in iCal format.'
+        );
+        expect(alert).not.toHaveTextContent('example.com');
+      });
+
+      it('lets the mistake be mended, and saves once it is', async () => {
+        const { onSave } = open(widgetOf('agenda'));
+
+        await add();
+        await userEvent.type(screen.getByLabelText('Calendar address'), 'nonsense');
+        await save();
+        expect(screen.getByRole('alert')).toBeInTheDocument();
+
+        await userEvent.clear(screen.getByLabelText('Calendar address'));
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+        await userEvent.type(screen.getByLabelText('Calendar address'), HOME);
+        await save();
+
+        expect(saved(onSave)).toMatchObject({ calendars: [{ url: HOME }] });
+      });
+
+      it('stops offering to add at eight', async () => {
+        open(
+          widgetOf('agenda', {
+            calendars: Array.from({ length: 7 }, (_unused, index) =>
+              source(HOME.replace('aaa111', `token${index}`))
+            )
+          })
+        );
+
+        await add();
+
+        expect(addresses()).toHaveLength(8);
+        expect(screen.queryByRole('button', { name: /Add calendar/ })).not.toBeInTheDocument();
+      });
     });
 
     it('saves a different number of events', async () => {

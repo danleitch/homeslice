@@ -46,19 +46,3 @@ export const normalizeCalendarAddress = (input: string): string | null => {
   const path = calendarFeedPath(input);
   return path ? `https://${CALENDAR_HOST}${path}` : null;
 };
-
-/** Up to `max` distinct valid addresses from whatever a hand-edited file holds, in order. */
-export const readCalendarAddresses = (value: unknown, max: number): string[] => {
-  const given = Array.isArray(value) ? value : typeof value === 'string' ? [value] : [];
-  const found: string[] = [];
-
-  for (const item of given) {
-    const address = typeof item === 'string' ? normalizeCalendarAddress(item) : null;
-
-    if (address && !found.includes(address)) {
-      found.push(address);
-    }
-  }
-
-  return found.slice(0, max);
-};

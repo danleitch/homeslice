@@ -267,7 +267,10 @@ more, the list moves to the right.
 - All-day and multi-day events say which day of how many it is, repeating
   events and the days taken out of them come out as Google has them, and
   cancelled events stay hidden.
-- Up to three calendars show in their own colours, with a key underneath.
+- **Up to eight calendars at once**, each in its own colour, with a key
+  underneath. Press a calendar in the key to take its events off the list and
+  the month, and press it again to bring them back; rest the pointer on it to
+  read what it is for.
 - **List only** drops the month for a plain list of what is coming up.
 
 It needs no Google sign-in or Cloud project: Google gives every calendar a
@@ -277,9 +280,23 @@ that. Read-only, and it works with any Google calendar you can open the settings
 1. In Google Calendar, open **Settings**, pick the calendar under **Settings
    for my calendars**, and scroll to **Integrate calendar**.
 2. Copy **Secret address in iCal format**.
-3. Add the **Agenda** widget, open its settings (the sliders icon) and paste the
-   address under **Calendars**. There is room for three, each in its own
-   colour. Only Google Calendar's own feed addresses are accepted.
+3. Add the **Agenda** widget, open its settings (the sliders icon), press **Add
+   calendar** under **Calendars** and paste the address. There is room for
+   eight, each in its own colour. Only Google Calendar's own feed addresses
+   are accepted.
+
+Each calendar has three fields, so you can keep track of them:
+
+- **Name** (optional): what the widget calls it. Left empty, it uses the name
+  the calendar gives itself.
+- **Address**: the secret address above. A calendar that is shared publicly has
+  a **Public address in iCal format** that works too.
+- **Description** (optional): what it is for, such as "Team calendar, shared
+  with Alex". It shows when the pointer rests on the calendar in the key, and
+  under the calendar's name in an event's details.
+
+Each Agenda widget keeps its own list, so one can show your work calendars and
+another your family's.
 
 The address is the key to your calendar, so treat it like a password:
 
@@ -308,9 +325,16 @@ widgets:
     weekStart: 1 # 0 for Sunday
     count: 6 # events in the list, 3 to 12
     month: true # false for the list alone
-    calendars: # up to three secret addresses in iCal format
-      - https://calendar.google.com/calendar/ical/you%40example.com/private-0123abcd/basic.ics
+    calendars: # up to eight, each with its secret address in iCal format
+      - name: Personal
+        description: My own diary, from Gmail
+        url: https://calendar.google.com/calendar/ical/you%40example.com/private-0123abcd/basic.ics
+      - name: Holidays
+        url: https://calendar.google.com/calendar/ical/en.usa%23holiday%40group.v.calendar.google.com/public/basic.ics
 ```
+
+An address on its own (`- https://calendar.google.com/…`) is read as a calendar
+with no name, as the widget saved them before calendars had names.
 
 ### Extensions
 
@@ -656,7 +680,7 @@ so Nginx resolves Yahoo with the container's own DNS servers per request, which
 means the container starts even if DNS isn't up yet. Yahoo turns away TLS
 handshakes that look scripted, so the relay offers a browser-like cipher order.
 
-The Agenda's `/api/calendar/1` to `/api/calendar/3` relays fetch one Google
+The Agenda's `/api/calendar/1` to `/api/calendar/8` relays fetch one Google
 Calendar feed each. The page names the feed's path in an `X-Calendar-Feed`
 header, and Nginx only accepts a path shaped like a Google Calendar "secret
 address in iCal format" (`/calendar/ical/<id>/private-<key>/basic.ics`, or

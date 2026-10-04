@@ -2282,6 +2282,40 @@ body {
   align-items: center;
 }
 
+/* A calendar is three fields and a remove button, so it is a small card of its own. */
+.rows-editor--calendars {
+  gap: 8px;
+}
+
+.rows-editor--calendars li {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'name remove'
+    'address address'
+    'note note';
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.rows-editor--calendars .cal-name {
+  grid-area: name;
+}
+
+.rows-editor--calendars .cal-remove {
+  grid-area: remove;
+}
+
+.rows-editor--calendars .cal-address {
+  grid-area: address;
+  font-size: 0.82rem;
+}
+
+.rows-editor--calendars .cal-note {
+  grid-area: note;
+}
+
 .bm-preview {
   margin: 0 0 18px;
   padding: 14px;

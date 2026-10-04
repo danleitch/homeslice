@@ -7,8 +7,8 @@ import {
   presetOf,
   type BenchPreset
 } from '../lib/benchlm';
-import { CALENDAR_SLOTS } from '../lib/agenda';
-import { normalizeCalendarAddress, readCalendarAddresses } from '../lib/calendar-address';
+import { CALENDAR_SLOTS, readCalendarSources, type CalendarSource } from '../lib/agenda';
+import { normalizeCalendarAddress } from '../lib/calendar-address';
 import { FOCUS_LIMITS } from '../lib/focus';
 import { POPULAR_LANGUAGES, TRENDING_SINCE, languageSlug } from '../lib/github';
 import { isToken, readToken } from '../lib/pulls';
@@ -129,7 +129,7 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
 
     if (draft.type === 'agenda') {
       // Blank rows are left out below, so only an address that was actually typed can be wrong.
-      const typed = draft.calendars.map((address) => address.trim()).filter(Boolean);
+      const typed = draft.calendars.map((calendar) => calendar.url.trim()).filter(Boolean);
 
       if (typed.some((address) => !normalizeCalendarAddress(address))) {
         setError(
@@ -156,7 +156,7 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
               : draft.type === 'prs'
                 ? { ...draft, token: readToken(draft.token) }
                 : draft.type === 'agenda'
-                  ? { ...draft, calendars: readCalendarAddresses(draft.calendars, CALENDAR_SLOTS) }
+                  ? { ...draft, calendars: readCalendarSources(draft.calendars) }
                   : draft;
 
     onSave(cleaned);
@@ -172,7 +172,7 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
           {WIDGET_LABELS[widget.type]}
         </span>
       }
-      size="sm"
+      size={widget.type === 'agenda' ? 'md' : 'sm'}
       onClose={onClose}
       footer={
         <>
@@ -596,29 +596,81 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
           <>
             <div className="field">
               <span className="field-label">Calendars</span>
-              {Array.from({ length: CALENDAR_SLOTS }, (_unused, index) => (
-                <input
-                  key={index}
-                  type="text"
-                  value={draft.calendars[index] ?? ''}
-                  aria-label={`Calendar ${index + 1} address`}
-                  placeholder={index === 0 ? 'Secret address in iCal format' : 'Another calendar'}
-                  spellCheck={false}
-                  autoComplete="off"
-                  onChange={(event) => {
-                    const next = Array.from(
-                      { length: CALENDAR_SLOTS },
-                      (_slot, slot) => draft.calendars[slot] ?? ''
-                    );
-                    next[index] = event.target.value;
-                    patch({ calendars: next });
-                  }}
-                />
-              ))}
+              <ul className="rows-editor rows-editor--calendars">
+                {draft.calendars.map((calendar, index) => {
+                  const change = (changes: Partial<CalendarSource>): void =>
+                    patch({
+                      calendars: draft.calendars.map((other, position) =>
+                        position === index ? { ...other, ...changes } : other
+                      )
+                    });
+
+                  return (
+                    <li key={index}>
+                      <input
+                        type="text"
+                        className="cal-name"
+                        aria-label="Calendar name"
+                        value={calendar.name}
+                        maxLength={60}
+                        placeholder="Name (optional)"
+                        data-autofocus={index === 0 ? '' : undefined}
+                        onChange={(event) => change({ name: event.target.value })}
+                      />
+                      <input
+                        type="text"
+                        className="cal-address"
+                        aria-label="Calendar address"
+                        value={calendar.url}
+                        placeholder="Secret address in iCal format"
+                        spellCheck={false}
+                        autoComplete="off"
+                        onChange={(event) => change({ url: event.target.value })}
+                      />
+                      <input
+                        type="text"
+                        className="cal-note"
+                        aria-label="Calendar description"
+                        value={calendar.description}
+                        maxLength={200}
+                        placeholder="What it’s for (optional)"
+                        onChange={(event) => change({ description: event.target.value })}
+                      />
+                      <button
+                        type="button"
+                        className="icon-btn cal-remove"
+                        aria-label={`Remove ${calendar.name || `calendar ${index + 1}`}`}
+                        onClick={() =>
+                          patch({
+                            calendars: draft.calendars.filter(
+                              (_other, position) => position !== index
+                            )
+                          })
+                        }
+                      >
+                        <X size={14} />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
               {error && (
                 <span className="field-error" role="alert">
                   {error}
                 </span>
+              )}
+              {draft.calendars.length < CALENDAR_SLOTS && (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-small"
+                  onClick={() =>
+                    patch({
+                      calendars: [...draft.calendars, { name: '', description: '', url: '' }]
+                    })
+                  }
+                >
+                  <Plus size={14} aria-hidden="true" /> Add calendar
+                </button>
               )}
               <span className="field-hint">
                 From Google Calendar: Settings, the calendar under “Settings for my calendars”, then
@@ -633,7 +685,6 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
                 min={3}
                 max={12}
                 value={draft.count}
-                data-autofocus=""
                 onChange={(event) => patch({ count: Number(event.target.value) })}
               />
             </Field>

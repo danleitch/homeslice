@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { clearRemoteCache, fetchJson, useRemote } from './use-remote';
+import { clearRemoteCache, dropRemoteCache, fetchJson, useRemote } from './use-remote';
 
 const TTL = 60_000;
 const CACHE = 'dashboard-cache:';
@@ -413,5 +413,30 @@ describe('fetchJson', () => {
     await expect(
       fetchJson('https://example.com/data', new AbortController().signal)
     ).rejects.toThrow('The service answered 503.');
+  });
+});
+
+describe('dropRemoteCache', () => {
+  it('forgets the one reading, and nothing else', () => {
+    window.localStorage.setItem(CACHE + 'a', '1');
+    window.localStorage.setItem(CACHE + 'b', '2');
+
+    dropRemoteCache('a');
+
+    expect(window.localStorage.getItem(CACHE + 'a')).toBeNull();
+    expect(window.localStorage.getItem(CACHE + 'b')).toBe('2');
+  });
+
+  it('is harmless for a reading that is not there', () => {
+    expect(() => dropRemoteCache('missing')).not.toThrow();
+  });
+
+  it('is harmless when storage cannot be reached', () => {
+    vi.spyOn(Storage.prototype, 'removeItem').mockImplementationOnce(() => {
+      throw new Error('blocked');
+    });
+
+    expect(() => dropRemoteCache('a')).not.toThrow();
+    vi.restoreAllMocks();
   });
 });

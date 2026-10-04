@@ -49,13 +49,15 @@ describe('dashboard YAML', () => {
     });
   });
 
-  it('carries an Agenda’s calendar addresses in the export, and warns that they are private', () => {
+  it('carries an Agenda’s calendars in the export, and warns that they are private', () => {
     const address =
       'https://calendar.google.com/calendar/ical/sam%40example.com/private-aaa111/basic.ics';
-    const config = sanitizeConfig({ widgets: [{ type: 'agenda', calendars: [address] }] });
+    const calendars = [{ name: 'Home', description: 'My own diary', url: address }];
+    const config = sanitizeConfig({ widgets: [{ type: 'agenda', calendars }] });
     const yaml = configToYaml(config);
 
     expect(yaml).toContain(address);
+    expect(yaml).toContain('My own diary');
     expect(yaml).toMatch(
       /Anyone with an\n# address can read that calendar, so keep this file private/
     );
@@ -63,7 +65,17 @@ describe('dashboard YAML', () => {
     const parsed = yamlToConfig(yaml);
     expect(parsed.ok && parsed.value.pages[0].widgets[0]).toMatchObject({
       type: 'agenda',
-      calendars: [address]
+      calendars
+    });
+  });
+
+  it('reads an Agenda’s calendars saved as addresses on their own, before they had names', () => {
+    const address =
+      'https://calendar.google.com/calendar/ical/sam%40example.com/private-aaa111/basic.ics';
+    const parsed = yamlToConfig(`widgets:\n  - type: agenda\n    calendars:\n      - ${address}\n`);
+
+    expect(parsed.ok && parsed.value.pages[0].widgets[0]).toMatchObject({
+      calendars: [{ name: '', description: '', url: address }]
     });
   });
 

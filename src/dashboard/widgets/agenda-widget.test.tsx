@@ -1,7 +1,13 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchAgenda, type AgendaCalendar, type AgendaData, type AgendaEvent } from '../lib/agenda';
+import {
+  fetchAgenda,
+  type AgendaCalendar,
+  type AgendaData,
+  type AgendaEvent,
+  type CalendarSource
+} from '../lib/agenda';
 import { createWidget, type AgendaWidget as AgendaConfig } from '../lib/model';
 import { AgendaWidget } from './agenda-widget';
 
@@ -75,9 +81,15 @@ const HOME = 'https://calendar.google.com/calendar/ical/sam%40example.com/privat
 const WORK =
   'https://calendar.google.com/calendar/ical/work%40example.com/private-bbb222/basic.ics';
 
+const src = (url: string, name = '', description = ''): CalendarSource => ({
+  name,
+  description,
+  url
+});
+
 const widgetOf = (patch: Partial<AgendaConfig> = {}): AgendaConfig => ({
   ...(createWidget('agenda') as AgendaConfig),
-  calendars: [HOME],
+  calendars: [src(HOME)],
   ...patch
 });
 
@@ -142,11 +154,12 @@ describe('AgendaWidget', () => {
     });
 
     it('asks for the calendars it has addresses for, as of now', async () => {
-      await loaded({ calendars: [HOME, WORK] });
+      const calendars = [src(HOME, 'Home', 'My own diary'), src(WORK)];
+      await loaded({ calendars });
 
       expect(fetchAgenda).toHaveBeenCalledWith(
         expect.any(Date),
-        [HOME, WORK],
+        calendars,
         expect.any(AbortSignal)
       );
     });
@@ -162,20 +175,59 @@ describe('AgendaWidget', () => {
 
     it('reads afresh when the addresses change, without spelling them out in its cache', async () => {
       vi.mocked(fetchAgenda).mockResolvedValue(data());
-      const view = show({ calendars: [HOME] });
+      const view = show({ calendars: [src(HOME)] });
       await screen.findByRole('grid', { name: /October 2026/ });
+      const [before] = Object.keys(window.localStorage).filter((key) => key.includes('agenda'));
 
       view.rerender(
-        <AgendaWidget widget={widgetOf({ calendars: [HOME, WORK] })} clock="24h" newTab={false} />
+        <AgendaWidget
+          widget={widgetOf({ calendars: [src(HOME), src(WORK)] })}
+          clock="24h"
+          newTab={false}
+        />
       );
       await screen.findByRole('grid', { name: /October 2026/ });
 
       expect(fetchAgenda).toHaveBeenCalledTimes(2);
-      expect(vi.mocked(fetchAgenda).mock.calls[1]?.[1]).toEqual([HOME, WORK]);
+      expect(vi.mocked(fetchAgenda).mock.calls[1]?.[1]).toEqual([src(HOME), src(WORK)]);
 
+      // The reading it replaced is forgotten, so the page's storage doesn't fill with old ones.
+      await waitFor(() =>
+        expect(
+          Object.keys(window.localStorage).filter((key) => key.includes('agenda'))
+        ).toHaveLength(1)
+      );
       const keys = Object.keys(window.localStorage).filter((key) => key.includes('agenda'));
-      expect(keys).toHaveLength(2);
+      expect(keys).not.toContain(before);
       expect(keys.join()).not.toMatch(/private|aaa111|bbb222|example/);
+    });
+
+    it('does not read again for a calendar’s new name or note, only for a new address', async () => {
+      vi.mocked(fetchAgenda).mockResolvedValue(data());
+      const view = show({ calendars: [src(HOME, 'Home')] });
+      await screen.findByRole('grid', { name: /October 2026/ });
+      const before = Object.keys(window.localStorage).filter((key) => key.includes('agenda'));
+
+      view.rerender(
+        <AgendaWidget
+          widget={widgetOf({ calendars: [src(HOME, 'Renamed', 'Now noted')] })}
+          clock="24h"
+          newTab={false}
+        />
+      );
+
+      expect(Object.keys(window.localStorage).filter((key) => key.includes('agenda'))).toEqual(
+        before
+      );
+      expect(fetchAgenda).toHaveBeenCalledTimes(1);
+    });
+
+    it('clears the reading kept before the widget had calendars of its own', async () => {
+      window.localStorage.setItem('dashboard-cache:agenda', '{"at":1,"data":{}}');
+
+      await loaded();
+
+      expect(window.localStorage.getItem('dashboard-cache:agenda')).toBeNull();
     });
   });
 
@@ -673,6 +725,181 @@ describe('AgendaWidget', () => {
         await screen.findByText('Couldn’t refresh; showing the last look.')
       ).toBeInTheDocument();
       expect(screen.getByText('Design review')).toBeInTheDocument();
+    });
+  });
+
+  describe('the calendars’ names and notes', () => {
+    const sources = [
+      src(HOME, 'Personal', 'My own diary, from Gmail'),
+      src(WORK, '', ''),
+      src(HOME.replace('aaa111', 'ccc333'), 'Sam', '')
+    ];
+    const answered = (rest: Partial<AgendaData> = {}): AgendaData =>
+      data({
+        calendars: [
+          { slot: 1, name: 'dan@example.com', ok: true },
+          { slot: 2, name: 'Calendar 2', ok: true }
+        ],
+        ...rest
+      });
+
+    it('goes by the name it was given, the feed’s own, or its number', async () => {
+      await loaded({ calendars: sources.slice(0, 2) }, answered());
+
+      expect(screen.getByRole('button', { name: 'Personal' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Calendar 2' })).toBeInTheDocument();
+    });
+
+    it('falls back to the name the feed gives itself', async () => {
+      await loaded({ calendars: [src(HOME), src(WORK)] }, answered());
+
+      expect(screen.getByRole('button', { name: 'dan@example.com' })).toBeInTheDocument();
+    });
+
+    it('says what each is for when the pointer rests on it in the key', async () => {
+      await loaded({ calendars: sources.slice(0, 2) }, answered());
+
+      expect(screen.getByRole('button', { name: 'Personal' })).toHaveAttribute(
+        'title',
+        'Personal: My own diary, from Gmail'
+      );
+      expect(screen.getByRole('button', { name: 'Calendar 2' })).toHaveAttribute(
+        'title',
+        'Calendar 2'
+      );
+    });
+
+    it('shows the name and note in an event’s details', async () => {
+      await loaded({ calendars: sources.slice(0, 2) }, answered());
+
+      await userEvent.click(within(row('Design review')).getByRole('button', { name: /Design/ }));
+
+      const detail = row('Design review').querySelector<HTMLElement>('.agenda-detail')!;
+      expect(detail).toHaveTextContent('Personal');
+      expect(within(detail).getByText('My own diary, from Gmail')).toBeInTheDocument();
+    });
+
+    it('leaves the note out when the calendar has none', async () => {
+      await loaded({ calendars: sources.slice(0, 2) }, answered());
+
+      await userEvent.click(within(row('Sprint planning')).getByRole('button', { name: /Sprint/ }));
+
+      expect(document.querySelector('.agenda-detail-note')).toBeNull();
+    });
+
+    it('is named by the widget, not the feed, when it did not answer', async () => {
+      await loaded(
+        { calendars: sources.slice(0, 2) },
+        answered({
+          calendars: [
+            { slot: 1, name: 'dan@example.com', ok: true },
+            { slot: 2, name: 'Calendar 2', ok: false }
+          ]
+        })
+      );
+
+      expect(await screen.findByRole('status', { name: '' })).toHaveTextContent(
+        'Calendar 2 didn’t answer.'
+      );
+    });
+
+    it('is not named for a place that is no longer in the list', async () => {
+      await loaded({ calendars: [src(HOME)] }, answered());
+
+      expect(screen.getByRole('button', { name: 'Calendar 2' })).toBeInTheDocument();
+    });
+  });
+
+  describe('switching calendars off in the key', () => {
+    const key = (name: string): HTMLElement => screen.getByRole('button', { name });
+
+    it('starts with every calendar on', async () => {
+      await loaded();
+
+      expect(key('Dan Leitch')).toHaveAttribute('aria-pressed', 'true');
+      expect(key('Work')).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('takes a calendar’s events off the list and the month, and puts them back', async () => {
+      await loaded();
+      const tones = (): string[] =>
+        Array.from(
+          day('Saturday, October 3').querySelectorAll<HTMLElement>('.agenda-dots span')
+        ).map((dot) => dot.style.getPropertyValue('--tone'));
+      expect(screen.getByText('Sprint planning')).toBeInTheDocument();
+      expect(tones()).toEqual(['var(--cal-1)', 'var(--cal-1)', 'var(--cal-2)']);
+
+      await userEvent.click(key('Work'));
+
+      expect(key('Work')).toHaveAttribute('aria-pressed', 'false');
+      expect(screen.queryByText('Sprint planning')).not.toBeInTheDocument();
+      expect(screen.getByText('Design review')).toBeInTheDocument();
+      expect(tones()).toEqual(['var(--cal-1)', 'var(--cal-1)', 'var(--cal-1)']);
+      expect(day('Saturday, October 3')).toHaveAccessibleName('Saturday, October 3, 3 events');
+
+      await userEvent.click(key('Work'));
+
+      expect(screen.getByText('Sprint planning')).toBeInTheDocument();
+      expect(tones()).toEqual(['var(--cal-1)', 'var(--cal-1)', 'var(--cal-2)']);
+    });
+
+    it('closes an open event when the list changes under it', async () => {
+      await loaded();
+      await userEvent.click(within(row('Design review')).getByRole('button', { name: /Design/ }));
+      expect(document.querySelectorAll('.agenda-detail')).toHaveLength(1);
+
+      await userEvent.click(key('Work'));
+
+      expect(document.querySelectorAll('.agenda-detail')).toHaveLength(0);
+    });
+
+    it('turns every calendar back on when the addresses change, which moves them about', async () => {
+      const { rerender } = await loaded({ calendars: [src(HOME)] });
+      await userEvent.click(key('Work'));
+      expect(key('Work')).toHaveAttribute('aria-pressed', 'false');
+
+      rerender(
+        <AgendaWidget widget={widgetOf({ calendars: [src(WORK)] })} clock="24h" newTab={false} />
+      );
+
+      await waitFor(() => expect(key('Work')).toHaveAttribute('aria-pressed', 'true'));
+    });
+
+    it('says so when every calendar is off', async () => {
+      await loaded();
+
+      await userEvent.click(key('Dan Leitch'));
+      await userEvent.click(key('Work'));
+
+      expect(screen.getByText('Every calendar is hidden.')).toBeInTheDocument();
+      expect(screen.queryByText('Nothing planned, and nothing coming up.')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('colours', () => {
+    it('gives each calendar its own, and starts again after the eighth', async () => {
+      const many = Array.from({ length: 9 }, (_unused, index) => ({
+        slot: index + 1,
+        name: `Calendar ${index + 1}`,
+        ok: true
+      }));
+      await loaded({}, data({ calendars: many }));
+
+      const tones = within(screen.getByRole('list', { name: 'Calendars' }))
+        .getAllByRole('listitem')
+        .map((item) => item.style.getPropertyValue('--tone'));
+
+      expect(tones).toEqual([
+        'var(--cal-1)',
+        'var(--cal-2)',
+        'var(--cal-3)',
+        'var(--cal-4)',
+        'var(--cal-5)',
+        'var(--cal-6)',
+        'var(--cal-7)',
+        'var(--cal-8)',
+        'var(--cal-1)'
+      ]);
     });
   });
 

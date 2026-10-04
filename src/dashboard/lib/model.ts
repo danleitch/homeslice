@@ -6,8 +6,7 @@
  * a visitor exports and imports, so every field has a sanitiser: a hand-edited
  * file, an old export or a half-typed value must never break the page.
  */
-import { CALENDAR_SLOTS, type AgendaWidget } from './agenda';
-import { readCalendarAddresses } from './calendar-address';
+import { readCalendarSources, type AgendaWidget } from './agenda';
 import { emptyExtensions, sanitizeExtensions, type ExtensionsConfig } from './extensions-config';
 import { FOCUS_LIMITS, type FocusWidget } from './focus';
 import { BENCH_SURFACES, type BenchmarkWidget } from './benchlm';
@@ -16,7 +15,7 @@ import { PULLS_SHOWS, readToken, type PullsWidget } from './pulls';
 import { readStatusIds } from './status-services';
 import { TRENDING_WINDOWS, type PopularTvWidget } from './tmdb';
 
-export type { AgendaWidget } from './agenda';
+export type { AgendaWidget, CalendarSource } from './agenda';
 export type { AppExtension, ExtensionsConfig } from './extensions-config';
 export type { BenchmarkWidget, BenchSurface } from './benchlm';
 export type { FocusWidget } from './focus';
@@ -498,7 +497,7 @@ const sanitizeWidget = (value: unknown): Widget | null => {
         weekStart: value.weekStart === 0 || value.weekStart === 'sunday' ? 0 : 1,
         count: Math.round(clampNumber(value.count, 3, 12, 5)),
         month: value.month !== false,
-        calendars: readCalendarAddresses(value.calendars, CALENDAR_SLOTS)
+        calendars: readCalendarSources(value.calendars)
       };
     case 'github':
       return {

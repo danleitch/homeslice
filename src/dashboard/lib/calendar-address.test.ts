@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  calendarFeedPath,
-  normalizeCalendarAddress,
-  readCalendarAddresses
-} from './calendar-address';
+import { calendarFeedPath, normalizeCalendarAddress } from './calendar-address';
 
 const SECRET =
   'https://calendar.google.com/calendar/ical/sam%40example.com/private-a1b2c3d4e5f6/basic.ics';
@@ -79,26 +75,5 @@ describe('normalizeCalendarAddress', () => {
   it('keeps an address in one form, whatever it was typed as', () => {
     expect(normalizeCalendarAddress(`  ${SECRET.replace('https:', 'webcal:')}?x=1 `)).toBe(SECRET);
     expect(normalizeCalendarAddress('https://example.com')).toBeNull();
-  });
-});
-
-describe('readCalendarAddresses', () => {
-  const other = SECRET.replace('private-a1b2c3d4e5f6', 'private-ffff');
-
-  it('reads a list, dropping what is not an address, repeats and anything past the limit', () => {
-    expect(
-      readCalendarAddresses([SECRET, 'nonsense', 42, null, SECRET, other, `${other}?x`, SECRET], 3)
-    ).toEqual([SECRET, other]);
-    expect(readCalendarAddresses([SECRET, other], 1)).toEqual([SECRET]);
-  });
-
-  it('reads a single address written as a string', () => {
-    expect(readCalendarAddresses(SECRET, 3)).toEqual([SECRET]);
-  });
-
-  it('reads nothing from anything else', () => {
-    expect(readCalendarAddresses(undefined, 3)).toEqual([]);
-    expect(readCalendarAddresses({ url: SECRET }, 3)).toEqual([]);
-    expect(readCalendarAddresses('', 3)).toEqual([]);
   });
 });

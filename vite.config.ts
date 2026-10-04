@@ -99,7 +99,7 @@ const pricingProxy: Record<string, ProxyOptions> = {
 export const calendarProxy = (
   target = `https://${CALENDAR_HOST}`
 ): Record<string, ProxyOptions> => ({
-  '^/api/calendar/[123]$': {
+  '^/api/calendar/[1-8]$': {
     target,
     changeOrigin: true,
     bypass: (request, response) => {

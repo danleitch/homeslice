@@ -104,29 +104,45 @@ describe('sanitizeConfig', () => {
     });
   });
 
-  it('reads the Agenda’s calendar addresses, keeping only Google Calendar’s, once each, up to three', () => {
+  it('reads the Agenda’s calendars, keeping only Google Calendar’s addresses, once each, up to eight', () => {
     const a = 'https://calendar.google.com/calendar/ical/a%40x.com/private-aaa/basic.ics';
     const b = 'https://calendar.google.com/calendar/ical/b%40x.com/private-bbb/basic.ics';
     const c = 'https://calendar.google.com/calendar/ical/c%40x.com/public/basic.ics';
-    const d = 'https://calendar.google.com/calendar/ical/d%40x.com/private-ddd/basic.ics';
-    const [none, single, several, messy, odd] = sanitizeConfig({
+    const source = (url: string, name = '', description = '') => ({ name, description, url });
+    const [none, single, named, messy, odd, many] = sanitizeConfig({
       widgets: [
         { type: 'agenda' },
         { type: 'agenda', calendars: a.replace('https:', 'webcal:') },
-        { type: 'agenda', calendars: [a, b, c, d] },
+        {
+          type: 'agenda',
+          calendars: [
+            { name: ' Personal ', description: 'My own diary', url: a },
+            { title: 'Club', href: b }
+          ]
+        },
         {
           type: 'agenda',
           calendars: ['nonsense', 'https://example.com/x.ics', 7, null, a, a, ' ' + b]
         },
-        { type: 'agenda', calendars: { a } }
+        { type: 'agenda', calendars: { a } },
+        {
+          type: 'agenda',
+          calendars: Array.from({ length: 12 }, (_unused, index) =>
+            c.replace('c%40x.com', `c${index}%40x.com`)
+          )
+        }
       ]
     }).pages[0].widgets;
 
     expect(none).toMatchObject({ calendars: [] });
-    expect(single).toMatchObject({ calendars: [a] });
-    expect(several).toMatchObject({ calendars: [a, b, c] });
-    expect(messy).toMatchObject({ calendars: [a, b] });
+    expect(single).toMatchObject({ calendars: [source(a)] });
+    expect(named).toMatchObject({
+      calendars: [source(a, 'Personal', 'My own diary'), source(b, 'Club')]
+    });
+    // Saved before calendars had names, an address stood on its own.
+    expect(messy).toMatchObject({ calendars: [source(a), source(b)] });
     expect(odd).toMatchObject({ calendars: [] });
+    expect((many as { calendars: unknown[] }).calendars).toHaveLength(8);
     expect(createWidget('agenda')).toMatchObject({ calendars: [] });
   });
 
