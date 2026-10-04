@@ -58,8 +58,9 @@ describe('dashboard YAML', () => {
 
     expect(yaml).toContain(address);
     expect(yaml).toContain('My own diary');
+    expect(yaml).toMatch(/encrypted with a\n# key that stays in the browser that saved them/);
     expect(yaml).toMatch(
-      /Anyone with an\n# address can read that calendar, so keep this file private/
+      /Anyone with\n# an address can read that calendar, so keep this file private/
     );
 
     const parsed = yamlToConfig(yaml);

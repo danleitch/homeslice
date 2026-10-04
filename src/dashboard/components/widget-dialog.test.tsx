@@ -1,7 +1,8 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CalendarSource } from '../lib/agenda';
+import { canProtect, seal } from '../lib/calendar-secret';
 import {
   WIDGET_BLURBS,
   WIDGET_LABELS,
@@ -11,6 +12,18 @@ import {
   type WidgetType
 } from '../lib/model';
 import { WidgetDialog, WidgetPicker } from './widget-dialog';
+
+// Where the page can encrypt is a browser's to say, and jsdom has nowhere to keep a key; the tests
+// say it, and seal in a way they can read. The sealing itself is tested on its own.
+vi.mock('../lib/calendar-secret', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../lib/calendar-secret')>()),
+  canProtect: vi.fn(() => false),
+  seal: vi.fn()
+}));
+
+/** What the tests' seal makes of an address: shaped like a sealed one, and not the address. */
+const sealedOf = (address: string): string =>
+  `enc1.${'S'.repeat(16)}.${btoa(address).replace(/[+/=]/g, 'x')}`;
 
 type Of<T extends WidgetType> = Extract<Widget, { type: T }>;
 
@@ -1007,6 +1020,213 @@ describe('WidgetDialog', () => {
         await save();
 
         expect(saved(onSave)).toMatchObject({ calendars: [{ url: HOME }] });
+      });
+
+      describe('where this page can encrypt an address', () => {
+        const SAVED = sealedOf(HOME);
+
+        beforeEach(() => {
+          vi.mocked(canProtect).mockReturnValue(true);
+          vi.mocked(seal).mockImplementation(async (address) => sealedOf(address));
+        });
+
+        afterEach(() => {
+          vi.mocked(canProtect).mockReturnValue(false);
+          vi.mocked(seal).mockReset();
+        });
+
+        const saving = (onSave: ReturnType<typeof vi.fn>): Promise<void> =>
+          waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+
+        it('says the address is encrypted, and what that means for the export', () => {
+          open(widgetOf('agenda'));
+
+          expect(screen.getByText(/encrypted before it is saved/)).toBeInTheDocument();
+          expect(
+            screen.getByText(/can’t be shown again here or read from the YAML export/)
+          ).toBeInTheDocument();
+          expect(screen.queryByText(/saved as typed/)).not.toBeInTheDocument();
+        });
+
+        it('shows a saved address as saved, and never as the address or what it was sealed as', () => {
+          open(widgetOf('agenda', { calendars: [source(SAVED, 'Personal', 'My own diary')] }));
+
+          expect(screen.getByText(/Address saved/)).toBeInTheDocument();
+          expect(screen.getByText('It can’t be shown again.')).toBeInTheDocument();
+          expect(addresses()).toHaveLength(0);
+          expect(document.body.innerHTML).not.toContain(SAVED);
+          expect(document.body.innerHTML).not.toContain('calendar.google.com');
+          expect(values('Calendar name')).toEqual(['Personal']);
+          expect(values('Calendar description')).toEqual(['My own diary']);
+        });
+
+        it('seals an address typed here before saving it, and saves nothing else of it', async () => {
+          const { onSave } = open(widgetOf('agenda'));
+
+          await add();
+          await userEvent.type(screen.getByLabelText('Calendar name'), 'Personal');
+          await userEvent.type(screen.getByLabelText('Calendar address'), `  ${HOME}  `);
+          await save();
+          await saving(onSave);
+
+          expect(seal).toHaveBeenCalledExactlyOnceWith(HOME);
+          expect(saved(onSave)).toMatchObject({
+            calendars: [{ name: 'Personal', url: SAVED }]
+          });
+          expect(JSON.stringify(saved(onSave))).not.toContain('calendar.google.com');
+        });
+
+        it('seals the address a webcal one stands for', async () => {
+          const { onSave } = open(widgetOf('agenda'));
+
+          await add();
+          await userEvent.type(
+            screen.getByLabelText('Calendar address'),
+            HOME.replace('https:', 'webcal:')
+          );
+          await save();
+          await saving(onSave);
+
+          expect(seal).toHaveBeenCalledExactlyOnceWith(HOME);
+        });
+
+        it('keeps a saved address exactly as it is, sealing nothing, and saves at once', async () => {
+          const { onSave } = open(widgetOf('agenda', { calendars: [source(SAVED, 'Personal')] }));
+
+          await userEvent.type(screen.getByLabelText('Calendar name'), ' at home');
+          await save();
+
+          expect(seal).not.toHaveBeenCalled();
+          expect(saved(onSave)).toMatchObject({
+            calendars: [{ name: 'Personal at home', url: SAVED }]
+          });
+        });
+
+        it('seals only the address that is new, beside one that was saved', async () => {
+          const { onSave } = open(widgetOf('agenda', { calendars: [source(SAVED, 'Personal')] }));
+
+          await add();
+          await userEvent.type(screen.getAllByLabelText('Calendar address')[0], WORK);
+          await save();
+          await saving(onSave);
+
+          expect(seal).toHaveBeenCalledExactlyOnceWith(WORK);
+          expect(saved(onSave)).toMatchObject({
+            calendars: [{ url: SAVED }, { url: sealedOf(WORK) }]
+          });
+        });
+
+        it('lets a saved address be replaced, and seals the new one', async () => {
+          const { onSave } = open(widgetOf('agenda', { calendars: [source(SAVED, 'Personal')] }));
+
+          await userEvent.click(
+            screen.getByRole('button', { name: 'Replace the address of Personal' })
+          );
+          expect(screen.queryByText(/Address saved/)).not.toBeInTheDocument();
+          expect(screen.getByLabelText('Calendar address')).toHaveValue('');
+          await userEvent.type(screen.getByLabelText('Calendar address'), WORK);
+          await save();
+          await saving(onSave);
+
+          expect(saved(onSave)).toMatchObject({
+            calendars: [{ name: 'Personal', url: sealedOf(WORK) }]
+          });
+        });
+
+        it('names an unnamed calendar by its number, to replace its address', () => {
+          open(widgetOf('agenda', { calendars: [source(SAVED)] }));
+
+          expect(
+            screen.getByRole('button', { name: 'Replace the address of calendar 1' })
+          ).toBeInTheDocument();
+        });
+
+        it('turns away an address that is not Google Calendar’s before sealing anything', async () => {
+          const { onSave } = open(widgetOf('agenda', { calendars: [source(SAVED)] }));
+
+          await add();
+          await userEvent.type(
+            screen.getAllByLabelText('Calendar address')[0],
+            'https://example.com/private/basic.ics'
+          );
+          await save();
+
+          expect(onSave).not.toHaveBeenCalled();
+          expect(seal).not.toHaveBeenCalled();
+          expect(screen.getByRole('alert')).toHaveTextContent(
+            'That isn’t a Google Calendar secret address'
+          );
+        });
+
+        it('leaves a row with no address out, and seals none for it', async () => {
+          const { onSave } = open(widgetOf('agenda'));
+
+          await add();
+          await userEvent.type(screen.getByLabelText('Calendar name'), 'Nothing yet');
+          await save();
+
+          expect(seal).not.toHaveBeenCalled();
+          expect(saved(onSave)).toMatchObject({ calendars: [] });
+        });
+
+        it('holds the Save button while it seals', async () => {
+          let finish: (sealed: string) => void = () => undefined;
+          vi.mocked(seal).mockReturnValue(new Promise((resolve) => (finish = resolve)));
+          const { onSave } = open(widgetOf('agenda'));
+
+          await add();
+          await userEvent.type(screen.getByLabelText('Calendar address'), HOME);
+          await save();
+
+          await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled());
+          expect(onSave).not.toHaveBeenCalled();
+
+          finish(SAVED);
+          await saving(onSave);
+        });
+
+        it('saves nothing, and says why, when the browser will not encrypt the address', async () => {
+          vi.mocked(seal).mockRejectedValue(new Error('blocked'));
+          const { onSave } = open(widgetOf('agenda'));
+
+          await add();
+          await userEvent.type(screen.getByLabelText('Calendar address'), HOME);
+          await save();
+
+          expect(await screen.findByRole('alert')).toHaveTextContent(
+            'This browser wouldn’t let the address be encrypted'
+          );
+          expect(onSave).not.toHaveBeenCalled();
+          expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+        });
+      });
+
+      describe('where this page cannot encrypt', () => {
+        it('says the address is saved as typed, and is in the export', () => {
+          open(widgetOf('agenda'));
+
+          expect(screen.getByText(/can’t encrypt it/)).toBeInTheDocument();
+          expect(screen.getByText(/saved as typed, in the YAML export too/)).toBeInTheDocument();
+          expect(screen.queryByText(/encrypted before it is saved/)).not.toBeInTheDocument();
+        });
+
+        it('saves what was typed, sealing nothing', async () => {
+          const { onSave } = open(widgetOf('agenda'));
+
+          await add();
+          await userEvent.type(screen.getByLabelText('Calendar address'), HOME);
+          await save();
+
+          expect(seal).not.toHaveBeenCalled();
+          expect(saved(onSave)).toMatchObject({ calendars: [{ url: HOME }] });
+        });
+
+        it('still never shows an address another browser sealed', () => {
+          open(widgetOf('agenda', { calendars: [source(sealedOf(HOME))] }));
+
+          expect(screen.getByText(/Address saved/)).toBeInTheDocument();
+          expect(addresses()).toHaveLength(0);
+        });
       });
 
       it('stops offering to add at eight', async () => {
