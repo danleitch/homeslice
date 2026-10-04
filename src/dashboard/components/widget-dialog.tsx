@@ -1,5 +1,5 @@
 import { useId, useMemo, useState, type FormEvent, type JSX } from 'react';
-import { Plus, X } from 'lucide-react';
+import { Lock, Plus, X } from 'lucide-react';
 import {
   BENCH_PRESETS,
   BENCH_SURFACES,
@@ -7,8 +7,14 @@ import {
   presetOf,
   type BenchPreset
 } from '../lib/benchlm';
-import { CALENDAR_SLOTS, readCalendarSources, type CalendarSource } from '../lib/agenda';
+import {
+  CALENDAR_SLOTS,
+  readCalendarSources,
+  type AgendaWidget,
+  type CalendarSource
+} from '../lib/agenda';
 import { normalizeCalendarAddress } from '../lib/calendar-address';
+import { canProtect, isSealed, seal } from '../lib/calendar-secret';
 import { FOCUS_LIMITS } from '../lib/focus';
 import { POPULAR_LANGUAGES, TRENDING_SINCE, languageSlug } from '../lib/github';
 import { isToken, readToken } from '../lib/pulls';
@@ -94,6 +100,8 @@ type WidgetDialogProps = {
 export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JSX.Element => {
   const [draft, setDraft] = useState<Widget>(widget);
   const [error, setError] = useState('');
+  // While a calendar's address is being sealed, which takes a moment.
+  const [busy, setBusy] = useState(false);
   const zoneList = useId();
   const zones = useMemo(supportedZones, []);
 
@@ -129,7 +137,10 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
 
     if (draft.type === 'agenda') {
       // Blank rows are left out below, so only an address that was actually typed can be wrong.
-      const typed = draft.calendars.map((calendar) => calendar.url.trim()).filter(Boolean);
+      // An address that was saved is sealed, and can't be wrong; one typed here is checked.
+      const typed = draft.calendars
+        .map((calendar) => calendar.url.trim())
+        .filter((url) => url && !isSealed(url));
 
       if (typed.some((address) => !normalizeCalendarAddress(address))) {
         setError(
@@ -159,7 +170,37 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
                   ? { ...draft, calendars: readCalendarSources(draft.calendars) }
                   : draft;
 
+    // An address typed here is sealed before it is saved, where this page can: that takes a moment.
+    if (
+      cleaned.type === 'agenda' &&
+      canProtect() &&
+      cleaned.calendars.some((calendar) => !isSealed(calendar.url))
+    ) {
+      void protect(cleaned);
+      return;
+    }
+
     onSave(cleaned);
+  };
+
+  const protect = async (agenda: AgendaWidget): Promise<void> => {
+    setBusy(true);
+
+    try {
+      const calendars = await Promise.all(
+        agenda.calendars.map(async (calendar) =>
+          isSealed(calendar.url) ? calendar : { ...calendar, url: await seal(calendar.url) }
+        )
+      );
+
+      onSave({ ...agenda, calendars });
+    } catch {
+      // Saving the address as typed would be keeping it in the open after saying it is hidden.
+      setError(
+        'This browser wouldn’t let the address be encrypted (private browsing can do that), so nothing was saved. Try again in a normal window.'
+      );
+      setBusy(false);
+    }
   };
 
   const Icon = WIDGET_ICONS[widget.type];
@@ -180,7 +221,7 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
           <button type="button" className="btn btn-ghost" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" form="widget-form" className="btn btn-primary">
+          <button type="submit" form="widget-form" className="btn btn-primary" disabled={busy}>
             Save
           </button>
         </>
@@ -617,16 +658,34 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
                         data-autofocus={index === 0 ? '' : undefined}
                         onChange={(event) => change({ name: event.target.value })}
                       />
-                      <input
-                        type="text"
-                        className="cal-address"
-                        aria-label="Calendar address"
-                        value={calendar.url}
-                        placeholder="Secret address in iCal format"
-                        spellCheck={false}
-                        autoComplete="off"
-                        onChange={(event) => change({ url: event.target.value })}
-                      />
+                      {isSealed(calendar.url) ? (
+                        // A saved address is never shown again, only replaced.
+                        <div className="cal-address cal-saved">
+                          <Lock size={13} aria-hidden="true" />
+                          <span>
+                            Address saved <small>It can’t be shown again.</small>
+                          </span>
+                          <button
+                            type="button"
+                            className="link-btn"
+                            aria-label={`Replace the address of ${calendar.name || `calendar ${index + 1}`}`}
+                            onClick={() => change({ url: '' })}
+                          >
+                            Replace
+                          </button>
+                        </div>
+                      ) : (
+                        <input
+                          type="text"
+                          className="cal-address"
+                          aria-label="Calendar address"
+                          value={calendar.url}
+                          placeholder="Secret address in iCal format"
+                          spellCheck={false}
+                          autoComplete="off"
+                          onChange={(event) => change({ url: event.target.value })}
+                        />
+                      )}
                       <input
                         type="text"
                         className="cal-note"
@@ -675,8 +734,10 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
               <span className="field-hint">
                 From Google Calendar: Settings, the calendar under “Settings for my calendars”, then
                 Integrate calendar, and copy the Secret address in iCal format. Anyone with the
-                address can read the calendar, and it is saved with this dashboard, in its YAML
-                export too, so keep both private.
+                address can read the calendar.{' '}
+                {canProtect()
+                  ? 'It is encrypted before it is saved, with a key that stays in this browser, so it can’t be shown again here or read from the YAML export. Paste it again after importing the dashboard in another browser.'
+                  : 'This page can’t encrypt it (a browser only allows that on https or localhost), so it is saved as typed, in the YAML export too: keep both private.'}
               </span>
             </div>
             <Field label={`Events: ${draft.count}`}>

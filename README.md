@@ -300,11 +300,26 @@ another your family's.
 
 The address is the key to your calendar, so treat it like a password:
 
-- It is saved with your dashboard in this browser, and **it is in the YAML
-  export too**, so an exported file carries your calendar with it. That is what
-  lets you import the file on another device and have the Agenda just work, and
-  also why that file is not for sharing or committing. The export says so at
-  the top.
+- **It is encrypted before it is saved**, with a key this browser makes for
+  itself and keeps where the page can use it but never read it back out. The
+  key is not in the dashboard or its YAML export. The settings show **Address
+  saved** and never the address again; to change it, press **Replace** and
+  paste the new one.
+- An exported YAML file carries the encrypted form, which opens in no other
+  browser. After importing a dashboard on another device, each calendar says it
+  needs its address pasted again, and the file is safe to keep. An address
+  saved before this existed, or written into the YAML by hand, is encrypted the
+  first time the dashboard opens it, and a toast says so.
+- This is protection for the address, not a vault. It keeps the address out of
+  the YAML, out of storage someone might browse or share, and off the screen. It
+  does **not** stand against someone who can run code in the page or use this
+  browser's developer tools, because the page has to open the address to fetch
+  your calendar.
+- A browser only offers this on **https** pages and on `localhost`. On a plain
+  `http://` address, such as a homelab server with no certificate, the address
+  is saved **as typed**, and is in the YAML too, so keep that file private. The
+  settings say which of the two you have. Serve the dashboard over https (a
+  reverse proxy does it) to turn the encryption on.
 - It is never put in a web address or a log: the page sends the feed's path to
   this server in a header, and the server fetches it from `calendar.google.com`
   and from nowhere else. Nginx keeps each feed for five minutes, so Google is
@@ -334,7 +349,10 @@ widgets:
 ```
 
 An address on its own (`- https://calendar.google.com/…`) is read as a calendar
-with no name, as the widget saved them before calendars had names.
+with no name, as the widget saved them before calendars had names. Written by
+hand like this, an address is encrypted the first time the dashboard opens it;
+what the dashboard saves in its place starts `enc1.` and means nothing in
+another browser.
 
 ### Extensions
 

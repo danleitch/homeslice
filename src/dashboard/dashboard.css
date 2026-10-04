@@ -2316,6 +2316,34 @@ body {
   grid-area: note;
 }
 
+/* A saved address, which is only ever replaced, never shown. */
+.rows-editor--calendars .cal-saved {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0.55rem 0.7rem;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: rgba(8, 11, 18, 0.3);
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.rows-editor--calendars .cal-saved svg {
+  flex-shrink: 0;
+  color: var(--up);
+}
+
+.rows-editor--calendars .cal-saved small {
+  margin-left: 4px;
+  color: var(--ink-faint);
+  font-size: 0.78rem;
+}
+
+.rows-editor--calendars .cal-saved .link-btn {
+  margin-left: auto;
+}
+
 .bm-preview {
   margin: 0 0 18px;
   padding: 14px;

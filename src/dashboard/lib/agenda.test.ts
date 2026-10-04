@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  LOCKED_MESSAGE,
   agendaWindow,
   fetchAgenda,
   findMeetingLink,
@@ -10,8 +11,17 @@ import {
   type AgendaEvent,
   type CalendarSource
 } from './agenda';
+import { open } from './calendar-secret';
+
+vi.mock('./calendar-secret', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./calendar-secret')>()),
+  open: vi.fn()
+}));
 
 const signal = new AbortController().signal;
+
+/** A sealed address's shape, which is all the sources check; the sealing itself is tested apart. */
+const sealedOf = (letter: string): string => `enc1.${letter.repeat(16)}.${letter.repeat(90)}`;
 
 /** The suite runs in UTC, so 8:00 below is 8:00 on the clock too. */
 const at = (day: number, hour = 0, minute = 0): number =>
@@ -469,6 +479,35 @@ describe('readCalendarSources', () => {
     expect(readCalendarSources({ url: ONE })).toEqual([]);
   });
 
+  it('keeps an address that was saved, which is sealed, as it is, beside ones as typed', () => {
+    expect(
+      readCalendarSources([
+        { name: 'Saved', url: `  ${sealedOf('A')} ` },
+        { name: 'Typed', url: TWO.replace('https:', 'webcal:') }
+      ])
+    ).toEqual([
+      { name: 'Saved', description: '', url: sealedOf('A') },
+      { name: 'Typed', description: '', url: TWO }
+    ]);
+  });
+
+  it('drops something that only looks like a sealed address', () => {
+    expect(
+      readCalendarSources([
+        sealedOf('A').replace('enc1', 'enc9'),
+        `enc1.short.${'B'.repeat(90)}`,
+        `${sealedOf('A')}.extra`,
+        { url: 'enc1.' }
+      ])
+    ).toEqual([]);
+  });
+
+  it('lists a sealed address once, though not two that merely look alike', () => {
+    expect(
+      readCalendarSources([sealedOf('A'), sealedOf('A'), sealedOf('B')]).map((item) => item.url)
+    ).toEqual([sealedOf('A'), sealedOf('B')]);
+  });
+
   it('lists a calendar once, under the first name it was given', () => {
     expect(
       readCalendarSources([
@@ -557,6 +596,58 @@ describe('fetchAgenda', () => {
     expect(fetchMock.mock.calls[0]![1]).toMatchObject({ cache: 'no-store', signal });
   });
 
+  describe('with addresses that were saved sealed', () => {
+    afterEach(() => {
+      vi.mocked(open).mockReset();
+    });
+
+    it('opens a sealed address just before asking for its feed, and sends only the feed’s path', async () => {
+      vi.mocked(open).mockResolvedValue(home);
+      const fetchMock = serve(reply(planning));
+
+      await fetchAgenda(now, [src(sealedOf('A'))], signal);
+
+      expect(open).toHaveBeenCalledWith(sealedOf('A'));
+      expect(fetchMock.mock.calls[0]![1].headers).toEqual({
+        'X-Calendar-Feed': '/calendar/ical/sam%40example.com/private-aaa111/basic.ics'
+      });
+      expect(JSON.stringify(fetchMock.mock.calls)).not.toContain(sealedOf('A'));
+    });
+
+    it('opens nothing for an address as typed', async () => {
+      serve(reply(planning));
+
+      await fetchAgenda(now, [src(home)], signal);
+
+      expect(open).not.toHaveBeenCalled();
+    });
+
+    it('says which calendar this browser cannot open, and shows the others', async () => {
+      vi.mocked(open).mockResolvedValue(null);
+      // The feed relay is asked for the second calendar alone, which is its second slot.
+      const fetchMock = serve(reply(''), reply(review));
+
+      const data = await fetchAgenda(now, [src(sealedOf('A')), src(work)], signal);
+
+      expect(data.calendars).toEqual([
+        { slot: 1, name: 'Calendar 1', ok: false, locked: true },
+        { slot: 2, name: 'Calendar 2', ok: true, locked: false }
+      ]);
+      expect(titles(data.events)).toEqual(['Review']);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('asks for the addresses to be pasted again when none of them can be opened', async () => {
+      vi.mocked(open).mockResolvedValue(null);
+      const fetchMock = serve();
+
+      await expect(
+        fetchAgenda(now, [src(sealedOf('A')), src(sealedOf('B'))], signal)
+      ).rejects.toThrow(LOCKED_MESSAGE);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
   it('asks for no more than eight calendars', async () => {
     const sources = Array.from({ length: 10 }, (_unused, index) =>
       src(`https://calendar.google.com/calendar/ical/c${index}%40example.com/public/basic.ics`)
@@ -578,7 +669,7 @@ describe('fetchAgenda', () => {
     serve(reply(planning));
 
     await expect(fetchAgenda(now, [src(home)], signal)).resolves.toMatchObject({
-      calendars: [{ slot: 1, name: 'Home', ok: true }],
+      calendars: [{ slot: 1, name: 'Home', ok: true, locked: false }],
       events: [{ title: 'Planning', calendar: 0 }]
     });
   });
@@ -588,8 +679,8 @@ describe('fetchAgenda', () => {
     const data = await fetchAgenda(now, [src(home), src(work)], signal);
 
     expect(data.calendars).toEqual([
-      { slot: 1, name: 'Home', ok: true },
-      { slot: 2, name: 'Calendar 2', ok: true }
+      { slot: 1, name: 'Home', ok: true, locked: false },
+      { slot: 2, name: 'Calendar 2', ok: true, locked: false }
     ]);
     expect(data.events.map((item) => [item.title, item.calendar])).toEqual([
       ['Planning', 0],
@@ -604,8 +695,8 @@ describe('fetchAgenda', () => {
       const data = await fetchAgenda(now, [src(home), src(work)], signal);
 
       expect(data.calendars).toEqual([
-        { slot: 1, name: 'Home', ok: true },
-        { slot: 2, name: 'Calendar 2', ok: false }
+        { slot: 1, name: 'Home', ok: true, locked: false },
+        { slot: 2, name: 'Calendar 2', ok: false, locked: false }
       ]);
       expect(titles(data.events)).toEqual(['Planning']);
     }
@@ -618,9 +709,9 @@ describe('fetchAgenda', () => {
     const data = await fetchAgenda(now, [src(home), src(work), src(club)], signal);
 
     expect(data.calendars).toEqual([
-      { slot: 1, name: 'Home', ok: true },
-      { slot: 2, name: 'Calendar 2', ok: false },
-      { slot: 3, name: 'Calendar 3', ok: false }
+      { slot: 1, name: 'Home', ok: true, locked: false },
+      { slot: 2, name: 'Calendar 2', ok: false, locked: false },
+      { slot: 3, name: 'Calendar 3', ok: false, locked: false }
     ]);
     expect(titles(data.events)).toEqual(['Planning']);
   });

@@ -11,6 +11,7 @@
  */
 import type ICAL from 'ical.js';
 import { CALENDAR_HEADER, calendarFeedPath, normalizeCalendarAddress } from './calendar-address';
+import { isSealed, open as openSealed } from './calendar-secret';
 
 /** A calendar in the widget's settings: its address, and a name and note to tell it by. */
 export type CalendarSource = {
@@ -18,7 +19,10 @@ export type CalendarSource = {
   name: string;
   /** What it is for, to keep track of it. */
   description: string;
-  /** Google Calendar's secret address in iCal format. */
+  /**
+   * Google Calendar's secret address in iCal format, kept sealed (see calendar-secret.ts) once
+   * saved; as typed only before that, or where a page can't seal it.
+   */
   url: string;
 };
 
@@ -56,7 +60,13 @@ export const readCalendarSources = (value: unknown): CalendarSource[] => {
           ? (item as Record<string, unknown>)
           : {};
     const address = record.url ?? record.href;
-    const url = typeof address === 'string' ? normalizeCalendarAddress(address) : null;
+    // An address that has been saved is sealed, and stays as it is; one as typed is checked.
+    const url =
+      typeof address !== 'string'
+        ? null
+        : isSealed(address.trim())
+          ? address.trim()
+          : normalizeCalendarAddress(address);
 
     if (url && !found.some((source) => source.url === url)) {
       const clip = (text: unknown, max: number): string =>
@@ -100,6 +110,8 @@ export type AgendaCalendar = {
   name: string;
   /** False when the calendar is set up but didn't answer this time. */
   ok: boolean;
+  /** True when its address was sealed by another browser, so this one can't open it. */
+  locked: boolean;
 };
 
 export type AgendaData = {
@@ -109,6 +121,10 @@ export type AgendaData = {
 };
 
 const RELAY = '/api/calendar';
+
+/** What the widget says when no address in it can be opened: another browser sealed them. */
+export const LOCKED_MESSAGE =
+  'These calendars’ addresses were saved in another browser and can’t be opened in this one. Paste them again in this widget’s settings.';
 const MAX_EVENTS_PER_CALENDAR = 600;
 /** Stops a rule that repeats every second, or never ends, from spinning forever. */
 const MAX_OCCURRENCES = 4000;
@@ -320,7 +336,7 @@ export const readCalendar = (
 
 type SlotResult =
   | { kind: 'ok'; name: string; events: AgendaEvent[] }
-  | { kind: 'no-relay' | 'rejected' | 'failed' };
+  | { kind: 'no-relay' | 'rejected' | 'failed' | 'locked' };
 
 const fetchSlot = async (
   library: Ical,
@@ -387,9 +403,12 @@ export const fetchAgenda = async (
   const library = (await import('ical.js')).default;
   const window = agendaWindow(now);
   const results = await Promise.all(
-    sources
-      .slice(0, CALENDAR_SLOTS)
-      .map((source, index) => fetchSlot(library, index + 1, source.url, window, signal))
+    sources.slice(0, CALENDAR_SLOTS).map(async (source, index): Promise<SlotResult> => {
+      // A sealed address is opened here, just as it is asked for, and goes no further than that.
+      const address = isSealed(source.url) ? await openSealed(source.url) : source.url;
+
+      return address ? fetchSlot(library, index + 1, address, window, signal) : { kind: 'locked' };
+    })
   );
   const answered = results.filter((result) => result.kind === 'ok');
 
@@ -400,6 +419,10 @@ export const fetchAgenda = async (
       throw new Error(
         'The Agenda goes through this dashboard’s server, which this host doesn’t provide.'
       );
+    }
+
+    if (kinds.includes('locked')) {
+      throw new Error(LOCKED_MESSAGE);
     }
 
     if (kinds.includes('rejected')) {
@@ -423,7 +446,8 @@ export const fetchAgenda = async (
     calendars.push({
       slot,
       name: result.kind === 'ok' ? result.name || `Calendar ${slot}` : `Calendar ${slot}`,
-      ok: result.kind === 'ok'
+      ok: result.kind === 'ok',
+      locked: result.kind === 'locked'
     });
 
     if (result.kind === 'ok') {

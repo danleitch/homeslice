@@ -20,6 +20,7 @@ import { useNow } from '../hooks/use-now';
 import { dropRemoteCache, useRemote } from '../hooks/use-remote';
 import { fingerprint } from '../lib/fingerprint';
 import {
+  LOCKED_MESSAGE,
   fetchAgenda,
   isAddress,
   type AgendaCalendar,
@@ -245,9 +246,12 @@ const AgendaBoard = ({
       <WidgetState
         tone="error"
         action={
-          <button type="button" className="link-btn" onClick={refresh}>
-            Try again
-          </button>
+          // Trying again can't open an address another browser sealed; pasting it again can.
+          error === LOCKED_MESSAGE ? undefined : (
+            <button type="button" className="link-btn" onClick={refresh}>
+              Try again
+            </button>
+          )
         }
       >
         {error}
@@ -312,6 +316,22 @@ const AgendaBoard = ({
   const atStart = monthStart(selected) <= monthStart(range.min);
   const atEnd = monthStart(selected) >= monthStart(range.max);
   const unanswered = data.calendars.filter((calendar) => !calendar.ok);
+  const namesOf = (silent: boolean): string[] =>
+    unanswered
+      .filter((calendar) => calendar.locked !== silent)
+      .map((calendar) => labels.get(calendar.slot - 1)!.name);
+  // A calendar whose address another browser sealed is told apart from one that didn't answer:
+  // trying again won't help it, but pasting the address again will.
+  const silent = namesOf(true);
+  const locked = namesOf(false);
+  const notices = [
+    locked.length
+      ? `${locked.join(' and ')} ${locked.length > 1 ? 'need' : 'needs'} the address pasted again in this widget’s settings.`
+      : '',
+    silent.length ? `${silent.join(' and ')} didn’t answer.` : ''
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   const list = (
     <div className="agenda-list">
@@ -500,12 +520,12 @@ const AgendaBoard = ({
         )}
         {(error || unanswered.length > 0) && (
           <span className="agenda-warn" role="status">
-            {error
-              ? 'Couldn’t refresh; showing the last look.'
-              : `${unanswered.map((calendar) => labels.get(calendar.slot - 1)!.name).join(' and ')} didn’t answer.`}{' '}
-            <button type="button" className="link-btn" onClick={refresh}>
-              Try again
-            </button>
+            {error ? 'Couldn’t refresh; showing the last look.' : notices}{' '}
+            {(error || silent.length > 0) && (
+              <button type="button" className="link-btn" onClick={refresh}>
+                Try again
+              </button>
+            )}
           </span>
         )}
         <a

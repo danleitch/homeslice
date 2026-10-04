@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  LOCKED_MESSAGE,
   fetchAgenda,
   type AgendaCalendar,
   type AgendaData,
@@ -67,8 +68,8 @@ const events = (): AgendaEvent[] => [
 ];
 
 const CALENDARS: AgendaCalendar[] = [
-  { slot: 1, name: 'Dan Leitch', ok: true },
-  { slot: 2, name: 'Work', ok: true }
+  { slot: 1, name: 'Dan Leitch', ok: true, locked: false },
+  { slot: 2, name: 'Work', ok: true, locked: false }
 ];
 
 const data = (rest: Partial<AgendaData> = {}): AgendaData => ({
@@ -695,7 +696,9 @@ describe('AgendaWidget', () => {
 
     it('says which calendar did not answer, and tries again', async () => {
       vi.mocked(fetchAgenda).mockResolvedValueOnce(
-        data({ calendars: [CALENDARS[0], { slot: 2, name: 'Calendar 2', ok: false }] })
+        data({
+          calendars: [CALENDARS[0], { slot: 2, name: 'Calendar 2', ok: false, locked: false }]
+        })
       );
       vi.mocked(fetchAgenda).mockResolvedValueOnce(data());
       show();
@@ -711,9 +714,56 @@ describe('AgendaWidget', () => {
       expect(screen.queryByText(/didn’t answer/)).not.toBeInTheDocument();
     });
 
+    it('says to paste the addresses again, and offers no retry, when none can be opened', async () => {
+      vi.mocked(fetchAgenda).mockRejectedValue(new Error(LOCKED_MESSAGE));
+      show();
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('saved in another browser');
+      expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+    });
+
+    it('asks for an address to be pasted again for a calendar this browser cannot open', async () => {
+      await loaded(
+        {},
+        data({
+          calendars: [CALENDARS[0], { slot: 2, name: 'Calendar 2', ok: false, locked: true }]
+        })
+      );
+
+      const notice = await screen.findByRole('status', { name: '' });
+
+      expect(notice).toHaveTextContent(
+        'Calendar 2 needs the address pasted again in this widget’s settings.'
+      );
+      expect(notice).not.toHaveTextContent('didn’t answer');
+      // Trying again can't open it, so it isn't offered.
+      expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+    });
+
+    it('tells a calendar that needs pasting again from one that did not answer', async () => {
+      await loaded(
+        {},
+        data({
+          calendars: [
+            { slot: 1, name: 'Home', ok: false, locked: true },
+            { slot: 2, name: 'Work', ok: false, locked: true },
+            { slot: 3, name: 'Club', ok: false, locked: false },
+            { slot: 4, name: 'Spare', ok: true, locked: false }
+          ]
+        })
+      );
+
+      const notice = await screen.findByRole('status', { name: '' });
+
+      expect(notice).toHaveTextContent(
+        'Home and Work need the address pasted again in this widget’s settings. Club didn’t answer.'
+      );
+      expect(within(notice).getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    });
+
     it('keeps the last look when a refresh fails, and says so', async () => {
       vi.mocked(fetchAgenda).mockResolvedValueOnce(
-        data({ calendars: [CALENDARS[0], { slot: 2, name: 'Work', ok: false }] })
+        data({ calendars: [CALENDARS[0], { slot: 2, name: 'Work', ok: false, locked: false }] })
       );
       vi.mocked(fetchAgenda).mockRejectedValueOnce(new Error('Google Calendar didn’t answer.'));
       show();
@@ -737,8 +787,8 @@ describe('AgendaWidget', () => {
     const answered = (rest: Partial<AgendaData> = {}): AgendaData =>
       data({
         calendars: [
-          { slot: 1, name: 'dan@example.com', ok: true },
-          { slot: 2, name: 'Calendar 2', ok: true }
+          { slot: 1, name: 'dan@example.com', ok: true, locked: false },
+          { slot: 2, name: 'Calendar 2', ok: true, locked: false }
         ],
         ...rest
       });
@@ -792,8 +842,8 @@ describe('AgendaWidget', () => {
         { calendars: sources.slice(0, 2) },
         answered({
           calendars: [
-            { slot: 1, name: 'dan@example.com', ok: true },
-            { slot: 2, name: 'Calendar 2', ok: false }
+            { slot: 1, name: 'dan@example.com', ok: true, locked: false },
+            { slot: 2, name: 'Calendar 2', ok: false, locked: false }
           ]
         })
       );
@@ -881,7 +931,8 @@ describe('AgendaWidget', () => {
       const many = Array.from({ length: 9 }, (_unused, index) => ({
         slot: index + 1,
         name: `Calendar ${index + 1}`,
-        ok: true
+        ok: true,
+        locked: false
       }));
       await loaded({}, data({ calendars: many }));
 

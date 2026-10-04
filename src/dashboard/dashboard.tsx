@@ -80,6 +80,8 @@ import {
   type Group,
   type Widget
 } from './lib/model';
+import { canProtect, seal } from './lib/calendar-secret';
+import { plainCalendarUrls, withSealedCalendars } from './lib/seal-config';
 import { collectSavedState, restoreSavedState, saveConfig } from './lib/storage';
 import {
   guessName,
@@ -160,6 +162,44 @@ export const Dashboard = ({
 }: DashboardProps): JSX.Element => {
   const { config: dashboard, apply: applyAll, toasts, notify, dismiss, undo } = useDashboard();
   const { page, leaving, direction, go, settle } = usePage();
+
+  // A calendar's address is kept sealed once saved. Ones that are still as typed, from before that
+  // or from an imported or hand-edited file, are sealed when the board is up, once each load.
+  const sealing = useRef(new Set<string>());
+
+  useEffect(() => {
+    if (!canProtect()) {
+      return;
+    }
+
+    const waiting = plainCalendarUrls(dashboard).filter((url) => !sealing.current.has(url));
+
+    if (waiting.length === 0) {
+      return;
+    }
+
+    waiting.forEach((url) => sealing.current.add(url));
+
+    void (async () => {
+      const sealed = new Map<string, string>();
+
+      for (const url of waiting) {
+        try {
+          sealed.set(url, await seal(url));
+          // Sealed, so if this address comes back as typed (an import, an undo) it is sealed again.
+          sealing.current.delete(url);
+        } catch {
+          // Left as it was typed, and not tried again until the page is reloaded.
+        }
+      }
+
+      if (sealed.size > 0) {
+        applyAll((current) => withSealedCalendars(current, sealed));
+        notify('Your calendar addresses are now stored encrypted.', 'success');
+      }
+    })();
+  }, [dashboard, applyAll, notify]);
+
   // Everything below edits the page in view; only a restore or a reset reaches past it.
   const config = useMemo(() => pageOf(dashboard, page), [dashboard, page]);
   const apply = useCallback<ApplyToPage>(
