@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
   addBookmark,
+  addGroup,
   arrayMove,
   deleteGroup,
+  fitCard,
   mergeGroups,
   moveBookmark,
+  moveGroup,
+  placeCards,
   updateGroup,
   updateWidget
 } from './edit';
-import { pageOf, sanitizeConfig, type PageConfig } from './model';
+import { MAX_ROWS, MIN_ROWS, pageOf, sanitizeConfig, type PageConfig } from './model';
 
 const board = (): PageConfig =>
   pageOf(
@@ -131,5 +135,332 @@ describe('board edits', () => {
     const config = board();
 
     expect(names(deleteGroup(config, config.groups[0].id))).toEqual([['HN']]);
+  });
+});
+
+describe('where the cards sit', () => {
+  /** A page with a widget and three groups that have all been put somewhere. */
+  const arranged = (): PageConfig =>
+    pageOf(
+      sanitizeConfig({
+        widgets: [{ type: 'calendar', width: 3, column: 0, row: 0 }],
+        groups: [
+          { name: 'A', width: 4, height: 60, column: 3, row: 0, bookmarks: [] },
+          { name: 'B', width: 4, column: 7, row: 0, bookmarks: [] },
+          { name: 'C', width: 4, column: 0, row: 40, collapsed: true, height: 60, bookmarks: [] }
+        ]
+      }),
+      0
+    );
+
+  const key = (kind: 'group' | 'widget', id: string): string => `${kind}:${id}`;
+  const item = (i: string, x: number, y: number, w: number, h: number) => ({ i, x, y, w, h });
+
+  /** Every card of a page, laid out where it already is. */
+  const asIs = (page: PageConfig) => [
+    ...page.widgets.map((card) =>
+      item(key('widget', card.id), card.column!, card.row!, card.width, 30)
+    ),
+    ...page.groups.map((card) =>
+      item(key('group', card.id), card.column!, card.row!, card.width, card.height ?? 30)
+    )
+  ];
+
+  describe('writing down a drag or resize', () => {
+    it('gives every card its column, row and width', () => {
+      const page = arranged();
+      const [a, b, c] = page.groups;
+      const layout = [
+        item(key('widget', page.widgets[0]!.id), 0, 0, 3, 30),
+        item(key('group', a!.id), 3, 0, 5, 60),
+        item(key('group', b!.id), 8, 4, 4, 30),
+        item(key('group', c!.id), 0, 40, 4, 60)
+      ];
+
+      const next = placeCards(page, layout);
+
+      expect(next.groups.map((card) => [card.name, card.column, card.row, card.width])).toEqual([
+        ['A', 3, 0, 5],
+        ['B', 8, 4, 4],
+        ['C', 0, 40, 4]
+      ]);
+    });
+
+    it('changes only the height of a card that already has one', () => {
+      const page = arranged();
+      const [a, b] = page.groups;
+
+      const next = placeCards(page, [
+        ...asIs(page).filter(
+          (entry) => ![key('group', a!.id), key('group', b!.id)].includes(entry.i)
+        ),
+        item(key('group', a!.id), 3, 0, 4, 90),
+        item(key('group', b!.id), 7, 0, 4, 90)
+      ]);
+
+      expect(next.groups[0]!.height).toBe(90);
+      // B fits its contents, so what the grid made of it is not written down.
+      expect(next.groups[1]).not.toHaveProperty('height');
+    });
+
+    it('gives the card that was just pulled taller or shorter a height of its own', () => {
+      const page = arranged();
+      const b = page.groups[1]!;
+      const layout = asIs(page).map((entry) =>
+        entry.i === key('group', b.id) ? { ...entry, h: 42 } : entry
+      );
+
+      expect(placeCards(page, layout, key('group', b.id)).groups[1]!.height).toBe(42);
+      expect(placeCards(page, layout).groups[1]).not.toHaveProperty('height');
+    });
+
+    it('leaves a folded group’s height alone, whatever the grid made of it', () => {
+      const page = arranged();
+      const c = page.groups[2]!;
+      const layout = asIs(page).map((entry) =>
+        entry.i === key('group', c.id) ? { ...entry, h: 8 } : entry
+      );
+
+      expect(placeCards(page, layout, key('group', c.id)).groups[2]!.height).toBe(60);
+    });
+
+    it('keeps the groups in the order they now sit, whichever were moved', () => {
+      const page = arranged();
+      const [a, b] = page.groups;
+      // A drops below B, which stays on the first row; C is still furthest down.
+      const layout = asIs(page).map((entry) =>
+        entry.i === key('group', a!.id) ? { ...entry, x: 0, y: 5 } : entry
+      );
+
+      expect(placeCards(page, layout).groups.map((card) => card.name)).toEqual(['B', 'A', 'C']);
+      expect(b!.name).toBe('B');
+    });
+
+    it('puts a group that moved to the top first', () => {
+      const page = arranged();
+      const c = page.groups[2]!;
+      const layout = asIs(page).map((entry) =>
+        entry.i === key('group', c.id) ? { ...entry, x: 0, y: 0 } : entry
+      );
+
+      // Every card sits at row 0 now, so it is left to right: C, then A, then B.
+      expect(placeCards(page, layout).groups.map((card) => card.name)).toEqual(['C', 'A', 'B']);
+    });
+
+    it('returns the page itself when nothing changed', () => {
+      const page = arranged();
+
+      expect(placeCards(page, asIs(page))).toBe(page);
+    });
+
+    it('leaves alone a card the grid says nothing about', () => {
+      const page = arranged();
+      const [a, b] = page.groups;
+
+      const next = placeCards(page, [item(key('group', a!.id), 9, 9, 3, 60)]);
+
+      expect(next.groups.find((card) => card.name === 'A')).toMatchObject({
+        column: 9,
+        row: 9,
+        width: 3
+      });
+      expect(next.groups.find((card) => card.name === 'B')).toBe(b);
+      expect(next.widgets[0]).toBe(page.widgets[0]);
+    });
+
+    it('places widgets as well', () => {
+      const page = arranged();
+      const layout = asIs(page).map((entry) =>
+        entry.i.startsWith('widget:') ? { ...entry, x: 9, y: 3, w: 3 } : entry
+      );
+
+      expect(placeCards(page, layout).widgets[0]).toMatchObject({ column: 9, row: 3, width: 3 });
+    });
+
+    it('gives a card with no place the one the grid found for it', () => {
+      const page = pageOf(sanitizeConfig({ groups: [{ name: 'New', bookmarks: [] }] }), 0);
+
+      const next = placeCards(page, [item(key('group', page.groups[0]!.id), 4, 7, 4, 30)]);
+
+      expect(next.groups[0]).toMatchObject({ column: 4, row: 7 });
+    });
+  });
+
+  describe('going back to the height of the contents', () => {
+    it('takes a group’s height away, and leaves the rest of it', () => {
+      const page = arranged();
+
+      const next = fitCard(page, 'group', page.groups[0]!.id);
+
+      expect(next.groups[0]).not.toHaveProperty('height');
+      expect(next.groups[0]).toMatchObject({ name: 'A', column: 3, row: 0 });
+    });
+
+    it('does the same for a widget', () => {
+      const page = pageOf(
+        sanitizeConfig({ widgets: [{ type: 'calendar', height: 90, column: 0, row: 0 }] }),
+        0
+      );
+
+      const next = fitCard(page, 'widget', page.widgets[0]!.id);
+
+      expect(next.widgets[0]).not.toHaveProperty('height');
+      expect(next.widgets[0]).toMatchObject({ column: 0, row: 0 });
+    });
+  });
+
+  describe('fitting a card that is already fitting', () => {
+    it('changes nothing, so there is nothing to save', () => {
+      const page = arranged();
+
+      expect(fitCard(page, 'group', page.groups[1]!.id)).toBe(page);
+      expect(fitCard(page, 'widget', page.widgets[0]!.id)).toBe(page);
+    });
+
+    it('changes nothing for a card that is not there', () => {
+      const page = arranged();
+
+      expect(fitCard(page, 'group', 'gone')).toBe(page);
+      expect(fitCard(page, 'widget', 'gone')).toBe(page);
+    });
+  });
+
+  describe('settings that carry a height', () => {
+    it('keeps a group’s height within what a card can be', () => {
+      const page = arranged();
+      const id = page.groups[1]!.id;
+
+      expect(updateGroup(page, id, { height: 1 }).groups[1]!.height).toBe(MIN_ROWS);
+      expect(updateGroup(page, id, { height: 99999 }).groups[1]!.height).toBe(MAX_ROWS);
+      expect(updateGroup(page, id, { height: 71.6 }).groups[1]!.height).toBe(72);
+    });
+
+    it('leaves a group’s place alone when only its name changes', () => {
+      const page = arranged();
+
+      expect(updateGroup(page, page.groups[1]!.id, { name: 'Renamed' }).groups[1]).toMatchObject({
+        column: 7,
+        row: 0
+      });
+    });
+
+    it('clears a half-set place, which would mean nothing', () => {
+      const page = arranged();
+
+      const next = updateGroup(page, page.groups[1]!.id, { row: undefined });
+
+      expect(next.groups[1]).not.toHaveProperty('column');
+      expect(next.groups[1]).not.toHaveProperty('row');
+    });
+
+    it('does the same for a widget, with its type and id untouched', () => {
+      const page = arranged();
+      const widget = page.widgets[0]!;
+
+      const next = updateWidget(page, widget.id, { height: 9 }).widgets[0]!;
+
+      expect(next.height).toBe(MIN_ROWS);
+      expect(next).toMatchObject({ id: widget.id, type: 'calendar', column: 0, row: 0 });
+    });
+
+    it('adds a group with the height it was made with, and none that is undefined', () => {
+      const page = arranged();
+
+      expect(addGroup(page, 'Tall', { height: 72 }).group.height).toBe(72);
+      expect(addGroup(page, 'Plain', { height: undefined }).group).not.toHaveProperty('height');
+    });
+  });
+
+  describe('moving a group earlier or later', () => {
+    it('trades places on the board with the group it passes', () => {
+      const page = arranged();
+
+      const next = moveGroup(page, 1, 0);
+
+      expect(next.groups.map((card) => [card.name, card.column, card.row])).toEqual([
+        ['B', 3, 0],
+        ['A', 7, 0],
+        ['C', 0, 40]
+      ]);
+    });
+
+    it('keeps each group’s own width and height', () => {
+      const page = arranged();
+
+      const [b, a] = moveGroup(page, 1, 0).groups;
+
+      expect(a).toMatchObject({ name: 'A', width: 4, height: 60 });
+      expect(b).not.toHaveProperty('height');
+    });
+
+    it('moves later the same way', () => {
+      const page = arranged();
+
+      const next = moveGroup(page, 1, 2);
+
+      expect(next.groups.map((card) => [card.name, card.column, card.row])).toEqual([
+        ['A', 3, 0],
+        ['C', 7, 0],
+        ['B', 0, 40]
+      ]);
+    });
+
+    it('only reorders groups that have not been put anywhere yet', () => {
+      const page = pageOf(
+        sanitizeConfig({
+          groups: [
+            { name: 'A', bookmarks: [] },
+            { name: 'B', bookmarks: [] }
+          ]
+        }),
+        0
+      );
+
+      const next = moveGroup(page, 1, 0);
+
+      expect(next.groups.map((card) => card.name)).toEqual(['B', 'A']);
+      expect(next.groups[0]).not.toHaveProperty('column');
+    });
+
+    it('gives a new group the place of the one it passes, which goes to the end in its turn', () => {
+      const placed = arranged();
+      const page: PageConfig = {
+        ...placed,
+        groups: [
+          ...placed.groups,
+          ...sanitizeConfig({ groups: [{ name: 'New', bookmarks: [] }] }).pages[0].groups
+        ]
+      };
+
+      const next = moveGroup(page, 3, 2);
+
+      expect(next.groups.map((card) => card.name)).toEqual(['A', 'B', 'New', 'C']);
+      expect(next.groups[2]).toMatchObject({ column: 0, row: 40 });
+      expect(next.groups[3]).not.toHaveProperty('column');
+    });
+
+    it('does nothing when there is nowhere to go, or no group there', () => {
+      const page = arranged();
+
+      expect(moveGroup(page, 0, -1)).toBe(page);
+      expect(moveGroup(page, 2, 3)).toBe(page);
+      expect(moveGroup(page, 1, 1)).toBe(page);
+      expect(moveGroup(page, 7, 0)).toBe(page);
+    });
+  });
+
+  describe('importing groups', () => {
+    it('adds them at the end, keeping their height but not the place they had on another board', () => {
+      const page = arranged();
+      const incoming = sanitizeConfig({
+        groups: [{ name: 'Imported', height: 72, column: 4, row: 4, bookmarks: [] }]
+      }).pages[0].groups;
+
+      const next = mergeGroups(page, incoming);
+
+      expect(next.groups[3]).toMatchObject({ name: 'Imported', height: 72 });
+      expect(next.groups[3]).not.toHaveProperty('column');
+      expect(next.groups[3]).not.toHaveProperty('row');
+    });
   });
 });

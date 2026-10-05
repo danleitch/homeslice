@@ -268,6 +268,42 @@ describe('GroupDialog', () => {
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ width: 5 }));
   });
 
+  it('starts as tall as its bookmarks, and says so', () => {
+    open();
+
+    expect(screen.getByRole('radio', { name: 'Fit' })).toBeChecked();
+  });
+
+  it('saves the height that was chosen, in the rows of the board', async () => {
+    const { user, onSave } = open();
+
+    await user.type(screen.getByLabelText(/^Name/), 'Media');
+    await user.click(screen.getByRole('radio', { name: 'M' }));
+    await user.click(screen.getByRole('button', { name: 'Create group' }));
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ name: 'Media', height: 72 }));
+  });
+
+  it('shows the height a group was dragged to, as pixels, so it is not lost when saved', async () => {
+    const { user, onSave } = open({ mode: 'edit', initial: { name: 'Odd', height: 50 } });
+
+    expect(screen.getByRole('radio', { name: '200px' })).toBeChecked();
+
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ height: 50 }));
+  });
+
+  it('goes back to fitting when Fit is chosen, which saves no height at all', async () => {
+    const { user, onSave } = open({ mode: 'edit', initial: { name: 'Tall', height: 96 } });
+    expect(screen.getByRole('radio', { name: 'L' })).toBeChecked();
+
+    await user.click(screen.getByRole('radio', { name: 'Fit' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(onSave.mock.calls[0]![0].height).toBeUndefined();
+  });
+
   it('opens a group to edit with what it has', () => {
     open({
       mode: 'edit',

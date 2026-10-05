@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   GRID_COLUMNS,
+  MAX_ROWS,
+  MIN_ROWS,
   MIN_SPAN,
   PAGE_COUNT,
   countBookmarks,
@@ -286,5 +288,67 @@ describe('pages', () => {
     expect(next.name).toBe('Sam');
     expect(next.pages[0]).toBe(config.pages[0]);
     expect(next.pages[1].groups).toEqual([]);
+  });
+});
+
+describe('where a card sits, and how tall it is', () => {
+  const groupOf = (extra: Record<string, unknown> = {}) =>
+    sanitizeConfig({ groups: [{ name: 'A', bookmarks: [], ...extra }] }).pages[0].groups[0];
+  const widgetOf = (extra: Record<string, unknown> = {}) =>
+    sanitizeConfig({ widgets: [{ type: 'calendar', ...extra }] }).pages[0].widgets[0];
+
+  it('leaves a card with none of it exactly as it was, so it fits its contents and takes the next place', () => {
+    for (const card of [groupOf(), widgetOf()]) {
+      expect(card).not.toHaveProperty('height');
+      expect(card).not.toHaveProperty('column');
+      expect(card).not.toHaveProperty('row');
+    }
+  });
+
+  it('keeps a height and a place, in groups and in widgets', () => {
+    for (const card of [
+      groupOf({ height: 60, column: 4, row: 12 }),
+      widgetOf({ height: 60, column: 4, row: 12 })
+    ]) {
+      expect(card).toMatchObject({ height: 60, column: 4, row: 12 });
+    }
+  });
+
+  it('reads numbers written as text, and rounds them', () => {
+    expect(groupOf({ height: '72', column: '3', row: '8.4' })).toMatchObject({
+      height: 72,
+      column: 3,
+      row: 8
+    });
+  });
+
+  it('keeps a height within what a card can be, and a place within the board', () => {
+    expect(groupOf({ height: 7, column: 0, row: 0 }).height).toBe(MIN_ROWS);
+    expect(groupOf({ height: 99999 }).height).toBe(MAX_ROWS);
+    // A card at least three columns wide has to start no later than the ninth.
+    expect(groupOf({ column: 99, row: 2 }).column).toBe(GRID_COLUMNS - MIN_SPAN);
+    expect(groupOf({ column: -4, row: -1 })).toMatchObject({ column: 0, row: 0 });
+    expect(groupOf({ column: 1, row: 1e9 }).row).toBe(10_000);
+  });
+
+  it('drops what makes no sense, so the card goes back to the defaults', () => {
+    for (const height of [0, -5, 'tall', 'auto', null, NaN, true, [], {}]) {
+      expect(groupOf({ height })).not.toHaveProperty('height');
+    }
+
+    expect(groupOf({ column: 'left', row: 'top' })).not.toHaveProperty('column');
+  });
+
+  it('does not take half a place: a column needs a row, and a row a column', () => {
+    expect(groupOf({ column: 4 })).not.toHaveProperty('column');
+    expect(widgetOf({ row: 4 })).not.toHaveProperty('row');
+    expect(widgetOf({ column: 4 })).not.toHaveProperty('row');
+  });
+
+  it('does not let one field disturb another', () => {
+    const card = groupOf({ height: 60, width: 6, column: 'nope', row: 3 });
+
+    expect(card).toMatchObject({ height: 60, width: 6 });
+    expect(card).not.toHaveProperty('column');
   });
 });

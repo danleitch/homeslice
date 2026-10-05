@@ -1,12 +1,14 @@
 import {
   useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
   type DragEvent,
   type MouseEvent,
   type ReactNode,
-  type RefObject,
   type JSX
 } from 'react';
 import {
@@ -18,6 +20,7 @@ import {
   closestCenter,
   defaultDropAnimationSideEffects,
   pointerWithin,
+  useDroppable,
   useSensor,
   useSensors,
   type CollisionDetection,
@@ -29,20 +32,33 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { GridLayout, verticalCompactor } from 'react-grid-layout/react';
+import {
+  absoluteStrategy,
+  gridBounds,
+  minMaxSize,
+  type LayoutConstraint
+} from 'react-grid-layout/core';
 import { FolderPlus, LayoutGrid } from 'lucide-react';
 import type { ApplyToPage } from '../hooks/use-dashboard';
-import { useJoinedRef, useMasonryRef } from '../hooks/use-masonry';
-import { useSpanResize } from '../hooks/use-span-resize';
+import { useEdgeScroll } from '../hooks/use-edge-scroll';
+import { useElementWidth } from '../hooks/use-element-width';
+import { findBookmark, fitCard, moveBookmark, placeCards } from '../lib/edit';
 import {
-  findBookmark,
-  moveBookmark,
-  moveGroup,
-  moveWidget,
-  updateGroup,
-  updateWidget
-} from '../lib/edit';
+  FLOW_BELOW,
+  buildLayout,
+  cardsOf,
+  inReadingOrder,
+  isFixed,
+  rowsFor,
+  type Card,
+  type CardKind
+} from '../lib/layout';
 import {
   GRID_COLUMNS,
+  GRID_GAP,
+  HEIGHT_STEP,
+  ROW_PX,
   type Bookmark,
   type PageConfig,
   type Group,
@@ -55,13 +71,10 @@ import { BookmarkCard } from './bookmark-card';
 import { GroupPanel } from './group-panel';
 
 type DragData =
-  | { type: 'bookmark'; bookmarkId: string; groupId: string }
-  | { type: 'group'; groupId: string }
-  | { type: 'widget'; widgetId: string };
+  { type: 'bookmark'; bookmarkId: string; groupId: string } | { type: 'group'; groupId: string };
 
 const bookmarkKey = (id: string): string => `bm:${id}`;
 const groupKey = (id: string): string => `group:${id}`;
-const widgetKey = (id: string): string => `widget:${id}`;
 
 const dataOf = (value: unknown): DragData | undefined => value as DragData | undefined;
 
@@ -72,6 +85,24 @@ const dropAnimation: DropAnimation = {
   easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
   sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: '0.35' } } })
 };
+
+/** What the grid is given as its width before the board has been measured. */
+const UNMEASURED_WIDTH = 1200;
+
+/** Cards are carried by their headers, though not by what is in them. */
+const DRAG_HANDLE = '.grp-head, .wdg-head';
+const DRAG_CANCEL = 'button, a, input, select, textarea';
+
+/** The bottom edge, and the corner, move in steps, so cards are easy to line up. */
+const heightSteps: LayoutConstraint = {
+  name: 'height-steps',
+  constrainSize: (_item, w, h, handle) => ({
+    w,
+    h: handle.includes('s') ? Math.round(h / HEIGHT_STEP) * HEIGHT_STEP : h
+  })
+};
+
+const CONSTRAINTS = [gridBounds, heightSteps, minMaxSize];
 
 export type BoardActions = {
   onEditBookmark: (bookmark: Bookmark) => void;
@@ -106,28 +137,16 @@ const GridGuides = (): JSX.Element => (
 
 /** A dashed space in edit mode that makes something new. */
 const GhostTile = ({
-  span,
   onClick,
   children
 }: {
-  span: number;
   onClick: () => void;
   children: ReactNode;
-}): JSX.Element => {
-  const masonryRef = useMasonryRef();
-
-  return (
-    <button
-      type="button"
-      ref={masonryRef}
-      className="ghost-tile"
-      style={{ '--span': span, '--span-md': span <= 6 ? 6 : 12 } as CSSProperties}
-      onClick={onClick}
-    >
-      {children}
-    </button>
-  );
-};
+}): JSX.Element => (
+  <button type="button" className="ghost-tile" onClick={onClick}>
+    {children}
+  </button>
+);
 
 type SortableBookmarkProps = {
   bookmark: Bookmark;
@@ -173,47 +192,30 @@ const SortableBookmark = ({
   );
 };
 
-type SortableGroupProps = {
+type DroppableGroupProps = {
   group: Group;
   editing: boolean;
   newTab: boolean;
-  gridRef: RefObject<HTMLDivElement | null>;
   linkOver: boolean;
   freshId: string | null;
   actions: BoardActions;
-  apply: ApplyToPage;
-  onResizing: (resizing: boolean) => void;
   onLinkOver: (groupId: string | null) => void;
 };
 
-const SortableGroup = ({
+/** A group, which a bookmark can be carried into, and a link from another tab dropped on. */
+const DroppableGroup = ({
   group,
   editing,
   newTab,
-  gridRef,
   linkOver,
   freshId,
   actions,
-  apply,
-  onResizing,
   onLinkOver
-}: SortableGroupProps): JSX.Element => {
-  const { setNodeRef, setActivatorNodeRef, listeners, transform, transition, isDragging } =
-    useSortable({
-      id: groupKey(group.id),
-      data: { type: 'group', groupId: group.id } satisfies DragData,
-      transition: SORT_TRANSITION
-    });
-  const nodeRef = useJoinedRef(setNodeRef, useMasonryRef());
-  const resize = useSpanResize(
-    gridRef,
-    group.width,
-    useCallback(
-      (span: number) => apply((config) => updateGroup(config, group.id, { width: span })),
-      [apply, group.id]
-    ),
-    onResizing
-  );
+}: DroppableGroupProps): JSX.Element => {
+  const { setNodeRef } = useDroppable({
+    id: groupKey(group.id),
+    data: { type: 'group', groupId: group.id } satisfies DragData
+  });
 
   const handleLinkOver = (event: DragEvent<HTMLElement>): void => {
     if (!isLinkDrag(Array.from(event.dataTransfer.types))) {
@@ -228,18 +230,12 @@ const SortableGroup = ({
 
   return (
     <GroupPanel
-      ref={nodeRef}
+      ref={setNodeRef}
       group={group}
-      editing={editing}
-      placeholder={isDragging}
       linkOver={linkOver}
-      handleRef={setActivatorNodeRef}
-      handleListeners={listeners}
-      style={{ transform: CSS.Translate.toString(transform), transition }}
       onAdd={(target) => actions.onAddBookmark(target.id)}
       onToggle={actions.onToggleGroup}
       onMenu={actions.onGroupMenu}
-      onResizeStart={resize}
       onLinkDragOver={handleLinkOver}
       onLinkDragLeave={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
@@ -278,57 +274,47 @@ const SortableGroup = ({
   );
 };
 
-type SortableWidgetProps = {
-  widget: Widget;
-  config: PageConfig;
-  editing: boolean;
-  gridRef: RefObject<HTMLDivElement | null>;
-  actions: BoardActions;
-  apply: ApplyToPage;
-  onResizing: (resizing: boolean) => void;
-};
+/**
+ * Wraps a card whose height is its contents', and tells the board how many
+ * rows that is, now and whenever it changes. A card that has been given a
+ * height needs no measuring.
+ */
+const Fit = ({
+  cardKey,
+  fixed,
+  onFit,
+  children
+}: {
+  cardKey: string;
+  fixed: boolean;
+  onFit: (key: string, rows: number) => void;
+  children: ReactNode;
+}): JSX.Element => {
+  const ref = useRef<HTMLDivElement>(null);
 
-const SortableWidget = ({
-  widget,
-  config,
-  editing,
-  gridRef,
-  actions,
-  apply,
-  onResizing
-}: SortableWidgetProps): JSX.Element => {
-  const { setNodeRef, setActivatorNodeRef, listeners, transform, transition, isDragging } =
-    useSortable({
-      id: widgetKey(widget.id),
-      data: { type: 'widget', widgetId: widget.id } satisfies DragData,
-      transition: SORT_TRANSITION
-    });
-  const nodeRef = useJoinedRef(setNodeRef, useMasonryRef());
-  const resize = useSpanResize(
-    gridRef,
-    widget.width,
-    useCallback(
-      (span: number) => apply((current) => updateWidget(current, widget.id, { width: span })),
-      [apply, widget.id]
-    ),
-    onResizing
-  );
+  useLayoutEffect(() => {
+    const element = ref.current;
+
+    if (!element || fixed) {
+      return;
+    }
+
+    const measure = (): void => onFit(cardKey, rowsFor(element.offsetHeight));
+    measure();
+
+    if (typeof ResizeObserver !== 'function') {
+      return;
+    }
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [cardKey, fixed, onFit]);
 
   return (
-    <WidgetFrame
-      ref={nodeRef}
-      widget={widget}
-      editing={editing}
-      placeholder={isDragging}
-      handleRef={setActivatorNodeRef}
-      handleListeners={listeners}
-      style={{ transform: CSS.Translate.toString(transform), transition }}
-      onConfigure={actions.onConfigureWidget}
-      onRemove={actions.onRemoveWidget}
-      onResizeStart={resize}
-    >
-      <WidgetView widget={widget} clock={config.clock} newTab={config.newTab} />
-    </WidgetFrame>
+    <div ref={ref} className="cell-fit">
+      {children}
+    </div>
   );
 };
 
@@ -348,9 +334,14 @@ const isPast = (event: DragOverEvent): boolean => {
 };
 
 /**
- * The board: widgets along the top, then the groups, all on one 12-column
- * grid. Groups and widgets are carried by their headers; bookmarks by
- * themselves, within a group or across to another one.
+ * The board: widgets and groups, all cards on one 12-column grid. Cards are
+ * carried by their headers and, in edit mode, resized from their right edge,
+ * bottom edge or corner; the rest of the board shuffles out of the way and
+ * closes up behind. A card is as tall as what is in it until it is resized.
+ * Bookmarks are carried by themselves, within a group or across to another one.
+ *
+ * Below FLOW_BELOW pixels there is no room for a grid, so the cards simply
+ * stack in the order they sit.
  */
 export const Board = ({
   config,
@@ -361,9 +352,14 @@ export const Board = ({
 }: BoardProps): JSX.Element => {
   const [active, setActive] = useState<DragData | null>(null);
   const [draft, setDraft] = useState<Group[] | null>(null);
-  const [resizing, setResizing] = useState(false);
+  const [moving, setMoving] = useState<CardKind | null>(null);
+  const [resizing, setResizing] = useState<string | null>(null);
+  const [fit, setFit] = useState<Record<string, number>>({});
   const [linkOver, setLinkOver] = useState<string | null>(null);
+  const [settled, setSettled] = useState(false);
   const gridRef = useRef<HTMLDivElement>(null);
+  const width = useElementWidth(gridRef);
+  const edgeScroll = useEdgeScroll();
   const lastOverId = useRef<UniqueIdentifier | null>(null);
   const movedAcross = useRef(false);
   const justDragged = useRef(false);
@@ -377,17 +373,34 @@ export const Board = ({
     useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } })
   );
 
+  // Cards slide into place, but not on the way in: they begin at a guess of
+  // their height and close up as each is measured.
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setSettled(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  const cards = useMemo(
+    () => cardsOf({ widgets: config.widgets, groups }),
+    [config.widgets, groups]
+  );
+  const layout = useMemo(() => buildLayout(cards, fit), [cards, fit]);
+  const ordered = useMemo(() => inReadingOrder(cards, fit), [cards, fit]);
+  const flow = width > 0 && width < FLOW_BELOW;
+
+  const handleFit = useCallback(
+    (key: string, rows: number): void =>
+      setFit((current) => (current[key] === rows ? current : { ...current, [key]: rows })),
+    []
+  );
+
   const collisionDetection = useCallback<CollisionDetection>((args) => {
     const data = dataOf(args.active.data.current);
     const ofType = (type: DragData['type']) =>
       args.droppableContainers.filter((container) => dataOf(container.data.current)?.type === type);
 
-    if (!data) {
+    if (data?.type !== 'bookmark') {
       return [];
-    }
-
-    if (data.type !== 'bookmark') {
-      return closestCenter({ ...args, droppableContainers: ofType(data.type) });
     }
 
     const bookmarks = ofType('bookmark');
@@ -424,27 +437,29 @@ export const Board = ({
     return lastOverId.current ? [{ id: lastOverId.current }] : [];
   }, []);
 
-  const finish = (): void => {
-    setActive(null);
-    lastOverId.current = null;
+  /** The click that ends a drag is not a click on whatever it ended over. */
+  const settleClicks = (): void => {
     justDragged.current = true;
     window.setTimeout(() => {
       justDragged.current = false;
     }, 60);
   };
 
+  const finish = (): void => {
+    setActive(null);
+    lastOverId.current = null;
+    settleClicks();
+  };
+
   const handleDragStart = (event: DragStartEvent): void => {
     const data = dataOf(event.active.data.current);
 
-    if (!data) {
+    if (data?.type !== 'bookmark') {
       return;
     }
 
     setActive(data);
-
-    if (data.type === 'bookmark') {
-      setDraft(config.groups);
-    }
+    setDraft(config.groups);
   };
 
   const handleDragOver = (event: DragOverEvent): void => {
@@ -477,7 +492,7 @@ export const Board = ({
 
       toGroupId = target.group.id;
       toIndex = target.index + (isPast(event) ? 1 : 0);
-    } else if (overData.type === 'group') {
+    } else {
       const target = current.find((group) => group.id === overData.groupId);
 
       if (!target || target.id === from.group.id || target.collapsed) {
@@ -486,8 +501,6 @@ export const Board = ({
 
       toGroupId = target.id;
       toIndex = target.bookmarks.length;
-    } else {
-      return;
     }
 
     // One crossing per frame, so the groups' new sizes are measured before
@@ -504,25 +517,8 @@ export const Board = ({
     const { over } = event;
     finish();
 
-    if (!data) {
+    if (data?.type !== 'bookmark') {
       setDraft(null);
-      return;
-    }
-
-    if (data.type === 'group' || data.type === 'widget') {
-      if (over && over.id !== event.active.id) {
-        const list = data.type === 'group' ? config.groups : config.widgets;
-        const key = data.type === 'group' ? groupKey : widgetKey;
-        const from = list.findIndex((item) => key(item.id) === event.active.id);
-        const to = list.findIndex((item) => key(item.id) === over.id);
-
-        if (from !== -1 && to !== -1) {
-          apply((current) =>
-            data.type === 'group' ? moveGroup(current, from, to) : moveWidget(current, from, to)
-          );
-        }
-      }
-
       return;
     }
 
@@ -557,13 +553,65 @@ export const Board = ({
 
   const activeBookmark =
     active?.type === 'bookmark' ? findBookmark(groups, active.bookmarkId) : null;
-  const activeGroup =
-    active?.type === 'group' ? config.groups.find((group) => group.id === active.groupId) : null;
-  const activeWidget =
-    active?.type === 'widget'
-      ? config.widgets.find((widget) => widget.id === active.widgetId)
-      : null;
-  const showGuides = resizing || active?.type === 'group' || active?.type === 'widget';
+  const arranging = moving !== null || resizing !== null;
+
+  const renderCard = (card: Card): JSX.Element => {
+    if (card.kind === 'group') {
+      const group = groups.find((candidate) => candidate.id === card.id)!;
+
+      return (
+        <DroppableGroup
+          group={group}
+          editing={editing}
+          newTab={config.newTab}
+          linkOver={linkOver === group.id}
+          freshId={freshId}
+          actions={actions}
+          onLinkOver={setLinkOver}
+        />
+      );
+    }
+
+    const widget = config.widgets.find((candidate) => candidate.id === card.id)!;
+
+    return (
+      <WidgetFrame
+        widget={widget}
+        editing={editing}
+        onConfigure={actions.onConfigureWidget}
+        onRemove={actions.onRemoveWidget}
+      >
+        <WidgetView widget={widget} clock={config.clock} newTab={config.newTab} />
+      </WidgetFrame>
+    );
+  };
+
+  /** Pulling a handle twice sends a card back to the height of its contents. */
+  const handleFitClick =
+    (card: Card) =>
+    (event: MouseEvent): void => {
+      if ((event.target as Element).closest('.react-resizable-handle')) {
+        apply((page) => fitCard(page, card.kind, card.id));
+      }
+    };
+
+  const cell = (card: Card): JSX.Element => {
+    const fixed = isFixed(card) || card.key === resizing;
+
+    return (
+      <div
+        key={card.key}
+        className="cell"
+        data-kind={card.kind}
+        data-fit={fixed ? 'fixed' : 'auto'}
+        onDoubleClick={handleFitClick(card)}
+      >
+        <Fit cardKey={card.key} fixed={fixed} onFit={handleFit}>
+          {renderCard(card)}
+        </Fit>
+      </div>
+    );
+  };
 
   let overlay: ReactNode = null;
 
@@ -578,35 +626,15 @@ export const Board = ({
         />
       </ul>
     );
-  } else if (activeGroup) {
-    overlay = (
-      <GroupPanel group={activeGroup} editing={false} overlay>
-        {activeGroup.bookmarks.map((bookmark) => (
-          <BookmarkCard
-            key={bookmark.id}
-            bookmark={bookmark}
-            variant={activeGroup.style}
-            newTab={config.newTab}
-          />
-        ))}
-      </GroupPanel>
-    );
-  } else if (activeWidget) {
-    overlay = (
-      <WidgetFrame widget={activeWidget} editing={false} overlay>
-        <WidgetView widget={activeWidget} clock={config.clock} newTab={config.newTab} />
-      </WidgetFrame>
-    );
   }
 
   return (
     <div
       className="board"
-      data-guides={showGuides ? 'on' : undefined}
+      data-guides={arranging ? 'on' : undefined}
       data-editing={editing ? 'on' : undefined}
-      data-dragging={active ? active.type : undefined}
+      data-dragging={active ? active.type : (moving ?? undefined)}
       onClickCapture={(event) => {
-        // The click that ends a drag is not a click on the card it ended on.
         if (justDragged.current) {
           event.preventDefault();
           event.stopPropagation();
@@ -622,61 +650,101 @@ export const Board = ({
         onDragEnd={handleDragEnd}
         onDragCancel={handleDragCancel}
       >
-        {/* Widgets and groups share one grid, packed like masonry, so a tall
-            widget never leaves a hole beside the groups that follow it. */}
-        <div className="dash-grid" ref={gridRef}>
-          <GridGuides />
-          <SortableContext
-            items={config.widgets.map((widget) => widgetKey(widget.id))}
-            strategy={rectSortingStrategy}
-          >
-            {config.widgets.map((widget) => (
-              <SortableWidget
-                key={widget.id}
-                widget={widget}
-                config={config}
-                editing={editing}
-                gridRef={gridRef}
-                actions={actions}
-                apply={apply}
-                onResizing={setResizing}
-              />
-            ))}
-          </SortableContext>
-          {editing && (
-            <GhostTile span={4} onClick={actions.onAddWidget}>
+        {/* Widgets and groups share one grid, which closes up behind a short
+            card so a tall one never leaves a hole beside it. */}
+        <div
+          className="dash-grid"
+          ref={gridRef}
+          data-settled={settled ? '' : undefined}
+          style={{ '--board-gap': `${GRID_GAP}px`, '--board-row': `${ROW_PX}px` } as CSSProperties}
+        >
+          {flow ? (
+            <div className="dash-flow">
+              {ordered.map((card) => (
+                <div
+                  key={card.key}
+                  className="cell cell--flow"
+                  data-kind={card.kind}
+                  data-wide={card.width > GRID_COLUMNS / 2 ? '' : undefined}
+                >
+                  {renderCard(card)}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <>
+              <GridGuides />
+              <GridLayout
+                className="dash-layout"
+                width={width || UNMEASURED_WIDTH}
+                layout={layout}
+                gridConfig={{
+                  cols: GRID_COLUMNS,
+                  rowHeight: ROW_PX,
+                  margin: [GRID_GAP, 0],
+                  containerPadding: [0, 0]
+                }}
+                dragConfig={{
+                  enabled: true,
+                  bounded: true,
+                  handle: DRAG_HANDLE,
+                  cancel: DRAG_CANCEL
+                }}
+                resizeConfig={{
+                  enabled: editing,
+                  handles: ['se', 'e', 's'],
+                  handleComponent: (axis, ref) => (
+                    <span
+                      ref={ref}
+                      className={`react-resizable-handle react-resizable-handle-${axis}`}
+                      title="Drag to resize; double-click to fit the contents"
+                    />
+                  )
+                }}
+                positionStrategy={absoluteStrategy}
+                compactor={verticalCompactor}
+                constraints={CONSTRAINTS}
+                onDragStart={(_layout, item) => {
+                  edgeScroll.start();
+                  setMoving(cards.find((card) => card.key === item?.i)?.kind ?? null);
+                }}
+                onDragStop={(next) => {
+                  edgeScroll.stop();
+                  setMoving(null);
+                  settleClicks();
+                  apply((page) => placeCards(page, next));
+                }}
+                onResizeStart={(_layout, item) => {
+                  edgeScroll.start();
+                  setResizing(item?.i ?? null);
+                }}
+                onResizeStop={(next, before, after) => {
+                  edgeScroll.stop();
+                  setResizing(null);
+                  settleClicks();
+                  // Only a card dragged taller or shorter is given a height of its own.
+                  const taller = before && after && before.h !== after.h;
+                  apply((page) => placeCards(page, next, taller ? before.i : undefined));
+                }}
+              >
+                {ordered.map(cell)}
+              </GridLayout>
+            </>
+          )}
+        </div>
+
+        {editing && (
+          <div className="dash-add">
+            <GhostTile onClick={actions.onAddWidget}>
               <LayoutGrid size={18} aria-hidden="true" />
               Add a widget
             </GhostTile>
-          )}
-
-          <SortableContext
-            items={groups.map((group) => groupKey(group.id))}
-            strategy={rectSortingStrategy}
-          >
-            {groups.map((group) => (
-              <SortableGroup
-                key={group.id}
-                group={group}
-                editing={editing}
-                newTab={config.newTab}
-                gridRef={gridRef}
-                linkOver={linkOver === group.id}
-                freshId={freshId}
-                actions={actions}
-                apply={apply}
-                onResizing={setResizing}
-                onLinkOver={setLinkOver}
-              />
-            ))}
-          </SortableContext>
-          {editing && (
-            <GhostTile span={4} onClick={actions.onAddGroup}>
+            <GhostTile onClick={actions.onAddGroup}>
               <FolderPlus size={18} aria-hidden="true" />
               New group
             </GhostTile>
-          )}
-        </div>
+          </div>
+        )}
 
         <DragOverlay dropAnimation={dropAnimation}>{overlay}</DragOverlay>
       </DndContext>

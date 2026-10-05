@@ -2,12 +2,34 @@ import { act, createEvent, fireEvent, render, screen, within } from '@testing-li
 import userEvent from '@testing-library/user-event';
 import { createElement } from 'react';
 import type { CollisionDetection, DndContextProps } from '@dnd-kit/core';
+import type { GridLayoutProps } from 'react-grid-layout/react';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
-import { pageOf, sanitizeConfig, type PageConfig } from '../lib/model';
+import { FLOW_BELOW, rowsFor } from '../lib/layout';
+import {
+  GRID_GAP,
+  HEIGHT_STEP,
+  ROW_PX,
+  pageOf,
+  sanitizeConfig,
+  type PageConfig
+} from '../lib/model';
 import { Board, type BoardActions } from './board';
 
-// The real DndContext does the sorting; this only lets a test reach the handlers the board gave it.
+// The real DndContext and GridLayout do the work; these only let a test reach what the board gave them.
 const dnd = vi.hoisted(() => ({ props: null as unknown }));
+const grid = vi.hoisted(() => ({ props: null as unknown }));
+
+vi.mock('react-grid-layout/react', async (importOriginal) => {
+  const layout = await importOriginal<typeof import('react-grid-layout/react')>();
+
+  return {
+    ...layout,
+    GridLayout: (props: GridLayoutProps) => {
+      grid.props = props;
+      return createElement(layout.GridLayout, props);
+    }
+  };
+});
 
 vi.mock('@dnd-kit/core', async (importOriginal) => {
   const core = await importOriginal<typeof import('@dnd-kit/core')>();
@@ -20,6 +42,8 @@ vi.mock('@dnd-kit/core', async (importOriginal) => {
     }
   };
 });
+
+const gridProps = (): GridLayoutProps => grid.props as GridLayoutProps;
 
 const handlers = (): Required<
   Pick<
@@ -98,6 +122,31 @@ const setup = (
   return { config, apply, actions };
 };
 
+/** `setup`, but able to give the same board another page, and to take it away. */
+const setupWith = (
+  config: PageConfig,
+  editing = false
+): {
+  actions: Actions;
+  apply: ReturnType<typeof vi.fn>;
+  unmount: () => void;
+  rerender: (next: PageConfig) => void;
+} => {
+  const apply = vi.fn();
+  const actions = actionsOf();
+  const { unmount, rerender } = render(
+    <Board config={config} editing={editing} apply={apply} {...actions} />
+  );
+
+  return {
+    actions,
+    apply,
+    unmount,
+    rerender: (next) =>
+      rerender(<Board config={next} editing={editing} apply={apply} {...actions} />)
+  };
+};
+
 const group = (name: string): HTMLElement => screen.getByRole('region', { name });
 const namesIn = (name: string): string[] =>
   [...group(name).querySelectorAll('.bm-name')].map((node) => node.textContent ?? '');
@@ -106,12 +155,9 @@ const namesIn = (name: string): string[] =>
 const appliedTo = (apply: ReturnType<typeof vi.fn>, config: PageConfig, call = 0): PageConfig =>
   (apply.mock.calls[call]![0] as (page: PageConfig) => PageConfig)(config);
 
-const groupNames = (config: PageConfig): string[] => config.groups.map((item) => item.name);
-
 // Ids as the board gives them to dnd-kit.
 const bm = (id: string): string => `bm:${id}`;
 const grp = (id: string): string => `group:${id}`;
-const wdg = (id: string): string => `widget:${id}`;
 
 type Rect = { top: number; left: number; width: number; height: number };
 const rectOf = ({ top, left, width, height }: Rect): Rect & { right: number; bottom: number } => ({
@@ -303,47 +349,7 @@ describe('Board', () => {
     });
   });
 
-  describe('dragging', () => {
-    it('shows the guides and says what is being carried while a group or widget is held', () => {
-      const config = boardConfig();
-      setup({ config });
-
-      act(() =>
-        handlers().onDragStart(
-          dragEvent({
-            active: { id: grp(groupId(config, 'Code')), data: groupData(config, 'Code') }
-          })
-        )
-      );
-
-      const board = document.querySelector('.board')!;
-      expect(board).toHaveAttribute('data-dragging', 'group');
-      expect(board).toHaveAttribute('data-guides', 'on');
-
-      act(() => handlers().onDragCancel({} as never));
-      expect(board).not.toHaveAttribute('data-dragging');
-      expect(board).not.toHaveAttribute('data-guides');
-    });
-
-    it('shows the guides for a widget too', () => {
-      const config = boardConfig();
-      setup({ config });
-
-      act(() =>
-        handlers().onDragStart(
-          dragEvent({
-            active: {
-              id: wdg(config.widgets[0]!.id),
-              data: { type: 'widget', widgetId: config.widgets[0]!.id }
-            }
-          })
-        )
-      );
-
-      expect(document.querySelector('.board')).toHaveAttribute('data-dragging', 'widget');
-      expect(document.querySelector('.board')).toHaveAttribute('data-guides', 'on');
-    });
-
+  describe('dragging a bookmark', () => {
     it('says a bookmark is being carried, without the guides', () => {
       const config = boardConfig();
       setup({ config });
@@ -359,12 +365,23 @@ describe('Board', () => {
       const board = document.querySelector('.board')!;
       expect(board).toHaveAttribute('data-dragging', 'bookmark');
       expect(board).not.toHaveAttribute('data-guides');
+
+      act(() => handlers().onDragCancel({} as never));
+      expect(board).not.toHaveAttribute('data-dragging');
     });
 
-    it('ignores a drag it knows nothing about', () => {
-      setup();
+    it('ignores a drag it knows nothing about, or of anything but a bookmark', () => {
+      const config = boardConfig();
+      setup({ config });
 
       act(() => handlers().onDragStart(dragEvent({ active: { id: 'mystery' } })));
+      act(() =>
+        handlers().onDragStart(
+          dragEvent({
+            active: { id: grp(groupId(config, 'Code')), data: groupData(config, 'Code') }
+          })
+        )
+      );
 
       expect(document.querySelector('.board')).not.toHaveAttribute('data-dragging');
     });
@@ -607,64 +624,20 @@ describe('Board', () => {
   });
 
   describe('putting things down', () => {
-    it('reorders groups', () => {
-      const config = boardConfig();
-      const { apply } = setup({ config });
-
-      act(() =>
-        handlers().onDragEnd(
-          dragEvent({
-            active: { id: grp(groupId(config, 'Code')), data: groupData(config, 'Code') },
-            over: { id: grp(groupId(config, 'Empty')), data: groupData(config, 'Empty') }
-          })
-        )
-      );
-
-      expect(groupNames(appliedTo(apply, config))).toEqual(['Read', 'Empty', 'Code', 'Folded']);
-    });
-
-    it('reorders widgets', () => {
-      const config = boardConfig();
-      const [first, second] = config.widgets;
-      const { apply } = setup({ config });
-
-      act(() =>
-        handlers().onDragEnd(
-          dragEvent({
-            active: { id: wdg(first!.id), data: { type: 'widget', widgetId: first!.id } },
-            over: { id: wdg(second!.id), data: { type: 'widget', widgetId: second!.id } }
-          })
-        )
-      );
-
-      expect(appliedTo(apply, config).widgets.map((widget) => widget.id)).toEqual([
-        second!.id,
-        first!.id
-      ]);
-    });
-
-    it('does nothing for a group put down on itself, on nothing, or on something unknown', () => {
+    it('does nothing for a group or anything unknown put down', () => {
       const config = boardConfig();
       const { apply } = setup({ config });
       const active = { id: grp(groupId(config, 'Code')), data: groupData(config, 'Code') };
 
       act(() =>
-        handlers().onDragEnd(dragEvent({ active, over: { id: active.id, data: active.data } }))
-      );
-      act(() => handlers().onDragEnd(dragEvent({ active, over: null })));
-      act(() =>
-        handlers().onDragEnd(
-          dragEvent({ active, over: { id: grp('gone'), data: { type: 'group', groupId: 'gone' } } })
-        )
-      );
-      act(() =>
         handlers().onDragEnd(
           dragEvent({
-            active: { id: grp('gone'), data: { type: 'group', groupId: 'gone' } },
+            active,
             over: { id: grp(groupId(config, 'Read')), data: groupData(config, 'Read') }
           })
         )
       );
+      act(() => handlers().onDragEnd(dragEvent({ active, over: null })));
 
       expect(apply).not.toHaveBeenCalled();
     });
@@ -794,8 +767,12 @@ describe('Board', () => {
     it('clears what it was carrying', () => {
       const config = boardConfig();
       setup({ config });
-      const active = { id: grp(groupId(config, 'Code')), data: groupData(config, 'Code') };
+      const active = {
+        id: bm(bookmarkId(config, 'Code', 0)),
+        data: bookmarkData(config, 'Code', 0)
+      };
       act(() => handlers().onDragStart(dragEvent({ active })));
+      expect(document.querySelector('.board')).toHaveAttribute('data-dragging', 'bookmark');
 
       act(() => handlers().onDragEnd(dragEvent({ active, over: null })));
 
@@ -815,7 +792,10 @@ describe('Board', () => {
     it('is not a click on whatever the drag ended over, for a moment', () => {
       const config = boardConfig();
       const { actions } = setup({ config, editing: true });
-      const active = { id: grp(groupId(config, 'Code')), data: groupData(config, 'Code') };
+      const active = {
+        id: bm(bookmarkId(config, 'Code', 0)),
+        data: bookmarkData(config, 'Code', 0)
+      };
       act(() => handlers().onDragStart(dragEvent({ active })));
       act(() => handlers().onDragEnd(dragEvent({ active, over: null })));
 
@@ -881,37 +861,16 @@ describe('Board', () => {
       expect(detect(boardConfig(), { active: { id: 'x' }, containers: [] })).toEqual([]);
     });
 
-    it('offers a carried group only the groups, and picks the nearest', () => {
-      const config = boardConfig();
-      const near = container('group:near', { type: 'group', groupId: 'near' }, rect(0, 0));
-      const far = container('group:far', { type: 'group', groupId: 'far' }, rect(500, 500));
-      const card = container(
-        'bm:card',
-        { type: 'bookmark', bookmarkId: 'c', groupId: 'near' },
-        rect(0, 0)
-      );
-
-      const found = detect(config, {
-        active: { id: 'group:me', data: { type: 'group', groupId: 'me' } },
-        containers: [card, far, near],
-        collisionRect: rect(10, 10)
-      });
-
-      expect(found[0]).toBe('group:near');
-      expect(found).not.toContain('bm:card');
-    });
-
-    it('offers a carried widget only the widgets', () => {
-      const config = boardConfig();
-      const widget = container('widget:w', { type: 'widget', widgetId: 'w' }, rect(0, 0));
+    it('offers nothing to a group or widget, which are not carried this way', () => {
       const group = container('group:g', { type: 'group', groupId: 'g' }, rect(0, 0));
 
-      const found = detect(config, {
-        active: { id: 'widget:me', data: { type: 'widget', widgetId: 'me' } },
-        containers: [group, widget]
-      });
-
-      expect(found).toEqual(['widget:w']);
+      expect(
+        detect(boardConfig(), {
+          active: { id: 'group:me', data: { type: 'group', groupId: 'me' } },
+          containers: [group],
+          pointer: { x: 10, y: 10 }
+        })
+      ).toEqual([]);
     });
 
     describe('for a bookmark', () => {
@@ -1113,64 +1072,625 @@ describe('Board', () => {
     });
   });
 
-  describe('resizing', () => {
-    beforeEach(() => {
-      Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
-        configurable: true,
-        get: () => 1200
+  describe('the grid', () => {
+    type Item = NonNullable<GridLayoutProps['layout']>[number];
+
+    const items = (): Record<string, Item> =>
+      Object.fromEntries((gridProps().layout ?? []).map((item) => [item.i, item]));
+    const groupItem = (config: PageConfig, name: string): Item =>
+      items()[`group:${config.groups.find((item) => item.name === name)!.id}`]!;
+    const widgetItem = (config: PageConfig, index: number): Item =>
+      items()[`widget:${config.widgets[index]!.id}`]!;
+    const cellOf = (name: string): HTMLElement => group(name).closest<HTMLElement>('.cell')!;
+
+    /** A page where the Code group has been put somewhere, and the Read group given a height. */
+    const arrangedConfig = (): PageConfig =>
+      pageOf(
+        sanitizeConfig({
+          widgets: [{ type: 'calendar', width: 3 }],
+          groups: [
+            { name: 'Code', width: 6, column: 4, row: 10, bookmarks: [] },
+            { name: 'Read', width: 4, height: 60, bookmarks: [] },
+            { name: 'Folded', collapsed: true, height: 60, bookmarks: [] }
+          ]
+        }),
+        0
+      );
+
+    /** Moves one card in the layout the grid was given, as dragging it would. */
+    const moved = (key: string, to: Partial<Item>): Item[] =>
+      (gridProps().layout ?? []).map((item) => (item.i === key ? { ...item, ...to } : item));
+
+    describe('what it is given', () => {
+      it('is twelve columns of tiny rows, with a gap between the columns and none below', () => {
+        setup();
+
+        expect(gridProps().gridConfig).toMatchObject({
+          cols: 12,
+          rowHeight: ROW_PX,
+          margin: [GRID_GAP, 0],
+          containerPadding: [0, 0]
+        });
       });
-      // Only the grid's own gap is faked; everything else is measured as usual.
-      const real = window.getComputedStyle.bind(window);
-      vi.spyOn(window, 'getComputedStyle').mockImplementation((element, pseudo) => {
-        const style = real(element, pseudo);
 
-        if (element.classList.contains('dash-grid')) {
-          Object.defineProperty(style, 'columnGap', { configurable: true, value: '12px' });
-        }
+      it('has every card on it, widgets and groups, at the width it has', () => {
+        const config = boardConfig();
+        setup({ config });
 
-        return style;
+        expect(Object.keys(items())).toHaveLength(6);
+        expect(widgetItem(config, 0)).toMatchObject({ w: 3 });
+        expect(groupItem(config, 'Code')).toMatchObject({ w: 4, minW: 3, maxW: 12 });
       });
-      HTMLElement.prototype.setPointerCapture = vi.fn();
+
+      it('keeps a card where it was put, and packs the others in below', () => {
+        const config = arrangedConfig();
+        setup({ config });
+
+        expect(groupItem(config, 'Code')).toMatchObject({ x: 4, y: 10 });
+        // The card with no place waits its turn after everything that has one.
+        expect(widgetItem(config, 0).y).toBeGreaterThanOrEqual(10);
+      });
+
+      it('is as wide as the board measures, or a desktop’s width before it has', () => {
+        setup();
+        expect(gridProps().width).toBe(1200);
+      });
+
+      it('is carried by its headers, though not by their buttons, and never off the board', () => {
+        setup();
+        const drag = gridProps().dragConfig!;
+
+        expect(drag.handle).toBe('.grp-head, .wdg-head');
+        expect(drag.cancel).toContain('button');
+        expect(drag.bounded).toBe(true);
+        expect(drag.enabled).toBe(true);
+      });
     });
 
-    afterEach(() => {
-      delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
-      delete (HTMLElement.prototype as { setPointerCapture?: unknown }).setPointerCapture;
-      vi.restoreAllMocks();
+    describe('how tall a card is', () => {
+      // jsdom's own `offsetHeight`, which has to come back: nothing else measures to a number.
+      const offsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight')!;
+      let heights: Map<string, number>;
+      let observers: { callback: (entries: unknown[]) => void; observe: Mock; disconnect: Mock }[];
+
+      beforeEach(() => {
+        heights = new Map();
+        observers = [];
+        Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+          configurable: true,
+          get(this: HTMLElement) {
+            return this.classList.contains('cell-fit')
+              ? (heights.get(this.querySelector('[aria-label]')!.getAttribute('aria-label')!) ?? 0)
+              : 0;
+          }
+        });
+        vi.stubGlobal(
+          'ResizeObserver',
+          class {
+            callback: (entries: unknown[]) => void;
+            observe = vi.fn();
+            disconnect = vi.fn();
+
+            constructor(callback: (entries: unknown[]) => void) {
+              this.callback = callback;
+              observers.push(this);
+            }
+          }
+        );
+      });
+
+      afterEach(() => {
+        Object.defineProperty(HTMLElement.prototype, 'offsetHeight', offsetHeight);
+        vi.unstubAllGlobals();
+      });
+
+      it('is as tall as it measures, and the board follows as it grows and shrinks', () => {
+        heights.set('Read', 200);
+        const config = boardConfig();
+        setup({ config });
+        expect(groupItem(config, 'Read').h).toBe(rowsFor(200));
+
+        heights.set('Read', 340);
+        act(() => observers.forEach((observer) => observer.callback([])));
+        expect(groupItem(config, 'Read').h).toBe(rowsFor(340));
+
+        heights.set('Read', 90);
+        act(() => observers.forEach((observer) => observer.callback([])));
+        expect(groupItem(config, 'Read').h).toBe(rowsFor(90));
+      });
+
+      it('has room for the gap beneath it in the rows it takes', () => {
+        expect(rowsFor(200)).toBe(Math.ceil((200 + GRID_GAP) / ROW_PX));
+        expect(rowsFor(0)).toBeGreaterThanOrEqual(1);
+      });
+
+      it('is the height it was given, and is not measured, once it has one', () => {
+        const config = arrangedConfig();
+        heights.set('Read', 999);
+        setup({ config });
+
+        expect(groupItem(config, 'Read').h).toBe(60);
+        expect(cellOf('Read')).toHaveAttribute('data-fit', 'fixed');
+        expect(cellOf('Code')).toHaveAttribute('data-fit', 'auto');
+        // Only the cards that fit their contents are watched.
+        const watched = observers.flatMap((observer) => observer.observe.mock.calls.flat());
+        expect(watched).not.toContain(cellOf('Read').querySelector('.cell-fit'));
+        expect(watched).toContain(cellOf('Code').querySelector('.cell-fit'));
+      });
+
+      it('goes back to its contents’ height when the height is taken away', () => {
+        const config = arrangedConfig();
+        heights.set('Read', 150);
+        const { rerender } = setupWith(config);
+        expect(groupItem(config, 'Read').h).toBe(60);
+
+        const fitted: PageConfig = {
+          ...config,
+          groups: config.groups.map((item) =>
+            item.name === 'Read' ? { ...item, height: undefined } : item
+          )
+        };
+        rerender(fitted);
+
+        expect(groupItem(fitted, 'Read').h).toBe(rowsFor(150));
+        expect(cellOf('Read')).toHaveAttribute('data-fit', 'auto');
+      });
+
+      it('is just its header when folded, whatever height it was given, and cannot be resized', () => {
+        const config = arrangedConfig();
+        heights.set('Folded', 60);
+        setup({ config });
+
+        expect(groupItem(config, 'Folded').h).toBe(rowsFor(60));
+        expect(groupItem(config, 'Folded').isResizable).toBe(false);
+        expect(cellOf('Folded')).toHaveAttribute('data-fit', 'auto');
+        expect(groupItem(config, 'Read').isResizable).toBeUndefined();
+      });
+
+      it('stops watching a card that goes', () => {
+        const config = boardConfig();
+        const { unmount } = setupWith(config);
+        const watching = observers.length;
+
+        unmount();
+
+        expect(watching).toBeGreaterThan(0);
+        expect(observers.every((observer) => observer.disconnect.mock.calls.length > 0)).toBe(true);
+      });
     });
 
-    it('resizes a group by dragging its right edge, and shows the guides while it does', () => {
-      const config = boardConfig();
-      const { apply } = setup({ config, editing: true });
-      const grip = screen.getByRole('separator', { name: 'Resize Code' });
-      const width = config.groups[0]!.width;
+    describe('resizing', () => {
+      it('is offered only while editing, from the right edge, the bottom edge and the corner', () => {
+        const { unmount } = setupWith(boardConfig());
+        expect(gridProps().resizeConfig?.enabled).toBe(false);
+        unmount();
 
-      fireEvent.pointerDown(grip, { button: 0, clientX: 500, pointerId: 1 });
-      expect(document.querySelector('.board')).toHaveAttribute('data-guides', 'on');
+        setup({ editing: true });
+        expect(gridProps().resizeConfig).toMatchObject({
+          enabled: true,
+          handles: ['se', 'e', 's']
+        });
+      });
 
-      fireEvent(grip, new MouseEvent('pointermove', { clientX: 500 + 101 * 2 }));
-      expect(apply).toHaveBeenCalledTimes(1);
-      expect(appliedTo(apply, config).groups[0]!.width).toBe(width + 2);
+      it('has handles that say how to use them', () => {
+        setup({ editing: true });
 
-      fireEvent(grip, new Event('pointerup'));
-      expect(document.querySelector('.board')).not.toHaveAttribute('data-guides');
+        const handle = document.querySelector<HTMLElement>('.react-resizable-handle-se')!;
+        expect(handle).toHaveAttribute('title', expect.stringContaining('double-click'));
+        expect(document.querySelector('.react-resizable-handle-e')).not.toBeNull();
+        expect(document.querySelector('.react-resizable-handle-s')).not.toBeNull();
+      });
+
+      it('moves the height in steps from the bottom edge or the corner, and not from the side', () => {
+        setup();
+        const steps = gridProps().constraints!.find((item) => item.name === 'height-steps')!;
+        const item = { i: 'group:x', x: 0, y: 0, w: 4, h: 50 };
+        const context = {} as never;
+
+        expect(steps.constrainSize!(item, 4, 40, 's', context)).toEqual({ w: 4, h: 42 });
+        expect(steps.constrainSize!(item, 5, 44, 'se', context)).toEqual({ w: 5, h: 42 });
+        expect(steps.constrainSize!(item, 6, 51, 'e', context)).toEqual({ w: 6, h: 51 });
+        expect(42 % HEIGHT_STEP).toBe(0);
+      });
+
+      it('shows the guides while a card is resized, and gives it the height it is pulled to', () => {
+        const config = boardConfig();
+        const { apply } = setup({ config, editing: true });
+        const before = groupItem(config, 'Code');
+        const key = before.i;
+
+        act(() =>
+          gridProps().onResizeStart!(gridProps().layout!, before, before, null, {} as Event, null)
+        );
+        expect(document.querySelector('.board')).toHaveAttribute('data-guides', 'on');
+        // It holds its height while it is pulled, rather than following its contents.
+        expect(cellOf('Code')).toHaveAttribute('data-fit', 'fixed');
+
+        const after = { ...before, h: 60, w: 6 };
+        act(() =>
+          gridProps().onResizeStop!(moved(key, after), before, after, null, {} as Event, null)
+        );
+
+        expect(document.querySelector('.board')).not.toHaveAttribute('data-guides');
+        const next = appliedTo(apply, config);
+        expect(next.groups[0]).toMatchObject({ width: 6, height: 60 });
+      });
+
+      it('gives a card a height of its own only when it was pulled taller or shorter', () => {
+        const config = boardConfig();
+        const { apply } = setup({ config, editing: true });
+        const before = groupItem(config, 'Code');
+        const after = { ...before, w: 6 };
+
+        act(() =>
+          gridProps().onResizeStop!(moved(before.i, after), before, after, null, {} as Event, null)
+        );
+
+        const next = appliedTo(apply, config);
+        expect(next.groups[0]!.width).toBe(6);
+        expect(next.groups[0]!.height).toBeUndefined();
+      });
+
+      it('carries on when the grid gives no card, which it only does for a drop from outside', () => {
+        const { apply } = setup({ editing: true });
+
+        act(() => gridProps().onResizeStart!([], null, null, null, {} as Event, null));
+        act(() => gridProps().onResizeStop!([], null, null, null, {} as Event, null));
+
+        expect(document.querySelector('.board')).not.toHaveAttribute('data-guides');
+        expect(apply).toHaveBeenCalledTimes(1);
+      });
+
+      it('sends a card back to its contents’ height when its handle is double-clicked', () => {
+        const config = arrangedConfig();
+        const { apply } = setup({ config, editing: true });
+        const readHeight = (page: PageConfig) => page.groups.find((g) => g.name === 'Read')!.height;
+
+        fireEvent.doubleClick(
+          cellOf('Read').querySelector('.react-resizable-handle-s') as HTMLElement
+        );
+
+        expect(readHeight(config)).toBe(60);
+        expect(readHeight(appliedTo(apply, config))).toBeUndefined();
+      });
+
+      it('leaves a card alone when anything else on it is double-clicked', () => {
+        const config = arrangedConfig();
+        const { apply } = setup({ config, editing: true });
+
+        fireEvent.doubleClick(within(group('Read')).getByRole('heading', { name: 'Read' }));
+
+        expect(apply).not.toHaveBeenCalled();
+      });
+
+      it('does the same for a widget', () => {
+        const config = pageOf(
+          sanitizeConfig({ widgets: [{ type: 'calendar', width: 3, height: 90 }] }),
+          0
+        );
+        const { apply } = setup({ config, editing: true });
+
+        fireEvent.doubleClick(
+          document.querySelector('.cell[data-kind="widget"] .react-resizable-handle-se')!
+        );
+
+        expect(config.widgets[0]!.height).toBe(90);
+        expect(appliedTo(apply, config).widgets[0]!.height).toBeUndefined();
+      });
     });
 
-    it('resizes a widget the same way', () => {
-      const config = boardConfig();
-      const { apply } = setup({ config, editing: true });
-      const grip = screen
-        .getAllByRole('separator')
-        .find(
-          (node) =>
-            /Resize/.test(node.getAttribute('aria-label') ?? '') &&
-            !/Code|Read|Empty|Folded/.test(node.getAttribute('aria-label') ?? '')
-        )!;
+    describe('moving a card', () => {
+      it('shows the guides, and says what is carried, while a group or widget is held', () => {
+        const config = boardConfig();
+        setup({ config });
+        const board = document.querySelector('.board')!;
 
-      fireEvent.pointerDown(grip, { button: 0, clientX: 500, pointerId: 1 });
-      fireEvent(grip, new MouseEvent('pointermove', { clientX: 500 + 101 * 3 }));
+        act(() =>
+          gridProps().onDragStart!(
+            gridProps().layout!,
+            groupItem(config, 'Code'),
+            null,
+            null,
+            {} as Event,
+            null
+          )
+        );
+        expect(board).toHaveAttribute('data-dragging', 'group');
+        expect(board).toHaveAttribute('data-guides', 'on');
 
-      expect(appliedTo(apply, config).widgets[0]!.width).toBe(config.widgets[0]!.width + 3);
+        act(() =>
+          gridProps().onDragStop!(gridProps().layout!, null, null, null, {} as Event, null)
+        );
+        expect(board).not.toHaveAttribute('data-dragging');
+        expect(board).not.toHaveAttribute('data-guides');
+
+        act(() =>
+          gridProps().onDragStart!(
+            gridProps().layout!,
+            widgetItem(config, 0),
+            null,
+            null,
+            {} as Event,
+            null
+          )
+        );
+        expect(board).toHaveAttribute('data-dragging', 'widget');
+      });
+
+      it('writes down where it was put, and the order the cards now read in', () => {
+        const config = boardConfig();
+        const { apply } = setup({ config });
+        const read = groupItem(config, 'Read');
+
+        act(() =>
+          gridProps().onDragStop!(
+            moved(read.i, { x: 0, y: 0 }),
+            read,
+            { ...read, x: 0, y: 0 },
+            null,
+            {} as Event,
+            null
+          )
+        );
+
+        const next = appliedTo(apply, config);
+        expect(next.groups.find((item) => item.name === 'Read')).toMatchObject({
+          column: 0,
+          row: 0
+        });
+        expect(next.groups[0]!.name).toBe('Read');
+      });
+
+      it('changes nothing when the card ends up where it began', () => {
+        const config = boardConfig();
+        const { apply } = setup({ config });
+        const placed = gridProps().layout!;
+
+        act(() => gridProps().onDragStop!(placed, null, null, null, {} as Event, null));
+        const first = appliedTo(apply, config);
+        // Applying the same layout to the page it produced is a no-op.
+        const again = (apply.mock.calls[0]![0] as (page: PageConfig) => PageConfig)(first);
+
+        expect(again).toBe(first);
+      });
+
+      it('does not take the click that ends it for a click on whatever it ended over', () => {
+        vi.useFakeTimers();
+        const config = boardConfig();
+        const { actions } = setup({ config, editing: true });
+        act(() =>
+          gridProps().onDragStop!(gridProps().layout!, null, null, null, {} as Event, null)
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: /New group/ }));
+        expect(actions.onAddGroup).not.toHaveBeenCalled();
+
+        act(() => {
+          vi.advanceTimersByTime(61);
+        });
+        fireEvent.click(screen.getByRole('button', { name: /New group/ }));
+        expect(actions.onAddGroup).toHaveBeenCalledTimes(1);
+        vi.useRealTimers();
+      });
+    });
+
+    describe('near the top or bottom of the window', () => {
+      let frames: Map<number, FrameRequestCallback>;
+      let scrollBy: ReturnType<typeof vi.fn>;
+
+      const tick = (): void => {
+        const due = [...frames.values()];
+        frames.clear();
+        act(() => {
+          due.forEach((frame) => frame(0));
+        });
+      };
+
+      beforeEach(() => {
+        frames = new Map();
+        let last = 0;
+        scrollBy = vi.fn();
+        vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+          last += 1;
+          frames.set(last, callback);
+          return last;
+        });
+        // A frame that has been cancelled does not run.
+        vi.spyOn(window, 'cancelAnimationFrame').mockImplementation((id) => {
+          frames.delete(id);
+        });
+        window.scrollBy = scrollBy as never;
+      });
+
+      afterEach(() => {
+        vi.restoreAllMocks();
+      });
+
+      it('scrolls the page while a card is carried to the edge, and stops once it is put down', () => {
+        const config = boardConfig();
+        setup({ config });
+
+        act(() =>
+          gridProps().onDragStart!(
+            gridProps().layout!,
+            groupItem(config, 'Code'),
+            null,
+            null,
+            {} as Event,
+            null
+          )
+        );
+        window.dispatchEvent(new MouseEvent('mousemove', { clientX: 200, clientY: 4 }));
+        tick();
+        expect(scrollBy).toHaveBeenCalledTimes(1);
+
+        act(() =>
+          gridProps().onDragStop!(gridProps().layout!, null, null, null, {} as Event, null)
+        );
+        window.dispatchEvent(new MouseEvent('mousemove', { clientX: 200, clientY: 4 }));
+        tick();
+        expect(scrollBy).toHaveBeenCalledTimes(1);
+      });
+
+      it('does the same while a card is resized', () => {
+        const config = boardConfig();
+        setup({ config, editing: true });
+        const item = groupItem(config, 'Code');
+
+        act(() =>
+          gridProps().onResizeStart!(gridProps().layout!, item, item, null, {} as Event, null)
+        );
+        window.dispatchEvent(
+          new MouseEvent('mousemove', { clientX: 200, clientY: window.innerHeight - 4 })
+        );
+        tick();
+        expect(scrollBy).toHaveBeenCalledTimes(1);
+
+        act(() =>
+          gridProps().onResizeStop!(gridProps().layout!, item, item, null, {} as Event, null)
+        );
+        tick();
+        expect(scrollBy).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe('the order the cards read in', () => {
+      it('is top to bottom and left to right, whichever are widgets and whichever groups', () => {
+        const config = pageOf(
+          sanitizeConfig({
+            widgets: [{ type: 'calendar', width: 3, column: 0, row: 40 }],
+            groups: [
+              { name: 'Second', column: 4, row: 0, bookmarks: [] },
+              { name: 'First', column: 0, row: 0, bookmarks: [] }
+            ]
+          }),
+          0
+        );
+        setup({ config });
+
+        expect(
+          [...document.querySelectorAll('.cell')].map(
+            (cell) => cell.querySelector('.grp, .wdg')!.getAttribute('aria-label') ?? cell.className
+          )
+        ).toEqual(['First', 'Second', 'Calendar']);
+      });
+    });
+
+    describe('settling in', () => {
+      it('slides cards into place only once the first frame has passed', () => {
+        const frames: FrameRequestCallback[] = [];
+        vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+          frames.push(callback);
+          return frames.length;
+        });
+        vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
+        setup();
+        const grid = document.querySelector('.dash-grid')!;
+        expect(grid).not.toHaveAttribute('data-settled');
+
+        act(() => frames.forEach((frame) => frame(0)));
+
+        expect(grid).toHaveAttribute('data-settled');
+        vi.restoreAllMocks();
+      });
+
+      it('gives up waiting for that frame when it goes', () => {
+        const cancel = vi.spyOn(window, 'cancelAnimationFrame');
+        const { unmount } = setupWith(boardConfig());
+
+        unmount();
+
+        expect(cancel).toHaveBeenCalled();
+        vi.restoreAllMocks();
+      });
+    });
+
+    describe('on a narrow screen', () => {
+      const widthIs = (pixels: number): void => {
+        Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+          configurable: true,
+          get: () => pixels
+        });
+      };
+
+      afterEach(() => {
+        delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
+      });
+
+      it('lays a board as wide as a grid needs out as a grid', () => {
+        widthIs(FLOW_BELOW);
+        setup({ editing: true });
+
+        expect(document.querySelector('.dash-layout')).not.toBeNull();
+        expect(document.querySelector('.dash-flow')).toBeNull();
+        expect(document.querySelectorAll('.grid-guides span')).toHaveLength(12);
+        expect(gridProps().width).toBe(FLOW_BELOW);
+      });
+
+      it('stacks the cards instead, in the order they read, with no handles', () => {
+        widthIs(FLOW_BELOW - 1);
+        const config = pageOf(
+          sanitizeConfig({
+            widgets: [{ type: 'calendar', width: 3 }],
+            groups: [
+              { name: 'Wide', width: 8, bookmarks: [] },
+              { name: 'Narrow', width: 4, bookmarks: [] }
+            ]
+          }),
+          0
+        );
+        setup({ config, editing: true });
+
+        expect(document.querySelector('.dash-layout')).toBeNull();
+        expect(document.querySelector('.grid-guides')).toBeNull();
+        expect(document.querySelector('.react-resizable-handle')).toBeNull();
+        const cells = [...document.querySelectorAll('.dash-flow > .cell--flow')];
+        expect(cells).toHaveLength(3);
+        // A wide card spans every column; a narrow one takes its place in one.
+        expect(group('Wide').closest('.cell')).toHaveAttribute('data-wide');
+        expect(group('Narrow').closest('.cell')).not.toHaveAttribute('data-wide');
+        expect(screen.getByRole('button', { name: /New group/ })).toBeInTheDocument();
+      });
+
+      it('follows the board as it is resized, between grid and stack', () => {
+        widthIs(1200);
+        setup();
+        expect(document.querySelector('.dash-layout')).not.toBeNull();
+
+        widthIs(500);
+        act(() => {
+          window.dispatchEvent(new Event('resize'));
+        });
+
+        expect(document.querySelector('.dash-flow')).not.toBeNull();
+        expect(document.querySelector('.dash-layout')).toBeNull();
+      });
+
+      it('is watched for size with a ResizeObserver when there is one, and until it goes', () => {
+        const disconnect = vi.fn();
+        const callbacks: ((entries: unknown[]) => void)[] = [];
+        vi.stubGlobal(
+          'ResizeObserver',
+          class {
+            observe = vi.fn();
+            disconnect = disconnect;
+
+            constructor(callback: (entries: unknown[]) => void) {
+              callbacks.push(callback);
+            }
+          }
+        );
+        widthIs(1200);
+        const { unmount } = setupWith(boardConfig());
+
+        widthIs(400);
+        act(() => callbacks.forEach((callback) => callback([])));
+        expect(document.querySelector('.dash-flow')).not.toBeNull();
+
+        unmount();
+        expect(disconnect).toHaveBeenCalled();
+        vi.unstubAllGlobals();
+      });
     });
   });
 });
