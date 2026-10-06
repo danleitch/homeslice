@@ -35,6 +35,15 @@ describe('sampleWidget', () => {
     expect(sampleWidget('weather')).toMatchObject({ location: 'Cape Town' });
   });
 
+  it('has tasks, some done, and a note, for Notes to show', () => {
+    const notes = sampleWidget('notes') as { items: { done: boolean }[]; text: string };
+
+    expect(notes.items.length).toBeGreaterThan(3);
+    expect(notes.items.some((item) => item.done)).toBe(true);
+    expect(notes.items.some((item) => !item.done)).toBe(true);
+    expect(notes.text).toContain('\n');
+  });
+
   it('has calendars for the agenda, and a token for My PRs, so neither asks for one', () => {
     expect(sampleWidget('agenda')).toMatchObject({
       calendars: [{ name: 'Personal' }, { name: 'Work' }]

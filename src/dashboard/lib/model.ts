@@ -9,6 +9,7 @@
 import { readCalendarSources, type AgendaWidget } from './agenda';
 import { emptyExtensions, sanitizeExtensions, type ExtensionsConfig } from './extensions-config';
 import { FOCUS_LIMITS, type FocusWidget } from './focus';
+import { NOTES_MODES, readItems, readNote, type NotesWidget } from './notes';
 import { BENCH_SURFACES, type BenchmarkWidget } from './benchlm';
 import { TRENDING_SINCE, languageSlug, type GithubTrendingWidget } from './github';
 import { PULLS_SHOWS, readToken, type PullsWidget } from './pulls';
@@ -20,6 +21,7 @@ export type { AgendaWidget, CalendarSource } from './agenda';
 export type { AppExtension, ExtensionsConfig } from './extensions-config';
 export type { BenchmarkWidget, BenchSurface } from './benchlm';
 export type { FocusWidget } from './focus';
+export type { NoteItem, NotesMode, NotesWidget } from './notes';
 export type { PullsShow, PullsWidget } from './pulls';
 export type { GithubTrendingWidget, TrendingSince } from './github';
 export type { PopularMoviesWidget, PopularTvWidget, TrendingWindow } from './tmdb';
@@ -151,6 +153,7 @@ export type Widget = Placement &
     | BenchmarkWidget
     | PopularTvWidget
     | PopularMoviesWidget
+    | NotesWidget
   );
 export type WidgetType = Widget['type'];
 
@@ -166,7 +169,8 @@ export const WIDGET_TYPES: readonly WidgetType[] = [
   'prs',
   'benchlm',
   'tv',
-  'movies'
+  'movies',
+  'notes'
 ];
 
 export const WIDGET_LABELS: Readonly<Record<WidgetType, string>> = {
@@ -181,7 +185,8 @@ export const WIDGET_LABELS: Readonly<Record<WidgetType, string>> = {
   prs: 'My PRs',
   benchlm: 'AI Leaderboard',
   tv: 'Popular TV',
-  movies: 'Popular Movies'
+  movies: 'Popular Movies',
+  notes: 'Notes'
 };
 
 export const WIDGET_BLURBS: Readonly<Record<WidgetType, string>> = {
@@ -196,7 +201,8 @@ export const WIDGET_BLURBS: Readonly<Record<WidgetType, string>> = {
   prs: 'Reviews waiting on you, and your open PRs with their checks',
   benchlm: 'The strongest AI models right now, from BenchLM',
   tv: 'What everyone is watching, from TMDB',
-  movies: 'The films everyone is watching, from TMDB'
+  movies: 'The films everyone is watching, from TMDB',
+  notes: 'A to-do list to tick off, or a note to jot things in'
 };
 
 export type SearchEngine = 'google' | 'duckduckgo' | 'bing' | 'brave' | 'kagi' | 'startpage';
@@ -663,6 +669,15 @@ const sanitizeWidgetSettings = (value: unknown): Widget | null => {
         window: oneOf(value.window, TRENDING_WINDOWS, 'week'),
         count: Math.round(clampNumber(value.count, 3, 12, 5))
       };
+    case 'notes':
+      return {
+        id,
+        type: 'notes',
+        width,
+        mode: oneOf(value.mode, NOTES_MODES, 'list'),
+        items: readItems(value.items),
+        text: readNote(value.text)
+      };
     default:
       return null;
   }
@@ -770,6 +785,8 @@ export const createWidget = (type: WidgetType): Widget => {
     case 'tv':
     case 'movies':
       return { id, type, width: 4, window: 'week', count: 5 };
+    case 'notes':
+      return { id, type, width: 4, mode: 'list', items: [], text: '' };
   }
 };
 

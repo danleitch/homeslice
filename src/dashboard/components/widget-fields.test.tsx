@@ -37,6 +37,31 @@ describe('WidgetFields', () => {
     });
   });
 
+  describe('the Notes’ style', () => {
+    it('offers a to-do list or a note, with the one it has chosen', () => {
+      show({ ...createWidget('notes'), mode: 'text' } as Widget);
+
+      expect(screen.getByRole('radio', { name: 'Note' })).toBeChecked();
+      expect(screen.getByRole('radio', { name: 'To-do list' })).not.toBeChecked();
+    });
+
+    it('changes the style, and says that what is written is kept with the board', async () => {
+      const patch = vi.fn();
+      render(<WidgetFields draft={createWidget('notes')} patch={patch} error="" />);
+
+      await userEvent.click(screen.getByRole('radio', { name: 'Note' }));
+
+      expect(patch).toHaveBeenCalledExactlyOnceWith({ mode: 'text' });
+      expect(screen.getByText(/kept with the board/)).toBeInTheDocument();
+    });
+
+    it('is there in the gallery too', () => {
+      show(createWidget('notes'), 'gallery');
+
+      expect(screen.getByRole('radiogroup', { name: 'Style' })).toBeInTheDocument();
+    });
+  });
+
   describe('in the dialog, which has every setting', () => {
     it('asks for My PRs’ token', () => {
       show(createWidget('prs'));

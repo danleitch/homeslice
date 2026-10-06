@@ -230,6 +230,48 @@ describe('sanitizeConfig', () => {
     expect(createWidget('focus')).toMatchObject({ type: 'focus', focus: 25, rest: 5, sound: true });
   });
 
+  describe('a Notes widget', () => {
+    const notesOf = (widget: unknown) =>
+      sanitizeConfig({ widgets: [{ type: 'notes', ...(widget as object) }] }).pages[0]
+        .widgets[0] as {
+        mode: string;
+        items: { text: string; done: boolean }[];
+        text: string;
+        width: number;
+      };
+
+    it('starts as an empty list', () => {
+      expect(createWidget('notes')).toMatchObject({
+        type: 'notes',
+        mode: 'list',
+        items: [],
+        text: ''
+      });
+    });
+
+    it('is read from what was saved, tasks and note both', () => {
+      expect(
+        notesOf({ mode: 'text', items: [{ text: 'a', done: true }, 'b'], text: 'jot', width: 6 })
+      ).toMatchObject({
+        mode: 'text',
+        items: [
+          { text: 'a', done: true },
+          { text: 'b', done: false }
+        ],
+        text: 'jot',
+        width: 6
+      });
+    });
+
+    it('is a list, with nothing in it, when nothing was said', () => {
+      expect(notesOf({})).toMatchObject({ mode: 'list', items: [], text: '' });
+    });
+
+    it('is a list for a style it has never heard of', () => {
+      expect(notesOf({ mode: 'diary' }).mode).toBe('list');
+    });
+  });
+
   describe('a token’s contract address among the market symbols', () => {
     const MINT = 'DemoMint1111111111111111111111111111111pump';
     const EVM = '0xAbAbAbAbAbAbAbAbAbAbAbAbAbAbAbAbAbAbAbAb';

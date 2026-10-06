@@ -367,6 +367,66 @@ describe('Dashboard flows', () => {
       expect(asked.filter((url) => url.startsWith('/api/calendar'))).toEqual([]);
     });
 
+    describe('Notes', () => {
+      const stored = (): string => window.localStorage.getItem(DASHBOARD_STORAGE_KEY) ?? '';
+
+      it('is added straight away, without a settings dialog, and takes a task that is saved with the board', async () => {
+        render(<App />);
+        key({ key: 'e' });
+
+        await userEvent.click(screen.getByRole('button', { name: /Widget/ }));
+        await userEvent.click(screen.getByRole('button', { name: 'Add Notes' }));
+
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        const notes = screen.getByRole('region', { name: 'Notes' });
+
+        await userEvent.type(within(notes).getByLabelText('Add a task'), 'Book the dentist{Enter}');
+
+        await waitFor(() => expect(stored()).toContain('Book the dentist'));
+        expect(within(notes).getByRole('checkbox', { name: 'Book the dentist' })).not.toBeChecked();
+      });
+
+      it('saves a task ticked off, with no toast to undo it, and keeps it across a reload', async () => {
+        seed({
+          ...board,
+          widgets: [
+            {
+              type: 'notes',
+              items: [{ text: 'Water the plants', done: false }, 'Send the invoice']
+            }
+          ]
+        });
+        const { unmount } = render(<App />);
+
+        await userEvent.click(screen.getByRole('checkbox', { name: 'Water the plants' }));
+
+        await waitFor(() => expect(stored()).toMatch(/done: true/));
+        expect(document.querySelector('.toast')).toBeNull();
+        unmount();
+
+        render(<App />);
+        expect(screen.getByRole('checkbox', { name: 'Water the plants' })).toBeChecked();
+        expect(screen.getByRole('checkbox', { name: 'Send the invoice' })).not.toBeChecked();
+      });
+
+      it('keeps a note typed in, a moment after the typing stops', async () => {
+        seed({ ...board, widgets: [{ type: 'notes', mode: 'text' }] });
+        render(<App />);
+
+        await userEvent.type(screen.getByRole('textbox', { name: 'Note' }), 'Ring the vet');
+
+        await waitFor(() => expect(stored()).toContain('Ring the vet'), { timeout: 3_000 });
+      });
+
+      it('is settled in the YAML export with its tasks, as a list a person could write', () => {
+        seed({ ...board, widgets: [{ type: 'notes', items: ['a', { text: 'b', done: true }] }] });
+
+        expect(stored()).toMatch(/type: notes/);
+        expect(stored()).toMatch(/text: a/);
+        expect(stored()).toMatch(/done: true/);
+      });
+    });
+
     it('removes a widget, and can take it back', async () => {
       seed({ ...board, widgets: [{ type: 'calendar' }] });
       render(<App />);

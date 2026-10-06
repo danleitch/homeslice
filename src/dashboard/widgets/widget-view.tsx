@@ -6,6 +6,7 @@ import { FocusWidget } from './focus-widget';
 import { GithubTrendingWidget } from './github-widget';
 import { HackerNewsWidget } from './hackernews-widget';
 import { MarketsWidget } from './markets-widget';
+import { NotesWidget } from './notes-widget';
 import { CalendarWidget, ClockWidget } from './time-widgets';
 import { PopularMoviesWidget, PopularTvWidget } from './tv-widget';
 import { PullsWidget } from './pulls-widget';
@@ -19,12 +20,15 @@ export const WidgetView = ({
   widget,
   clock,
   newTab,
-  demo = false
+  demo = false,
+  onChange
 }: {
   widget: Widget;
   clock: HourFormat;
   newTab: boolean;
   demo?: boolean;
+  /** Keeps a change a widget makes to itself, like a task ticked off. */
+  onChange?: (widget: Widget) => void;
 }): JSX.Element => {
   switch (widget.type) {
     case 'weather':
@@ -51,5 +55,7 @@ export const WidgetView = ({
       return <PopularTvWidget widget={widget} newTab={newTab} />;
     case 'movies':
       return <PopularMoviesWidget widget={widget} newTab={newTab} />;
+    case 'notes':
+      return <NotesWidget widget={widget} onChange={onChange} />;
   }
 };

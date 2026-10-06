@@ -649,6 +649,18 @@ export const sampleWidget = (type: WidgetType): Widget => {
       return { ...widget, calendars: SAMPLE_CALENDARS };
     case 'prs':
       return { ...widget, token: 'sample' };
+    case 'notes':
+      return {
+        ...widget,
+        items: [
+          { text: 'Reply to Priya about the design review', done: false },
+          { text: 'Book the dentist', done: true },
+          { text: 'Pick up the parcel', done: false },
+          { text: 'Send the invoice', done: true },
+          { text: 'Water the plants', done: false }
+        ],
+        text: 'Ideas for the weekend\n- a widget for the tides\n- try the new ramen place\n- finally fix the shelf'
+      };
     default:
       return widget;
   }

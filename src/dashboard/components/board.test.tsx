@@ -98,6 +98,7 @@ const actionsOf = (): Actions => ({
   onAddGroup: vi.fn<BoardActions['onAddGroup']>(),
   onAddWidget: vi.fn<BoardActions['onAddWidget']>(),
   onConfigureWidget: vi.fn<BoardActions['onConfigureWidget']>(),
+  onUpdateWidget: vi.fn<BoardActions['onUpdateWidget']>(),
   onRemoveWidget: vi.fn<BoardActions['onRemoveWidget']>(),
   onDropLink: vi.fn<BoardActions['onDropLink']>()
 });

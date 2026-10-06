@@ -601,6 +601,25 @@ export const WidgetFields = ({
       </>
     )}
 
+    {draft.type === 'notes' && (
+      <div className="field">
+        <span className="field-label">Style</span>
+        <Segmented
+          label="Style"
+          value={draft.mode}
+          options={[
+            { value: 'list', label: 'To-do list' },
+            { value: 'text', label: 'Note' }
+          ]}
+          onChange={(mode) => patch({ mode })}
+        />
+        <span className="field-hint">
+          What you write is kept with the board, in this browser and in the YAML export, so keep
+          both private. Changing the style keeps both the list and the note.
+        </span>
+      </div>
+    )}
+
     {(draft.type === 'calendar' || (draft.type === 'agenda' && draft.month)) && (
       <div className="field">
         <span className="field-label">Weeks start on</span>

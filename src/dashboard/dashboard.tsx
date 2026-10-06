@@ -287,6 +287,13 @@ export const Dashboard = ({
     [apply]
   );
 
+  // A widget that keeps something in itself (Notes), written through like any other edit but with
+  // no toast to undo it: it happens as often as somebody types.
+  const updateWidgetSelf = useCallback(
+    (widget: Widget) => apply((current) => updateWidget(current, widget.id, widget)),
+    [apply]
+  );
+
   const removeWidget = useCallback(
     (widget: Widget): void => {
       apply((current) => deleteWidget(current, widget.id), `Removed ${WIDGET_LABELS[widget.type]}`);
@@ -845,6 +852,7 @@ export const Dashboard = ({
         onAddWidget={() => setPickerOpen(true)}
         onConfigureWidget={setWidgetDialog}
         onRemoveWidget={removeWidget}
+        onUpdateWidget={updateWidgetSelf}
         onDropLink={(groupId, url, title) => {
           let addedId = '';
           apply((current) => {
@@ -1000,9 +1008,16 @@ export const Dashboard = ({
               // Most widgets want a word about what to show before they are useful.
               if (
                 created.widget &&
-                !['calendar', 'agenda', 'hackernews', 'github', 'benchlm', 'tv', 'movies'].includes(
-                  type
-                )
+                ![
+                  'calendar',
+                  'agenda',
+                  'hackernews',
+                  'github',
+                  'benchlm',
+                  'tv',
+                  'movies',
+                  'notes'
+                ].includes(type)
               ) {
                 setWidgetDialog(created.widget);
               }

@@ -115,6 +115,8 @@ export type BoardActions = {
   onAddWidget: () => void;
   onConfigureWidget: (widget: Widget) => void;
   onRemoveWidget: (widget: Widget) => void;
+  /** A widget changed itself, like a task ticked off in Notes. */
+  onUpdateWidget: (widget: Widget) => void;
   /** A link from another tab was dropped on a group. */
   onDropLink: (groupId: string, url: string, title: string) => void;
 };
@@ -581,7 +583,12 @@ export const Board = ({
         onConfigure={actions.onConfigureWidget}
         onRemove={actions.onRemoveWidget}
       >
-        <WidgetView widget={widget} clock={config.clock} newTab={config.newTab} />
+        <WidgetView
+          widget={widget}
+          clock={config.clock}
+          newTab={config.newTab}
+          onChange={actions.onUpdateWidget}
+        />
       </WidgetFrame>
     );
   };

@@ -1609,6 +1609,128 @@ body {
   flex-shrink: 0;
 }
 
+/* Notes. */
+.nt {
+  display: grid;
+  gap: 8px;
+}
+
+.nt-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nt-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 34px;
+  padding: 7px 2px;
+}
+
+.nt-item + .nt-item {
+  border-top: 1px solid var(--line);
+}
+
+.nt-check {
+  flex: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+  padding: 0;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.nt-check:hover {
+  border-color: var(--accent);
+}
+
+.nt-check:checked {
+  border-color: var(--accent-strong);
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-7'/%3E%3C/svg%3E")
+      center / 12px no-repeat,
+    var(--accent-strong);
+}
+
+.nt-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  cursor: pointer;
+}
+
+.nt-item--done .nt-text {
+  color: var(--ink-faint);
+  text-decoration: line-through;
+}
+
+.nt-tools {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.nt-item:hover .nt-tools,
+.nt-item:focus-within .nt-tools {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .nt-tools {
+    opacity: 1;
+  }
+}
+
+.nt-edit,
+.nt-add input {
+  padding: 0.42rem 0.6rem;
+  font-size: 0.88rem;
+}
+
+.nt-add {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nt-empty {
+  margin: 4px 0 2px;
+  color: var(--ink-faint);
+  font-size: 0.85rem;
+}
+
+.nt-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 0.76rem;
+}
+
+.nt-note {
+  width: 100%;
+  min-height: 150px;
+  padding: 0.6rem 0.7rem;
+  resize: vertical;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
 /* Markets. */
 .mkt-list,
 .hn-list,
