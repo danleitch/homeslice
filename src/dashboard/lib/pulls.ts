@@ -221,10 +221,12 @@ const WEIGHT: Readonly<Record<Checks, number>> = { failing: 0, pending: 1, none:
 /** The pull requests the token's owner has to deal with, failing ones first among their own. */
 export const fetchPulls = async (token: string, signal: AbortSignal): Promise<PullsData> => {
   const who = object(object(await ask(token, WHO, {}, signal)).viewer);
-  const login = text(who.login, 60);
+  // One more than the longest login that is accepted, so one that is too long is refused, not cut.
+  const login = text(who.login, 61);
 
-  // A login is letters, digits and hyphens; it goes into a search, so nothing else may.
-  if (!/^[A-Za-z0-9-]{1,39}$/.test(login)) {
+  // A login is letters, digits and hyphens, plus the underscore in an Enterprise Managed User's
+  // name (handle_shortcode); it goes into a search, so nothing else may.
+  if (!/^[A-Za-z0-9_-]{1,60}$/.test(login)) {
     throw new Error('GitHub didn’t say whose token this is.');
   }
 
