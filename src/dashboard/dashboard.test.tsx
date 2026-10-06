@@ -595,8 +595,8 @@ describe('The side bar and extensions', () => {
     await user.click(screen.getByRole('button', { name: 'Edit the board' }));
     await user.click(screen.getByRole('button', { name: /Widget/ }));
     const picker = screen.getByRole('dialog', { name: 'Add a widget' });
-    expect(within(picker).queryByText('Markets')).not.toBeInTheDocument();
-    expect(within(picker).getByText('GitHub Trending')).toBeInTheDocument();
+    expect(within(picker).queryByRole('button', { name: 'Add Markets' })).not.toBeInTheDocument();
+    expect(within(picker).getByRole('button', { name: 'Add GitHub Trending' })).toBeInTheDocument();
   });
 
   it('shows what is trending on GitHub', async () => {

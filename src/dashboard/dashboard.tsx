@@ -45,7 +45,8 @@ import { PageDots } from './components/page-dots';
 import { StatusBar } from './components/status-bar';
 import { EditDock, EmptyBoard, TopBar } from './components/top-bar';
 import { ContextMenu, Toasts, type MenuItem } from './components/ui';
-import { WidgetDialog, WidgetPicker } from './components/widget-dialog';
+import { WidgetDialog } from './components/widget-dialog';
+import { WidgetPicker } from './components/widget-gallery';
 import { useDashboard, type ApplyToPage } from './hooks/use-dashboard';
 import { usePage } from './hooks/use-page';
 import { clearRemoteCache } from './hooks/use-remote';
@@ -985,6 +986,7 @@ export const Dashboard = ({
         {pickerOpen && (
           <WidgetPicker
             types={enabledWidgetTypes(extensions)}
+            clock={config.clock}
             onClose={() => setPickerOpen(false)}
             onPick={(type) => {
               setPickerOpen(false);

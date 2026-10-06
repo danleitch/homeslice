@@ -1,10 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 
 /**
  * Widget data, cached in local storage so a reload paints the last reading at
  * once and only goes to the network once it has gone stale.
  */
 const CACHE_PREFIX = 'dashboard-cache:';
+
+/**
+ * Inside this, a widget's readings come from the source rather than the network, and are never
+ * kept: the widget gallery shows the real widgets on sample data. A source answers `undefined`
+ * for a key it knows nothing of, and that reading is fetched as usual.
+ */
+export const SampleReadings = createContext<((key: string) => unknown) | null>(null);
 
 type Cached<T> = { at: number; data: T };
 
@@ -56,6 +63,8 @@ export type Remote<T> = {
   refresh: () => void;
 };
 
+const nothing = (): void => undefined;
+
 /**
  * Fetches `load` under `key`, at most every `ttlMs`, while the tab is visible.
  * A failed refresh keeps showing the last good reading alongside the error.
@@ -65,13 +74,28 @@ export const useRemote = <T>(
   ttlMs: number,
   load: (signal: AbortSignal) => Promise<T>
 ): Remote<T> => {
+  const sample = useContext(SampleReadings)?.(key) as T | undefined;
+  const live = useLiveRemote(key, ttlMs, load, sample === undefined);
+
+  return sample === undefined
+    ? live
+    : { data: sample, error: null, loading: false, fetchedAt: null, refresh: nothing };
+};
+
+/** `useRemote` proper; with `enabled` off it reads no cache and fetches nothing. */
+const useLiveRemote = <T>(
+  key: string,
+  ttlMs: number,
+  load: (signal: AbortSignal) => Promise<T>,
+  enabled: boolean
+): Remote<T> => {
   const [state, setState] = useState<{
     key: string;
     data: T | null;
     at: number | null;
     error: string | null;
   }>(() => {
-    const cached = readCache<T>(key);
+    const cached = enabled ? readCache<T>(key) : null;
     return { key, data: cached?.data ?? null, at: cached?.at ?? null, error: null };
   });
   const [loading, setLoading] = useState(false);
@@ -82,11 +106,15 @@ export const useRemote = <T>(
 
   // A new key is a different reading altogether; show its cache, not the old one's.
   if (state.key !== key) {
-    const cached = readCache<T>(key);
+    const cached = enabled ? readCache<T>(key) : null;
     setState({ key, data: cached?.data ?? null, at: cached?.at ?? null, error: null });
   }
 
   useEffect(() => {
+    if (!enabled) {
+      return undefined;
+    }
+
     const controller = new AbortController();
     let timer: number | undefined;
 
@@ -144,7 +172,7 @@ export const useRemote = <T>(
       window.clearTimeout(timer);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [key, ttlMs, nonce]);
+  }, [key, ttlMs, nonce, enabled]);
 
   const refresh = useCallback(() => {
     forced.current = true;

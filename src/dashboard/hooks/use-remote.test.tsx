@@ -1,6 +1,13 @@
 import { act, renderHook } from '@testing-library/react';
+import { createElement, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { clearRemoteCache, dropRemoteCache, fetchJson, useRemote } from './use-remote';
+import {
+  SampleReadings,
+  clearRemoteCache,
+  dropRemoteCache,
+  fetchJson,
+  useRemote
+} from './use-remote';
 
 const TTL = 60_000;
 const CACHE = 'dashboard-cache:';
@@ -438,5 +445,76 @@ describe('dropRemoteCache', () => {
 
     expect(() => dropRemoteCache('a')).not.toThrow();
     vi.restoreAllMocks();
+  });
+});
+
+describe('useRemote with sample readings', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ now: START });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const sampled =
+    (source: (key: string) => unknown) =>
+    ({ children }: { children: ReactNode }) =>
+      createElement(SampleReadings.Provider, { value: source }, children);
+
+  it('answers with the sample, at once, and fetches nothing', async () => {
+    const load = vi.fn().mockResolvedValue({ temp: 99 });
+    const { result } = renderHook(() => useRemote('weather:london', TTL, load), {
+      wrapper: sampled(() => ({ temp: 14 }))
+    });
+
+    expect(result.current).toMatchObject({ data: { temp: 14 }, error: null, loading: false });
+    await settle(TTL * 3);
+
+    expect(load).not.toHaveBeenCalled();
+    expect(result.current.data).toEqual({ temp: 14 });
+  });
+
+  it('shows the sample, not a real reading that is in the cache', async () => {
+    seedCache('weather:london', { temp: 99 }, 1_000);
+    const { result } = renderHook(() => useRemote('weather:london', TTL, vi.fn()), {
+      wrapper: sampled(() => ({ temp: 14 }))
+    });
+    await settle();
+
+    expect(result.current.data).toEqual({ temp: 14 });
+  });
+
+  it('never writes the cache, so a sample is not taken for a real reading later', async () => {
+    renderHook(() => useRemote('weather:london', TTL, vi.fn()), {
+      wrapper: sampled(() => ({ temp: 14 }))
+    });
+    await settle(TTL);
+
+    expect(cacheOf('weather:london')).toBeNull();
+  });
+
+  it('refreshes without going anywhere', async () => {
+    const load = vi.fn().mockResolvedValue(1);
+    const { result } = renderHook(() => useRemote('weather:london', TTL, load), {
+      wrapper: sampled(() => ({ temp: 14 }))
+    });
+
+    act(() => result.current.refresh());
+    await settle();
+
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it('fetches as usual a reading the source knows nothing of', async () => {
+    const load = vi.fn().mockResolvedValue({ temp: 7 });
+    const { result } = renderHook(() => useRemote('weather:london', TTL, load), {
+      wrapper: sampled(() => undefined)
+    });
+    await settle();
+
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(result.current.data).toEqual({ temp: 7 });
+    expect(cacheOf('weather:london')?.data).toEqual({ temp: 7 });
   });
 });
