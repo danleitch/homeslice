@@ -38,16 +38,27 @@ and you're free to spin up your own the same way (see
   description or group. Enter opens the top match, an address goes straight
   there, and anything else is searched on the web with the engine you choose.
 - **Widgets.** Weather from Open-Meteo, in the style of glance's widget: twelve
-  bars across the day with daylight and rain marked. Markets with a month of
-  trend for stocks, indices, FX and crypto. A world clock, this month's
-  calendar, the top of Hacker News, GitHub Trending, the strongest AI models
-  from BenchLM, and the TV shows and films everyone is watching from TMDB. The
-  world clock finds a place by name (type "Boston" and it keeps New York's time),
-  and shows a sun or a moon beside each one. Popular TV and Popular Movies can be
-  narrowed to two columns, a sixth of the board; the other widgets stop at three.
-  **Add a widget** opens a gallery you scroll through: every widget running on
-  sample data, in the same size it will have on the board, so you can try one
-  (turn the agenda's month, start the focus timer) before you press Add.
+  bars across the day with daylight and rain marked, and, if you want them,
+  sunrise and sunset, the day's UV index and the air quality. Markets with a
+  month of trend for stocks, indices, FX and crypto, and for a token no
+  exchange lists, which you follow by pasting its contract address (see
+  [Markets and tokens](#markets-and-tokens)). A world clock, this month's
+  calendar, headlines from a feed you pick ([News](#news)), a to-do list or a
+  note ([Notes](#notes)), the top of Hacker News, GitHub Trending, the
+  strongest AI models from BenchLM, and the TV shows and films everyone is
+  watching from TMDB. The world clock finds a place by name (type "Boston" and
+  it keeps New York's time), and shows a sun or a moon beside each one. Popular
+  TV and Popular Movies can be narrowed to two columns, a sixth of the board;
+  the other widgets stop at three.
+- **A gallery to add them from.** **Add a widget** opens a gallery you scroll
+  through: every widget running on sample data, so you can try one (turn the
+  agenda's month, start the focus timer) before you press Add. **Customise**
+  opens the widget's settings on the example, including its width, which shows
+  what the width does (the weather's days to come appear from half the board),
+  and **Add** adds it as you set it. A few widgets go together as **starter
+  packs** (Dev morning, Planner, Catch up, Crypto watch, Movie night), added in
+  one step and taken back with one Undo. The gallery says what is already on the
+  page, narrows by kind, and can be kept open to add several.
 - **Your Google Calendar.** The [Agenda](#agenda-your-google-calendar) widget
   shows the month with a dot under every day that has something on, and the
   days to come beneath it: what is on now, what is next and in how long, a
@@ -147,6 +158,56 @@ of prices. Readings are cached in `localStorage` so a reload paints at once.
 GitHub Trending reads the static JSON that
 [isboyjc/github-trending-api](https://github.com/isboyjc/github-trending-api)
 publishes, straight from the browser.
+
+The weather's **air quality** is one more request, to Open-Meteo's air quality
+service, made only when the widget shows it; if it can't be had, the rest of the
+weather still shows. Sunrise and sunset come with the forecast, and the UV index
+is one more field on it.
+
+### Markets and tokens
+
+A symbol in the Markets widget is read from Yahoo Finance, which only knows
+listed instruments. A symbol that is a **token's contract address** (a Solana
+mint, or an `0x` address on an Ethereum-style chain) is read from where it
+trades instead, so a coin no exchange lists can sit beside `BTC-USD` and
+`ETH-USD`: paste the address into a symbol row in the widget's settings. The
+price, the day's change and the pool's liquidity come from
+[DexScreener](https://dexscreener.com), and the trend from
+[GeckoTerminal](https://www.geckoterminal.com)'s daily candles (drawn from the
+changes DexScreener reports when a token is too new to have any). Both are asked
+straight from the browser, with no key, and neither goes through this server. A
+token that can't be read is left out rather than failing the other rows.
+
+A small pool's price can be moved a long way by a few trades, so a pool with
+less than $50,000 in it is marked, and each row says how much liquidity there
+is. Addresses are case-sensitive on Solana, so they are kept exactly as typed.
+This shows prices; it is not advice.
+
+### News
+
+The **News** widget reads a feed you pick from a short list: BBC News, NPR, The
+Guardian, BBC Technology, Ars Technica, The Verge, WIRED, TechCrunch, Lobsters,
+The GitHub Blog, NASA and Quanta (RSS 1.0, RSS 2.0 and Atom are understood). A
+browser can't read a feed straight from its publisher, and a relay that fetched
+any address it was given would be an open door into whatever network this runs
+on, so the page never names an address: it asks `/api/news/<id>`, and the relay
+fetches the one host and path listed for that id. The list is
+`src/dashboard/lib/news.ts`; `nginx.conf` has the same list (a test keeps the two
+together), and the Vite dev and preview servers build theirs from it. Each feed is
+kept for ten minutes. A plain static host without the relay shows a note in the
+widget instead of headlines.
+
+Headlines are shown as plain text, and a link is kept only if it is an
+`http(s)` address, so a feed can't put a script in a link. To offer another
+source, add it to `news.ts` and to the two `map` blocks in `nginx.conf`.
+
+### Notes
+
+The **Notes** widget is a to-do list (add, tick off, reword, remove, clear what
+is done) or a single note. What you write is kept in the widget's own settings,
+so it is saved with the board in this browser, comes out in the YAML export, and
+follows the board into your other tabs. Keep the export private if you write
+anything private in it.
 
 The **AI Leaderboard** (from [BenchLM](https://benchlm.ai)), **Popular TV** and
 **Popular Movies** (from [TMDB](https://www.themoviedb.org)) widgets need a key. Keys never go in
@@ -574,8 +635,9 @@ src/
   dashboard/
     dashboard.tsx             # The board: dialogs, menus, shortcuts, paste and drop
     dashboard.css             # Glass, the grid, cards, widgets and dialogs
-    components/               # Board (drag and drop), groups, cards, search, settings
-    widgets/                  # Weather, markets, world clock, calendar, Hacker News
+    components/               # Board (drag and drop), groups, cards, search, settings,
+                              #   and the widget gallery
+    widgets/                  # Weather, markets, clock, calendar, news, notes, and the rest
     hooks/                    # Board state with undo, cached fetches, measuring
     lib/                      # The YAML model, imports, icons, URLs and widget data
   branchify/
@@ -627,8 +689,8 @@ npm run dev
 
 Then open the local URL shown by Vite (typically `http://localhost:5173`). The
 dev server also relays `/api/markets` to Yahoo Finance, so the markets widget
-works locally, and BenchLM, TMDB and your calendars with the keys and
-addresses in `.env` (copy `.env.example`). The dev server doesn't keep their answers the way nginx does;
+works locally, `/api/news/<id>` to the News widget's feeds, and BenchLM, TMDB and
+your calendars with the keys and addresses in `.env` (copy `.env.example`). The dev server doesn't keep their answers the way nginx does;
 the page's own cache asks at most twice a day.
 
 ## Testing & Quality

@@ -3050,6 +3050,13 @@ body {
     padding: 4px 14px 18px;
   }
 
+  /* On a phone the bar would take a fifth of what is in view, so it scrolls away with the rest. */
+  .gallery-bar {
+    position: static;
+    margin: 0 -14px;
+    padding: 10px 14px;
+  }
+
   .modal--gallery .modal-head {
     padding-left: 16px;
   }
