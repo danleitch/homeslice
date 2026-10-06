@@ -3,6 +3,7 @@ import {
   addBookmark,
   addGroup,
   addWidget,
+  addWidgets,
   arrayMove,
   deleteGroup,
   fitCard,
@@ -20,6 +21,7 @@ import {
   pageOf,
   sanitizeConfig,
   type PageConfig,
+  type Widget,
   type WidgetType
 } from './model';
 
@@ -525,6 +527,38 @@ describe('addWidget', () => {
     addWidget(before, 'clock', settings);
 
     expect(settings.id).toBe(settings.id);
+    expect(before.widgets).toHaveLength(1);
+  });
+});
+
+describe('addWidgets', () => {
+  it('adds each at the end, in order', () => {
+    const config = addWidgets(board(), [createWidget('clock'), createWidget('hackernews')]);
+
+    expect(config.widgets.map((widget) => widget.type)).toEqual(['weather', 'clock', 'hackernews']);
+  });
+
+  it('gives each an id of its own, even the same widgets added twice', () => {
+    const widgets = [createWidget('clock')];
+    const twice = addWidgets(addWidgets(board(), widgets), widgets);
+
+    expect(new Set(twice.widgets.map((widget) => widget.id)).size).toBe(3);
+    expect(widgets[0]!.id).not.toBe(twice.widgets[1]!.id);
+  });
+
+  it('keeps each widget’s settings', () => {
+    const config = addWidgets(board(), [
+      { ...createWidget('hackernews'), count: 11, width: 6 } as Widget
+    ]);
+
+    expect(config.widgets[1]).toMatchObject({ type: 'hackernews', count: 11, width: 6 });
+  });
+
+  it('changes nothing for no widgets, and not the board it was given', () => {
+    const before = board();
+
+    expect(addWidgets(before, []).widgets).toEqual(before.widgets);
+    addWidgets(before, [createWidget('clock')]);
     expect(before.widgets).toHaveLength(1);
   });
 });

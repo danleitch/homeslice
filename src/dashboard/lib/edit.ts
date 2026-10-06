@@ -236,6 +236,15 @@ export const addWidget = (
   return { config: { ...config, widgets: [...config.widgets, widget] }, widget };
 };
 
+/** Adds several widgets at the end, in order, each given an id of its own. */
+export const addWidgets = (config: PageConfig, widgets: readonly Widget[]): PageConfig => ({
+  ...config,
+  widgets: [
+    ...config.widgets,
+    ...widgets.map((widget) => ({ ...widget, id: newId('w') }) as Widget)
+  ]
+});
+
 export const updateWidget = (
   config: PageConfig,
   widgetId: string,

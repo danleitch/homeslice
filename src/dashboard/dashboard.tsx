@@ -46,7 +46,7 @@ import { StatusBar } from './components/status-bar';
 import { EditDock, EmptyBoard, TopBar } from './components/top-bar';
 import { ContextMenu, Toasts, type MenuItem } from './components/ui';
 import { WidgetDialog } from './components/widget-dialog';
-import { needsSetup } from './lib/gallery';
+import { countByType, needsSetup } from './lib/gallery';
 import { WidgetPicker } from './components/widget-gallery';
 import { useDashboard, type ApplyToPage } from './hooks/use-dashboard';
 import { usePage } from './hooks/use-page';
@@ -55,6 +55,7 @@ import {
   addBookmark,
   addGroup,
   addWidget,
+  addWidgets,
   deleteBookmark,
   deleteGroup,
   deleteWidget,
@@ -997,9 +998,13 @@ export const Dashboard = ({
           <WidgetPicker
             types={enabledWidgetTypes(extensions)}
             clock={config.clock}
+            onBoard={countByType(config.widgets)}
             onClose={() => setPickerOpen(false)}
-            onPick={({ type, settings }) => {
-              setPickerOpen(false);
+            onPick={({ type, settings, stay }) => {
+              if (!stay) {
+                setPickerOpen(false);
+              }
+
               const created: { widget: Widget | null } = { widget: null };
               apply((current) => {
                 const result = addWidget(current, type, settings);
@@ -1008,13 +1013,22 @@ export const Dashboard = ({
               });
 
               // Most widgets want a word about what to show before they are useful. One that was
-              // set up in the gallery has had it, unless what it wants is only its owner's to give.
+              // set up in the gallery has had it, unless what it wants is only its owner's to
+              // give. With the gallery left open there is no asking: it is set up afterwards.
               if (
+                !stay &&
                 created.widget &&
                 (settings ? needsSetup(created.widget) : SETUP_FIRST.includes(type))
               ) {
                 setWidgetDialog(created.widget);
               }
+            }}
+            onPickPack={({ pack, stay }) => {
+              if (!stay) {
+                setPickerOpen(false);
+              }
+
+              apply((current) => addWidgets(current, pack.widgets), `Added ${pack.name}`);
             }}
           />
         )}

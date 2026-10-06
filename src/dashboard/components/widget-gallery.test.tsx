@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FOCUS_KEY } from '../lib/focus';
+import { GALLERY_GROUPS, PACKS } from '../lib/gallery';
 import { WIDGET_BLURBS, WIDGET_LABELS, WIDGET_TYPES, type WidgetType } from '../lib/model';
 import { WidgetPicker, type WidgetPick } from './widget-gallery';
 
@@ -10,6 +11,12 @@ const open = (props: Partial<Parameters<typeof WidgetPicker>[0]> = {}) => {
   const onClose = vi.fn();
   render(<WidgetPicker onPick={onPick} onClose={onClose} {...props} />);
   return { onPick, onClose };
+};
+
+/** The gallery with starter packs on offer, and something to hand them to. */
+const openWithPacks = (props: Partial<Parameters<typeof WidgetPicker>[0]> = {}) => {
+  const onPickPack = vi.fn();
+  return { onPickPack, ...open({ onPickPack, ...props }) };
 };
 
 /** The cards' own names, in order; the examples draw headings of their own too. */
@@ -93,7 +100,7 @@ describe('WidgetPicker', () => {
           within(card(type)).getByRole('button', { name: `Add ${WIDGET_LABELS[type]}` })
         );
 
-        expect(onPick).toHaveBeenCalledExactlyOnceWith({ type });
+        expect(onPick).toHaveBeenCalledExactlyOnceWith({ type, stay: false });
         expect(onClose).not.toHaveBeenCalled();
       }
     );
@@ -105,6 +112,278 @@ describe('WidgetPicker', () => {
       await userEvent.click(within(card('clock')).getByText('New York'));
 
       expect(onPick).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('starter packs', () => {
+    const packCard = (name: string): HTMLElement =>
+      screen.getByRole('heading', { name, level: 4 }).closest('li')!;
+
+    it('are offered, each with what it says, what is in it, and one button to add it all', () => {
+      openWithPacks();
+
+      expect(screen.getByRole('region', { name: 'Starter packs' })).toBeInTheDocument();
+
+      for (const pack of PACKS) {
+        const item = packCard(pack.name);
+
+        expect(within(item).getByText(pack.blurb)).toBeInTheDocument();
+        expect(within(item).getByRole('list', { name: `In ${pack.name}` })).toBeInTheDocument();
+        expect(
+          within(item).getByRole('button', { name: `Add the ${pack.name} pack` })
+        ).toBeVisible();
+      }
+    });
+
+    it('name each widget in them, by its own name', () => {
+      openWithPacks();
+
+      const parts = within(packCard('Dev morning')).getAllByRole('listitem');
+
+      expect(parts.map((part) => part.textContent)).toEqual([
+        'My PRs',
+        'GitHub Trending',
+        'Hacker News'
+      ]);
+    });
+
+    it('say “Add all” with how many, and just “Add” for a pack of one', () => {
+      openWithPacks();
+
+      expect(within(packCard('Dev morning')).getByRole('button')).toHaveTextContent('Add all 3');
+      expect(within(packCard('Crypto watch')).getByRole('button')).toHaveTextContent(/^Add$/);
+    });
+
+    it('are handed over whole when added, and the gallery is not closed by it', async () => {
+      const { onPickPack, onClose } = openWithPacks();
+
+      await userEvent.click(
+        within(packCard('Planner')).getByRole('button', { name: 'Add the Planner pack' })
+      );
+
+      expect(onPickPack).toHaveBeenCalledExactlyOnceWith({
+        pack: PACKS.find((pack) => pack.id === 'planner'),
+        stay: false
+      });
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('are left out when something in them is turned off', () => {
+      openWithPacks({ types: WIDGET_TYPES.filter((type) => type !== 'prs') });
+
+      expect(screen.queryByRole('heading', { name: 'Dev morning', level: 4 })).toBeNull();
+      expect(screen.getByRole('heading', { name: 'Planner', level: 4 })).toBeInTheDocument();
+    });
+
+    it('are left out altogether when the gallery has nothing to hand them to', () => {
+      open();
+
+      expect(screen.queryByRole('region', { name: 'Starter packs' })).toBeNull();
+    });
+
+    it('are left out when no widget is turned on, and the gallery says so instead', () => {
+      openWithPacks({ types: [] });
+
+      expect(screen.queryByRole('region', { name: 'Starter packs' })).toBeNull();
+      expect(screen.getByText(/Every widget is turned off/)).toBeInTheDocument();
+    });
+  });
+
+  describe('narrowing', () => {
+    const chips = (): string[] =>
+      within(screen.getByRole('group', { name: 'Show' }))
+        .getAllByRole('button')
+        .map((chip) => chip.textContent!);
+    const chip = (name: string): HTMLElement =>
+      within(screen.getByRole('group', { name: 'Show' })).getByRole('button', { name });
+    const visibleCards = (): string[] =>
+      [...document.querySelectorAll<HTMLElement>('.gallery-card')]
+        .filter((item) => !item.hidden)
+        .map((item) => item.querySelector('.gallery-name')!.textContent!);
+
+    it('offers all, the packs and each kind of widget, starting with all', () => {
+      openWithPacks();
+
+      expect(chips()).toEqual([
+        'All',
+        'Starter packs',
+        ...GALLERY_GROUPS.map((group) => group.label)
+      ]);
+      expect(chip('All')).toHaveAttribute('aria-pressed', 'true');
+      expect(chip('Developer')).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('shows every widget, and the packs above them, for all', () => {
+      openWithPacks();
+
+      expect(visibleCards()).toEqual(WIDGET_TYPES.map((type) => WIDGET_LABELS[type]));
+      expect(screen.getByText('Widgets', { selector: 'h3' })).toBeInTheDocument();
+    });
+
+    it('shows only the widgets of the kind that was chosen', async () => {
+      open();
+
+      await userEvent.click(chip('Developer'));
+
+      expect(visibleCards()).toEqual([
+        'Hacker News',
+        'GitHub Trending',
+        'My PRs',
+        'AI Leaderboard'
+      ]);
+      expect(chip('Developer')).toHaveAttribute('aria-pressed', 'true');
+      expect(chip('All')).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('puts the kinds in the order the widgets are, and gives each widget one kind', async () => {
+      open();
+      const seen: string[] = [];
+
+      for (const group of GALLERY_GROUPS) {
+        await userEvent.click(chip(group.label));
+        seen.push(...visibleCards());
+      }
+
+      expect(seen.sort()).toEqual(WIDGET_TYPES.map((type) => WIDGET_LABELS[type]).sort());
+    });
+
+    it('shows only the packs for the packs, with no widgets under them', async () => {
+      openWithPacks();
+
+      await userEvent.click(chip('Starter packs'));
+
+      expect(screen.getByRole('region', { name: 'Starter packs' })).toBeInTheDocument();
+      expect(document.querySelector('.gallery')).toBeNull();
+      expect(screen.queryByText('Widgets', { selector: 'h3' })).toBeNull();
+    });
+
+    it('shows no packs when a kind of widget is chosen', async () => {
+      openWithPacks();
+
+      await userEvent.click(chip('Watch'));
+
+      expect(screen.queryByRole('region', { name: 'Starter packs' })).toBeNull();
+    });
+
+    it('brings everything back for all', async () => {
+      openWithPacks();
+      await userEvent.click(chip('Watch'));
+
+      await userEvent.click(chip('All'));
+
+      expect(visibleCards()).toHaveLength(WIDGET_TYPES.length);
+      expect(screen.getByRole('region', { name: 'Starter packs' })).toBeInTheDocument();
+    });
+
+    it('offers only the kinds that have a widget turned on, and no packs chip without packs', () => {
+      open({ types: ['weather', 'clock'] });
+
+      expect(chips()).toEqual(['All', 'Time and notes', 'Everyday']);
+    });
+
+    it('keeps what was tried in an example while it is narrowed away', async () => {
+      open();
+      await userEvent.click(
+        within(await customiseWeather()).getByRole('radio', { name: '°F, mph' })
+      );
+      expect(within(card('weather')).getByText('°F')).toBeInTheDocument();
+
+      await userEvent.click(chip('Watch'));
+      await userEvent.click(chip('All'));
+
+      expect(within(card('weather')).getByText('°F')).toBeInTheDocument();
+    });
+
+    const customiseWeather = async (): Promise<HTMLElement> => {
+      await userEvent.click(
+        within(card('weather')).getByRole('button', { name: 'Customise Weather' })
+      );
+      return screen.getByRole('form', { name: 'Weather options' });
+    };
+
+    it('does not offer to add what is narrowed away', async () => {
+      open();
+
+      await userEvent.click(chip('Watch'));
+
+      expect(screen.queryByRole('button', { name: 'Add Weather' })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Add Popular TV' })).toBeVisible();
+    });
+  });
+
+  describe('what is on the page', () => {
+    it('is marked on the example, once or with how many', () => {
+      open({ onBoard: { weather: 1, clock: 3 } });
+
+      expect(within(card('weather')).getByText('On this page')).toBeInTheDocument();
+      expect(within(card('clock')).getByText('3 on this page')).toBeInTheDocument();
+      expect(within(card('markets')).queryByText(/on this page/i)).toBeNull();
+    });
+
+    it('is not marked for none', () => {
+      open({ onBoard: { weather: 0 } });
+
+      expect(screen.queryByText(/on this page/i)).toBeNull();
+    });
+
+    it('is not part of a widget’s name', () => {
+      open({ onBoard: { weather: 1 } });
+
+      expect(screen.getByRole('heading', { name: 'Weather', level: 3 })).toBeInTheDocument();
+    });
+  });
+
+  describe('keeping the gallery open', () => {
+    const toggle = (): HTMLElement =>
+      screen.getByRole('switch', { name: 'Keep open after adding' });
+
+    it('is off until it is asked for', () => {
+      open();
+
+      expect(toggle()).not.toBeChecked();
+    });
+
+    it('hands over that the gallery stays, for a widget and for a pack, once it is on', async () => {
+      const { onPick, onPickPack } = openWithPacks();
+      await userEvent.click(toggle());
+
+      await userEvent.click(within(card('weather')).getByRole('button', { name: 'Add Weather' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Add the Planner pack' }));
+
+      expect(onPick).toHaveBeenCalledExactlyOnceWith({ type: 'weather', stay: true });
+      expect(onPickPack).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ stay: true }));
+    });
+
+    it('can be turned off again', async () => {
+      const { onPick } = open();
+      await userEvent.click(toggle());
+      await userEvent.click(toggle());
+
+      await userEvent.click(within(card('weather')).getByRole('button', { name: 'Add Weather' }));
+
+      expect(onPick).toHaveBeenCalledExactlyOnceWith({ type: 'weather', stay: false });
+    });
+
+    it('can add again and again, each time as it was set then', async () => {
+      const { onPick } = open();
+      await userEvent.click(toggle());
+
+      await userEvent.click(within(card('tv')).getByRole('button', { name: 'Add Popular TV' }));
+      await userEvent.click(within(card('tv')).getByRole('button', { name: 'Add Popular TV' }));
+
+      expect(onPick).toHaveBeenCalledTimes(2);
+    });
+
+    it('says aloud what was added, since nothing else changes', async () => {
+      openWithPacks();
+      const status = (): string => screen.getByRole('status').textContent!;
+      expect(status()).toBe('');
+
+      await userEvent.click(within(card('weather')).getByRole('button', { name: 'Add Weather' }));
+      expect(status()).toBe('Added Weather');
+
+      await userEvent.click(screen.getByRole('button', { name: 'Add the Dev morning pack' }));
+      expect(status()).toBe('Added Dev morning');
     });
   });
 
@@ -296,7 +575,7 @@ describe('WidgetPicker', () => {
 
         await add('weather');
 
-        expect(pickOf(onPick)).toEqual({ type: 'weather' });
+        expect(pickOf(onPick)).toEqual({ type: 'weather', stay: false });
       });
 
       it('is just the kind, though the options were opened and closed again', async () => {
@@ -308,7 +587,7 @@ describe('WidgetPicker', () => {
 
         await add('weather');
 
-        expect(pickOf(onPick)).toEqual({ type: 'weather' });
+        expect(pickOf(onPick)).toEqual({ type: 'weather', stay: false });
       });
 
       it('is the widget as it was set, once the options are used', async () => {
@@ -377,7 +656,7 @@ describe('WidgetPicker', () => {
         });
 
         await add('github');
-        expect(pickOf(onPick)).toEqual({ type: 'github' });
+        expect(pickOf(onPick)).toEqual({ type: 'github', stay: false });
 
         await add('hackernews');
         expect(pickOf(onPick).settings).toMatchObject({ type: 'hackernews', count: 11 });
@@ -407,7 +686,7 @@ describe('WidgetPicker', () => {
         expect(within(card('notes')).getByText('My own task')).toBeInTheDocument();
         await add('notes');
 
-        expect(pickOf(onPick)).toEqual({ type: 'notes' });
+        expect(pickOf(onPick)).toEqual({ type: 'notes', stay: false });
       });
     });
 

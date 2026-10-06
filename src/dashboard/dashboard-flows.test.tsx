@@ -367,6 +367,119 @@ describe('Dashboard flows', () => {
       expect(asked.filter((url) => url.startsWith('/api/calendar'))).toEqual([]);
     });
 
+    describe('the gallery’s starter packs, marks and keeping it open', () => {
+      const stored = (): string => window.localStorage.getItem(DASHBOARD_STORAGE_KEY) ?? '';
+      const openGallery = async (): Promise<HTMLElement> => {
+        render(<App />);
+        key({ key: 'e' });
+        await userEvent.click(screen.getByRole('button', { name: /Widget/ }));
+        return screen.getByRole('dialog', { name: 'Add a widget' });
+      };
+
+      it('adds every widget in a pack at once, with no settings dialog, and closes', async () => {
+        const gallery = await openGallery();
+
+        await userEvent.click(
+          within(gallery).getByRole('button', { name: 'Add the Dev morning pack' })
+        );
+
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        for (const name of ['My PRs', 'GitHub Trending', 'Hacker News']) {
+          expect(screen.getByRole('region', { name })).toBeInTheDocument();
+        }
+
+        await waitFor(() => expect(stored()).toMatch(/type: prs/));
+      });
+
+      it('takes a whole pack back with one undo, since it was one change', async () => {
+        const gallery = await openGallery();
+        await userEvent.click(
+          within(gallery).getByRole('button', { name: 'Add the Dev morning pack' })
+        );
+        expect(toast('Added Dev morning')).toBeInTheDocument();
+
+        await userEvent.click(within(toasts()).getByRole('button', { name: /Undo/ }));
+
+        for (const name of ['My PRs', 'GitHub Trending', 'Hacker News']) {
+          expect(screen.queryByRole('region', { name })).not.toBeInTheDocument();
+        }
+      });
+
+      it('has the main coins ready for a token of your own, in the crypto pack', async () => {
+        const gallery = await openGallery();
+
+        await userEvent.click(
+          within(gallery).getByRole('button', { name: 'Add the Crypto watch pack' })
+        );
+
+        await waitFor(() => expect(stored()).toContain('BTC-USD'));
+        expect(stored()).toContain('ETH-USD');
+        expect(stored()).toContain('SOL-USD');
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      });
+
+      it('marks what the page has already', async () => {
+        seed({
+          ...board,
+          widgets: [{ type: 'weather', location: 'Oslo' }, { type: 'clock' }, { type: 'clock' }]
+        });
+        const gallery = await openGallery();
+
+        const card = (name: string) =>
+          within(gallery).getByRole('heading', { name, level: 3 }).closest('li')!;
+
+        expect(within(card('Weather')).getByText('On this page')).toBeInTheDocument();
+        expect(within(card('World clock')).getByText('2 on this page')).toBeInTheDocument();
+        expect(within(card('Markets')).queryByText(/on this page/)).not.toBeInTheDocument();
+      });
+
+      it('stays open when asked to, marking each thing as it is added, and asking nothing', async () => {
+        const gallery = await openGallery();
+        await userEvent.click(
+          within(gallery).getByRole('switch', { name: 'Keep open after adding' })
+        );
+
+        // Weather would ask for a place if the gallery were closing; with it open, it does not.
+        await userEvent.click(within(gallery).getByRole('button', { name: 'Add Weather' }));
+        await userEvent.click(within(gallery).getByRole('button', { name: 'Add Notes' }));
+
+        expect(screen.getByRole('dialog', { name: 'Add a widget' })).toBeInTheDocument();
+        expect(screen.queryByRole('dialog', { name: 'Weather' })).not.toBeInTheDocument();
+        expect(screen.getByRole('region', { name: 'Weather' })).toBeInTheDocument();
+        expect(screen.getByRole('region', { name: 'Notes' })).toBeInTheDocument();
+        const weatherCard = within(gallery)
+          .getByRole('heading', { name: 'Weather', level: 3 })
+          .closest('li')!;
+        expect(within(weatherCard).getByText('On this page')).toBeInTheDocument();
+
+        await userEvent.click(within(gallery).getByRole('button', { name: 'Add Weather' }));
+        expect(within(weatherCard).getByText('2 on this page')).toBeInTheDocument();
+      });
+
+      it('adds a pack and stays, when asked to', async () => {
+        const gallery = await openGallery();
+        await userEvent.click(
+          within(gallery).getByRole('switch', { name: 'Keep open after adding' })
+        );
+
+        await userEvent.click(
+          within(gallery).getByRole('button', { name: 'Add the Movie night pack' })
+        );
+
+        expect(screen.getByRole('dialog', { name: 'Add a widget' })).toBeInTheDocument();
+        expect(screen.getByRole('region', { name: 'Popular Movies' })).toBeInTheDocument();
+        expect(screen.getByRole('region', { name: 'Popular TV' })).toBeInTheDocument();
+      });
+
+      it('closes after adding by default, so the board is what is left', async () => {
+        const gallery = await openGallery();
+
+        await userEvent.click(within(gallery).getByRole('button', { name: 'Add Notes' }));
+
+        expect(screen.queryByRole('dialog', { name: 'Add a widget' })).not.toBeInTheDocument();
+      });
+    });
+
     describe('the gallery, when an example was customised', () => {
       const stored = (): string => window.localStorage.getItem(DASHBOARD_STORAGE_KEY) ?? '';
       const openGallery = async (): Promise<HTMLElement> => {
