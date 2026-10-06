@@ -19,11 +19,15 @@ and you're free to spin up your own the same way (see
   automatically, with a monogram while it loads or if a site has none. Each
   group lays its bookmarks out as **cards** (icon, name and description),
   **tiles** (a launcher of big icons) or a compact **list**.
-- **Drag and snap.** Drag a bookmark to reorder it or carry it into another
-  group. Drag a group or widget by its header to move it. In edit mode, drag a
-  right edge to resize it; widths snap to a 12-column grid, and faint column
-  guides show while you place things. The board packs itself like masonry, so a
-  tall widget never leaves a hole beside it.
+- **Drag and resize.** Drag a bookmark to reorder it or carry it into another
+  group. Drag a group or widget by its header and the rest of the board shuffles
+  out of the way, then closes up behind it, so a short card never leaves a hole
+  beneath it. In edit mode, drag a card's right edge, bottom edge or corner to
+  resize it, both ways: widths snap to a 12-column grid, heights to steps you
+  can line up, and faint column guides show while you work. A card is as tall as
+  what is in it until you give it a height; double-click its edge to take the
+  height back, or pick **Fit** in its settings. Narrow screens stack the cards
+  instead.
 - **Adding is quick.** Press `N` or the `+` button, paste a link anywhere on the
   page, or drag a link in from another tab and drop it on a group. Names are
   guessed from the address, and you can change everything later.
@@ -110,8 +114,11 @@ groups:
         url: https://github.com/notifications
 ```
 
-Widths are columns of the 12-column board, from 3 to 12. Leave `icon` out for
-the site's favicon, or use the same forms homepage does: `si-github` (Simple
+Widths are columns of the 12-column board, from 3 to 12. A `height` is rows of
+4 pixels (from 36 to 600); leave it out and the card is as tall as what is in
+it. Once you drag a card, the board writes where it sits as `column` (from 0)
+and `row`, so you rarely need to; a card without them takes the next free place.
+Leave `icon` out for the site's favicon, or use the same forms homepage does: `si-github` (Simple
 Icons), `mdi-home` (Material Design Icons), `sh-jellyfin` (selfh.st icons),
 `plex.png` (dashboard-icons), an emoji, or any image address. Anything the
 dashboard doesn't understand is dropped rather than breaking the page.
@@ -559,7 +566,7 @@ src/
     dashboard.css             # Glass, the grid, cards, widgets and dialogs
     components/               # Board (drag and drop), groups, cards, search, settings
     widgets/                  # Weather, markets, world clock, calendar, Hacker News
-    hooks/                    # Board state with undo, cached fetches, masonry, resizing
+    hooks/                    # Board state with undo, cached fetches, measuring
     lib/                      # The YAML model, imports, icons, URLs and widget data
   branchify/
     use-branchify.ts          # The form and naming settings, saved while closed too

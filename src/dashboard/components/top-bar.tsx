@@ -71,7 +71,7 @@ export const EditDock = ({
 }: EditDockProps): JSX.Element => (
   <div className="dock glass" role="toolbar" aria-label="Edit the board" data-dash="">
     <span className="dock-hint">
-      Drag to arrange · drag a right edge to resize · right-click for more
+      Drag to arrange · drag an edge or corner to resize · right-click for more
     </span>
     <button type="button" className="dock-btn" onClick={onAddBookmark}>
       <BookmarkPlus size={16} aria-hidden="true" /> Bookmark

@@ -1,58 +1,42 @@
 import {
   forwardRef,
-  type CSSProperties,
   type DragEvent,
   type HTMLAttributes,
   type MouseEvent,
-  type PointerEvent,
   type ReactNode
 } from 'react';
 import { ChevronDown, GripVertical, MoreHorizontal, Plus } from 'lucide-react';
-import type { DraggableSyntheticListeners } from '@dnd-kit/core';
 import type { Group } from '../lib/model';
 import { BookmarkIcon } from './bookmark-icon';
 import { noDrag } from './no-drag';
 
 type GroupPanelProps = Omit<HTMLAttributes<HTMLElement>, 'children' | 'onToggle'> & {
   group: Group;
-  editing: boolean;
   children?: ReactNode;
-  overlay?: boolean;
-  placeholder?: boolean;
   /** A link from another tab is being held over this group. */
   linkOver?: boolean;
-  handleRef?: (element: HTMLElement | null) => void;
-  handleListeners?: DraggableSyntheticListeners;
   onAdd?: (group: Group) => void;
   onToggle?: (group: Group) => void;
   onMenu?: (group: Group, event: MouseEvent) => void;
-  onResizeStart?: (event: PointerEvent<HTMLElement>) => void;
   onLinkDragOver?: (event: DragEvent<HTMLElement>) => void;
   onLinkDragLeave?: (event: DragEvent<HTMLElement>) => void;
   onLinkDrop?: (event: DragEvent<HTMLElement>) => void;
 };
 
-/** One group of bookmarks: a header to carry it by, and its cards. */
+/** One group of bookmarks: a header to carry it by, and its cards. The board sizes and places it. */
 export const GroupPanel = forwardRef<HTMLElement, GroupPanelProps>(
   (
     {
       group,
-      editing,
       children,
-      overlay = false,
-      placeholder = false,
       linkOver = false,
-      handleRef,
-      handleListeners,
       onAdd,
       onToggle,
       onMenu,
-      onResizeStart,
       onLinkDragOver,
       onLinkDragLeave,
       onLinkDrop,
       className,
-      style,
       ...rest
     },
     ref
@@ -65,21 +49,12 @@ export const GroupPanel = forwardRef<HTMLElement, GroupPanelProps>(
         className={[
           'grp',
           'glass',
-          overlay && 'grp--overlay',
-          placeholder && 'grp--placeholder',
           linkOver && 'grp--link-over',
           group.collapsed && 'grp--collapsed',
           className
         ]
           .filter(Boolean)
           .join(' ')}
-        style={
-          {
-            '--span': group.width,
-            '--span-md': group.width <= 6 ? 6 : 12,
-            ...style
-          } as CSSProperties
-        }
         aria-label={group.name}
         data-dash=""
         onDragOver={onLinkDragOver}
@@ -89,8 +64,6 @@ export const GroupPanel = forwardRef<HTMLElement, GroupPanelProps>(
       >
         <header
           className="grp-head"
-          ref={handleRef}
-          {...handleListeners}
           onContextMenu={(event) => {
             if (onMenu) {
               event.preventDefault();
@@ -163,18 +136,6 @@ export const GroupPanel = forwardRef<HTMLElement, GroupPanelProps>(
               </div>
             )}
           </div>
-        )}
-
-        {editing && onResizeStart && (
-          <span
-            className="resize-grip"
-            role="separator"
-            aria-orientation="vertical"
-            aria-label={`Resize ${group.name}`}
-            title="Drag to resize"
-            {...noDrag}
-            onPointerDown={onResizeStart}
-          />
         )}
       </section>
     );

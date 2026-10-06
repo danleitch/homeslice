@@ -389,24 +389,223 @@ body {
   gap: 18px;
 }
 
-/* Tiny rows that each item spans by its own height (see use-masonry.ts), so
-   the grid packs like masonry while keeping its 12 snapping columns. */
+/* Cards sit on 12 columns of tiny rows (see layout.ts), placed by
+   react-grid-layout, which closes the board up behind a short card. A cell is
+   a card's place on the grid: the card, and the gap beneath it. */
 .dash-grid {
   position: relative;
-  display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  grid-auto-rows: 2px;
-  grid-auto-flow: row;
-  align-items: start;
-  column-gap: 18px;
-  row-gap: 0;
 }
 
-.dash-grid > .grp,
-.dash-grid > .wdg,
-.dash-grid > .ghost-tile {
-  grid-column: span var(--span, 4);
-  grid-row-end: span var(--rows, 60);
+.dash-layout {
+  position: relative;
+}
+
+.cell {
+  box-sizing: border-box;
+  min-width: 0;
+  padding-bottom: var(--board-gap, 18px);
+}
+
+.cell-fit {
+  display: flow-root;
+}
+
+/* Cards slide into place, but not on the way in (the board sets data-settled). */
+.dash-grid[data-settled] .dash-layout > .cell {
+  transition:
+    top 0.22s var(--ease),
+    left 0.22s var(--ease),
+    width 0.22s var(--ease),
+    height 0.22s var(--ease);
+}
+
+.dash-layout > .cell.react-draggable-dragging,
+.dash-layout > .cell.resizing {
+  z-index: 4;
+  transition: none;
+}
+
+.dash-layout > .cell.react-draggable-dragging > .cell-fit > :is(.grp, .wdg) {
+  box-shadow: var(--shadow-lift);
+}
+
+/* Where the card being moved or resized will land. */
+.dash-layout > .react-grid-placeholder {
+  z-index: 1;
+  pointer-events: none;
+}
+
+.dash-layout > .react-grid-placeholder::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 var(--board-gap, 18px);
+  border: 1.5px dashed rgba(138, 168, 255, 0.55);
+  border-radius: var(--radius-lg);
+  background: var(--accent-wash);
+}
+
+.dash-grid[data-settled] .dash-layout > .react-grid-placeholder {
+  transition:
+    top 0.12s ease,
+    left 0.12s ease,
+    width 0.12s ease,
+    height 0.12s ease;
+}
+
+.dash-layout > .react-grid-placeholder.placeholder-resizing {
+  transition: none;
+}
+
+/* A header is a handle, so a finger on it moves the card rather than the page. */
+.dash-layout :is(.grp-head, .wdg-head) {
+  touch-action: none;
+}
+
+/* A card that has been given a height keeps it, and scrolls what does not fit. */
+.cell[data-fit='fixed'] > .cell-fit {
+  height: 100%;
+}
+
+.cell[data-fit='fixed'] > .cell-fit > :is(.grp, .wdg) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.cell[data-fit='fixed'] :is(.grp-body, .wdg-body) {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+
+/* Room for a bookmark's edit tools, which sit just outside its corner, to
+   show instead of being clipped by the scrolling body. */
+.cell[data-fit='fixed'] .grp-body {
+  margin: -8px;
+  padding: 8px;
+}
+
+/* In edit mode the right edge, the bottom edge and the corner take the pointer
+   (react-grid-layout adds them to each cell). Pulled, they snap the card to
+   the grid; pulled twice, they send it back to the height of its contents. */
+.react-resizable-hide > .react-resizable-handle {
+  display: none;
+}
+
+.cell > .react-resizable-handle {
+  position: absolute;
+  z-index: 3;
+  touch-action: none;
+}
+
+.cell > .react-resizable-handle::after {
+  content: '';
+  position: absolute;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+  transition:
+    background 0.15s ease,
+    width 0.2s var(--ease),
+    height 0.2s var(--ease);
+}
+
+.cell > .react-resizable-handle:hover::after,
+.cell.resizing > .react-resizable-handle::after {
+  background: var(--accent);
+}
+
+.cell > .react-resizable-handle-e {
+  top: 18px;
+  right: -9px;
+  bottom: calc(var(--board-gap, 18px) + 18px);
+  width: 18px;
+  cursor: ew-resize;
+}
+
+.cell > .react-resizable-handle-e::after {
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 44px;
+  max-height: 100%;
+  transform: translate(-50%, -50%);
+}
+
+.cell > .react-resizable-handle-e:hover::after {
+  height: 64px;
+}
+
+.cell > .react-resizable-handle-s {
+  right: 18px;
+  bottom: calc(var(--board-gap, 18px) - 9px);
+  left: 18px;
+  height: 18px;
+  cursor: ns-resize;
+}
+
+.cell > .react-resizable-handle-s::after {
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 6px;
+  max-width: 100%;
+  transform: translate(-50%, -50%);
+}
+
+.cell > .react-resizable-handle-s:hover::after {
+  width: 64px;
+}
+
+.cell > .react-resizable-handle-se {
+  right: -9px;
+  bottom: calc(var(--board-gap, 18px) - 9px);
+  width: 24px;
+  height: 24px;
+  cursor: nwse-resize;
+}
+
+.cell > .react-resizable-handle-se::after {
+  right: 5px;
+  bottom: 5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 0 0 4px;
+  border-right: 3px solid rgba(255, 255, 255, 0.4);
+  border-bottom: 3px solid rgba(255, 255, 255, 0.4);
+  background: none;
+  box-shadow: none;
+}
+
+.cell > .react-resizable-handle-se:hover::after,
+.cell.resizing > .react-resizable-handle-se::after {
+  border-color: var(--accent);
+  background: none;
+}
+
+/* Below the width of a grid, cards stack, in the columns there is room for. */
+.dash-flow {
+  columns: 300px;
+  column-gap: var(--board-gap, 18px);
+}
+
+.cell--flow {
+  break-inside: avoid;
+}
+
+.cell--flow[data-wide] {
+  column-span: all;
+}
+
+/* The two dashed spaces that make something new, below the board in edit mode. */
+.dash-add {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: var(--board-gap, 18px);
+  margin-top: calc(var(--board-gap, 18px) * -1);
 }
 
 @media (max-width: 1100px) {
@@ -425,37 +624,15 @@ body {
   .topbar-center {
     grid-area: search;
   }
-
-  .dash-grid > .grp,
-  .dash-grid > .wdg,
-  .dash-grid > .ghost-tile {
-    grid-column: span var(--span-md, 6);
-  }
-
-  .resize-grip {
-    display: none;
-  }
-}
-
-@media (max-width: 680px) {
-  .dash-grid > .grp,
-  .dash-grid > .wdg,
-  .dash-grid > .ghost-tile {
-    grid-column: 1 / -1;
-  }
-
-  .dash-grid {
-    column-gap: 14px;
-  }
 }
 
 /* Twelve faint columns appear while something is being placed or resized. */
 .grid-guides {
   position: absolute;
-  inset: -6px 0 12px;
+  inset: 0 0 var(--board-gap, 18px);
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
-  column-gap: 18px;
+  column-gap: var(--board-gap, 18px);
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.2s ease;
@@ -672,61 +849,11 @@ body {
   text-decoration: underline;
 }
 
-.grp--placeholder,
-.wdg--placeholder {
-  opacity: 0.35;
-  border-style: dashed;
-  border-color: rgba(138, 168, 255, 0.5);
-}
-
-.grp--overlay,
-.wdg--overlay {
-  box-shadow: var(--shadow-lift);
-  transform: rotate(-0.6deg) scale(1.01);
-  cursor: grabbing;
-  animation: none;
-}
-
 .grp--link-over {
   border-color: rgba(138, 168, 255, 0.7);
   box-shadow:
     0 0 0 4px rgba(138, 168, 255, 0.18),
     var(--shadow-panel);
-}
-
-/* The right edge, pulled to snap the width to the board's columns. */
-.resize-grip {
-  position: absolute;
-  top: 18px;
-  bottom: 18px;
-  right: -9px;
-  width: 18px;
-  cursor: ew-resize;
-  touch-action: none;
-  z-index: 2;
-}
-
-.resize-grip::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 6px;
-  height: 44px;
-  max-height: 100%;
-  border-radius: 999px;
-  transform: translate(-50%, -50%);
-  background: rgba(255, 255, 255, 0.28);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
-  transition:
-    background 0.15s ease,
-    height 0.2s var(--ease);
-}
-
-.resize-grip:hover::after,
-.resize-grip:active::after {
-  height: 64px;
-  background: var(--accent);
 }
 
 .ghost-tile {

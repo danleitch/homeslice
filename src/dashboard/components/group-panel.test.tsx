@@ -23,63 +23,31 @@ const panel = (): HTMLElement => screen.getByRole('region', { name: 'Code' });
 describe('GroupPanel', () => {
   describe('the group', () => {
     it('is a region named for the group, headed by its name', () => {
-      render(<GroupPanel group={groupOf()} editing={false} />);
+      render(<GroupPanel group={groupOf()} />);
 
       expect(within(panel()).getByRole('heading', { name: 'Code' })).toBeInTheDocument();
       expect(panel()).toHaveAttribute('data-dash');
     });
 
     it('counts its bookmarks', () => {
-      render(<GroupPanel group={groupOf({}, 7)} editing={false} />);
+      render(<GroupPanel group={groupOf({}, 7)} />);
 
       expect(screen.getByLabelText('7 bookmarks')).toHaveTextContent('7');
     });
 
-    it.each([
-      [3, 6],
-      [4, 6],
-      [6, 6],
-      [8, 12],
-      [12, 12]
-    ])('on the board it spans %i columns, and %i on a narrower screen', (width, narrow) => {
-      render(<GroupPanel group={groupOf({ width })} editing={false} />);
-
-      expect(panel().style.getPropertyValue('--span')).toBe(String(width));
-      expect(panel().style.getPropertyValue('--span-md')).toBe(String(narrow));
-    });
-
     it('takes on the classes for what is happening to it', () => {
-      const { rerender } = render(<GroupPanel group={groupOf()} editing={false} />);
+      const { rerender } = render(<GroupPanel group={groupOf()} />);
       expect(panel()).toHaveClass('grp', 'glass');
-      expect(panel()).not.toHaveClass(
-        'grp--overlay',
-        'grp--placeholder',
-        'grp--link-over',
-        'grp--collapsed'
-      );
+      expect(panel()).not.toHaveClass('grp--link-over', 'grp--collapsed');
 
-      rerender(
-        <GroupPanel
-          group={groupOf({ collapsed: true })}
-          editing={false}
-          overlay
-          placeholder
-          linkOver
-        />
-      );
-      expect(panel()).toHaveClass(
-        'grp--overlay',
-        'grp--placeholder',
-        'grp--link-over',
-        'grp--collapsed'
-      );
+      rerender(<GroupPanel group={groupOf({ collapsed: true })} linkOver />);
+      expect(panel()).toHaveClass('grp--link-over', 'grp--collapsed');
     });
 
     it('keeps the class and style it is given, and passes other attributes on', () => {
       render(
         <GroupPanel
           group={groupOf()}
-          editing={false}
           className="extra"
           style={{ transform: 'translate(3px, 4px)' }}
           data-testid="mine"
@@ -88,34 +56,22 @@ describe('GroupPanel', () => {
 
       expect(panel()).toHaveClass('grp', 'extra');
       expect(panel().style.transform).toBe('translate(3px, 4px)');
-      expect(panel().style.getPropertyValue('--span')).toBe('4');
       expect(screen.getByTestId('mine')).toBe(panel());
     });
 
-    it('hands its element to a ref, and its header to the drag handle’s', () => {
+    it('hands its element to a ref', () => {
       const ref = createRef<HTMLElement>();
-      const handleRef = vi.fn();
 
-      render(<GroupPanel ref={ref} group={groupOf()} editing={false} handleRef={handleRef} />);
+      render(<GroupPanel ref={ref} group={groupOf()} />);
 
       expect(ref.current).toBe(panel());
-      expect(handleRef).toHaveBeenCalledWith(panel().querySelector('header'));
-    });
-
-    it('carries the drag listeners on its header', () => {
-      const onPointerDown = vi.fn();
-
-      render(<GroupPanel group={groupOf()} editing={false} handleListeners={{ onPointerDown }} />);
-      fireEvent.pointerDown(panel().querySelector('header')!);
-
-      expect(onPointerDown).toHaveBeenCalledTimes(1);
     });
 
     it('shows its icon beside its name only when it has one', () => {
-      const { rerender } = render(<GroupPanel group={groupOf({ icon: '🚀' })} editing={false} />);
+      const { rerender } = render(<GroupPanel group={groupOf({ icon: '🚀' })} />);
       expect(panel().querySelector('.grp-icon')).toHaveTextContent('🚀');
 
-      rerender(<GroupPanel group={groupOf({ icon: '' })} editing={false} />);
+      rerender(<GroupPanel group={groupOf({ icon: '' })} />);
       expect(panel().querySelector('.grp-icon')).toBeNull();
     });
   });
@@ -123,7 +79,7 @@ describe('GroupPanel', () => {
   describe('its body', () => {
     it('lays its bookmarks out in the style the group chose', () => {
       render(
-        <GroupPanel group={groupOf({ style: 'tiles' })} editing={false}>
+        <GroupPanel group={groupOf({ style: 'tiles' })}>
           <li>one</li>
           <li>two</li>
         </GroupPanel>
@@ -136,7 +92,7 @@ describe('GroupPanel', () => {
 
     it('is hidden altogether while the group is collapsed', () => {
       render(
-        <GroupPanel group={groupOf({ collapsed: true })} editing={false}>
+        <GroupPanel group={groupOf({ collapsed: true })}>
           <li>one</li>
         </GroupPanel>
       );
@@ -146,7 +102,7 @@ describe('GroupPanel', () => {
     });
 
     it('invites a drop when the group is empty', () => {
-      render(<GroupPanel group={groupOf({}, 0)} editing={false} />);
+      render(<GroupPanel group={groupOf({}, 0)} />);
 
       expect(screen.getByText('Drop bookmarks here')).toBeInTheDocument();
       expect(screen.queryByRole('list')).not.toBeInTheDocument();
@@ -155,7 +111,7 @@ describe('GroupPanel', () => {
     it('offers to add one to an empty group, if it can', async () => {
       const onAdd = vi.fn();
       const group = groupOf({}, 0);
-      render(<GroupPanel group={group} editing={false} onAdd={onAdd} />);
+      render(<GroupPanel group={group} onAdd={onAdd} />);
 
       await userEvent.click(screen.getByRole('button', { name: 'or add one' }));
 
@@ -163,7 +119,7 @@ describe('GroupPanel', () => {
     });
 
     it('does not offer to add when it cannot', () => {
-      render(<GroupPanel group={groupOf({}, 0)} editing={false} />);
+      render(<GroupPanel group={groupOf({}, 0)} />);
 
       expect(screen.queryByRole('button', { name: 'or add one' })).not.toBeInTheDocument();
     });
@@ -171,7 +127,7 @@ describe('GroupPanel', () => {
 
   describe('its buttons', () => {
     it('has none when it has nothing to do with them', () => {
-      render(<GroupPanel group={groupOf()} editing={false} />);
+      render(<GroupPanel group={groupOf()} />);
 
       expect(screen.queryAllByRole('button')).toHaveLength(0);
     });
@@ -179,7 +135,7 @@ describe('GroupPanel', () => {
     it('adds a bookmark to this group', async () => {
       const onAdd = vi.fn();
       const group = groupOf();
-      render(<GroupPanel group={group} editing={false} onAdd={onAdd} />);
+      render(<GroupPanel group={group} onAdd={onAdd} />);
 
       await userEvent.click(screen.getByRole('button', { name: 'Add a bookmark to Code' }));
 
@@ -189,7 +145,7 @@ describe('GroupPanel', () => {
     it('opens its options from the button, handing over the click', async () => {
       const onMenu = vi.fn();
       const group = groupOf();
-      render(<GroupPanel group={group} editing={false} onMenu={onMenu} />);
+      render(<GroupPanel group={group} onMenu={onMenu} />);
 
       await userEvent.click(screen.getByRole('button', { name: 'Code options' }));
 
@@ -199,7 +155,7 @@ describe('GroupPanel', () => {
     it('collapses, saying what it will do', async () => {
       const onToggle = vi.fn();
       const group = groupOf();
-      render(<GroupPanel group={group} editing={false} onToggle={onToggle} />);
+      render(<GroupPanel group={group} onToggle={onToggle} />);
       const toggle = screen.getByRole('button', { name: 'Collapse Code' });
       expect(toggle).toHaveAttribute('aria-expanded', 'true');
 
@@ -209,9 +165,7 @@ describe('GroupPanel', () => {
     });
 
     it('expands when it is collapsed', () => {
-      render(
-        <GroupPanel group={groupOf({ collapsed: true })} editing={false} onToggle={vi.fn()} />
-      );
+      render(<GroupPanel group={groupOf({ collapsed: true })} onToggle={vi.fn()} />);
 
       expect(screen.getByRole('button', { name: 'Expand Code' })).toHaveAttribute(
         'aria-expanded',
@@ -226,7 +180,7 @@ describe('GroupPanel', () => {
         <div onMouseDown={onMouseDown} onTouchStart={onTouchStart}>
           <GroupPanel
             group={groupOf()}
-            editing={false}
+
             onAdd={vi.fn()}
             onMenu={vi.fn()}
             onToggle={vi.fn()}
@@ -248,7 +202,7 @@ describe('GroupPanel', () => {
     it('opens the group’s menu on a right-click on the header, and not the browser’s', () => {
       const onMenu = vi.fn();
       const group = groupOf();
-      render(<GroupPanel group={group} editing={false} onMenu={onMenu} />);
+      render(<GroupPanel group={group} onMenu={onMenu} />);
 
       const proceeded = fireEvent.contextMenu(panel().querySelector('header')!);
 
@@ -257,32 +211,9 @@ describe('GroupPanel', () => {
     });
 
     it('leaves the browser’s menu alone when there is none of its own', () => {
-      render(<GroupPanel group={groupOf()} editing={false} />);
+      render(<GroupPanel group={groupOf()} />);
 
       expect(fireEvent.contextMenu(panel().querySelector('header')!)).toBe(true);
-    });
-  });
-
-  describe('resizing', () => {
-    it('offers a grip on the right edge while editing', () => {
-      const onResizeStart = vi.fn();
-      render(<GroupPanel group={groupOf()} editing onResizeStart={onResizeStart} />);
-
-      const grip = screen.getByRole('separator', { name: 'Resize Code' });
-      expect(grip).toHaveAttribute('aria-orientation', 'vertical');
-
-      fireEvent.pointerDown(grip);
-      expect(onResizeStart).toHaveBeenCalledTimes(1);
-    });
-
-    it('shows no grip when not editing, or when it cannot resize', () => {
-      const { rerender } = render(
-        <GroupPanel group={groupOf()} editing={false} onResizeStart={vi.fn()} />
-      );
-      expect(screen.queryByRole('separator')).not.toBeInTheDocument();
-
-      rerender(<GroupPanel group={groupOf()} editing />);
-      expect(screen.queryByRole('separator')).not.toBeInTheDocument();
     });
   });
 
@@ -294,7 +225,7 @@ describe('GroupPanel', () => {
       render(
         <GroupPanel
           group={groupOf()}
-          editing={false}
+
           onLinkDragOver={onLinkDragOver}
           onLinkDragLeave={onLinkDragLeave}
           onLinkDrop={onLinkDrop}

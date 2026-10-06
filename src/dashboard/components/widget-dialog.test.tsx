@@ -174,6 +174,67 @@ describe('WidgetDialog', () => {
     });
   });
 
+  describe('height', () => {
+    it('offers Fit and the usual heights, with Fit chosen for a widget that has none', () => {
+      open(widgetOf('hackernews'));
+      const radios = within(screen.getByRole('radiogroup', { name: 'Height' })).getAllByRole(
+        'radio'
+      );
+
+      expect(radios.map((radio) => radio.textContent)).toEqual(['Fit', 'S', 'M', 'L', 'XL']);
+      expect(radios.map((radio) => radio.getAttribute('aria-checked'))).toEqual([
+        'true',
+        'false',
+        'false',
+        'false',
+        'false'
+      ]);
+    });
+
+    it('saves the height that was chosen', async () => {
+      const { onSave } = open(widgetOf('hackernews'));
+
+      await choose('Height', 'L');
+      await save();
+
+      expect(saved(onSave)).toMatchObject({ height: 96 });
+    });
+
+    it('goes back to fitting, which saves no height', async () => {
+      const { onSave } = open(widgetOf('hackernews', { height: 72 }));
+      expect(
+        within(screen.getByRole('radiogroup', { name: 'Height' })).getByRole('radio', { name: 'M' })
+      ).toBeChecked();
+
+      await choose('Height', 'Fit');
+      await save();
+
+      expect(saved(onSave).height).toBeUndefined();
+    });
+
+    it('shows a height dragging made, as pixels, rather than losing it', async () => {
+      const { onSave } = open(widgetOf('hackernews', { height: 50 }));
+
+      expect(
+        within(screen.getByRole('radiogroup', { name: 'Height' })).getByRole('radio', {
+          name: '200px'
+        })
+      ).toBeChecked();
+
+      await save();
+      expect(saved(onSave)).toMatchObject({ height: 50 });
+    });
+
+    it('keeps the widget’s place on the board when saved', async () => {
+      const { onSave } = open(widgetOf('hackernews', { column: 4, row: 12 }));
+
+      await choose('Height', 'S');
+      await save();
+
+      expect(saved(onSave)).toMatchObject({ column: 4, row: 12, height: 48 });
+    });
+  });
+
   describe('weather', () => {
     it('shows the place and the units', () => {
       open(widgetOf('weather', { location: 'Cape Town', units: 'imperial' }));

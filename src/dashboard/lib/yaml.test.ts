@@ -18,6 +18,35 @@ describe('dashboard YAML', () => {
     expect(parsed.ok && strip(parsed.value)).toEqual(strip(config));
   });
 
+  it('writes a card’s height and place only when it has them, as plain words, and reads them back', () => {
+    const config = sanitizeConfig({
+      widgets: [{ type: 'calendar', width: 3, height: 60, column: 8, row: 0 }],
+      groups: [
+        { name: 'Tall', height: 72, column: 0, row: 4, bookmarks: [] },
+        { name: 'Plain', bookmarks: [] }
+      ]
+    });
+    const yaml = configToYaml(config);
+
+    // `y` would have been quoted as a YAML 1.1 boolean, which is why it is not the name.
+    expect(yaml).toMatch(/^\s+column: 0$/m);
+    expect(yaml).toMatch(/^\s+row: 4$/m);
+    expect(yaml).toMatch(/^\s+height: 72$/m);
+    expect(yaml.match(/^\s*height:/gm)).toHaveLength(2);
+    expect(yaml.match(/^\s*column:/gm)).toHaveLength(2);
+    expect(yaml).toContain('A height is rows of 4');
+
+    const parsed = yamlToConfig(yaml);
+    expect(parsed.ok && strip(parsed.value)).toEqual(strip(config));
+  });
+
+  it('leaves a half-set place out of a group’s YAML', () => {
+    const config = sanitizeConfig({ groups: [{ name: 'A', bookmarks: [] }] });
+    config.pages[0].groups[0] = { ...config.pages[0].groups[0], column: 3 };
+
+    expect(configToYaml(config)).not.toMatch(/^\s*column:/m);
+  });
+
   it('carries the status bar’s services in the export, and leaves them out when there are none', () => {
     const watching = configToYaml(
       sanitizeConfig({ status: ['npm', 'github'], statusDegraded: true })

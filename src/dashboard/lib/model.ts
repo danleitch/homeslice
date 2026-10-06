@@ -43,7 +43,31 @@ export const GRID_COLUMNS = 12;
 export const MIN_SPAN = 3;
 export const DEFAULT_GROUP_SPAN = 4;
 
-export type Group = {
+/** The board's rows are this many pixels tall; a card's `height` counts them. */
+export const ROW_PX = 4;
+/** The gap between cards, across and down, in pixels. */
+export const GRID_GAP = 18;
+/** A card set to a height is never shorter or taller than this, in rows. */
+export const MIN_ROWS = 36;
+export const MAX_ROWS = 600;
+/** Dragging a card's bottom edge snaps its height to a multiple of this many rows. */
+export const HEIGHT_STEP = 6;
+
+/**
+ * Where a card sits on the board and how tall it is, all optional. A card with
+ * none of it is placed in order after the others and is as tall as what is in
+ * it; moving or resizing cards fills these in.
+ */
+export type Placement = {
+  /** Rows of ROW_PX pixels, from MIN_ROWS to MAX_ROWS. Left out, the card fits its contents. */
+  height?: number;
+  /** The column the card starts in, counting from 0. Only meaningful together with `row`. */
+  column?: number;
+  /** The row the card starts on, counting from 0. */
+  row?: number;
+};
+
+export type Group = Placement & {
   id: string;
   name: string;
   icon: string;
@@ -99,18 +123,20 @@ export type CalendarWidget = {
   weekStart: 0 | 1;
 };
 
-export type Widget =
-  | WeatherWidget
-  | MarketsWidget
-  | ClockWidget
-  | FocusWidget
-  | HackerNewsWidget
-  | CalendarWidget
-  | AgendaWidget
-  | GithubTrendingWidget
-  | PullsWidget
-  | BenchmarkWidget
-  | PopularTvWidget;
+export type Widget = Placement &
+  (
+    | WeatherWidget
+    | MarketsWidget
+    | ClockWidget
+    | FocusWidget
+    | HackerNewsWidget
+    | CalendarWidget
+    | AgendaWidget
+    | GithubTrendingWidget
+    | PullsWidget
+    | BenchmarkWidget
+    | PopularTvWidget
+  );
 export type WidgetType = Widget['type'];
 
 export const WIDGET_TYPES: readonly WidgetType[] = [
@@ -371,6 +397,33 @@ const clampNumber = (value: unknown, min: number, max: number, fallback: number)
 export const clampSpan = (value: unknown, fallback = DEFAULT_GROUP_SPAN): number =>
   Math.round(clampNumber(value, MIN_SPAN, GRID_COLUMNS, fallback));
 
+/** A row far below anything a board reaches, so a wild `row` can't make the page enormous. */
+const MAX_ROW = 10_000;
+
+const wholeNumber = (value: unknown, min: number, max: number): number | undefined => {
+  const number = typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
+  return typeof number === 'number' && Number.isFinite(number)
+    ? Math.round(Math.min(max, Math.max(min, number)))
+    : undefined;
+};
+
+/**
+ * A card's height, and where it sits once it has been put somewhere. Anything
+ * unusable is left out, so the card goes back to fitting its contents and
+ * taking the next free place; `column` means nothing without `row`.
+ */
+export const readPlacement = (value: Record<string, unknown>): Placement => {
+  const rows = wholeNumber(value.height, 0, MAX_ROWS);
+  const height = rows ? Math.max(MIN_ROWS, rows) : undefined;
+  const column = wholeNumber(value.column, 0, GRID_COLUMNS - MIN_SPAN);
+  const row = wholeNumber(value.row, 0, MAX_ROW);
+
+  return {
+    ...(height !== undefined ? { height } : {}),
+    ...(column !== undefined && row !== undefined ? { column, row } : {})
+  };
+};
+
 const sanitizeBookmark = (value: unknown): Bookmark | null => {
   if (!isRecord(value)) {
     return null;
@@ -408,7 +461,8 @@ const sanitizeGroup = (value: unknown): Group | null => {
     width: clampSpan(value.width),
     style: oneOf(value.style, BOOKMARK_STYLES, 'cards'),
     collapsed: value.collapsed === true,
-    bookmarks
+    bookmarks,
+    ...readPlacement(value)
   };
 };
 
@@ -449,6 +503,11 @@ const sanitizeZones = (value: unknown): ClockZone[] =>
     .slice(0, 8);
 
 const sanitizeWidget = (value: unknown): Widget | null => {
+  const widget = sanitizeWidgetSettings(value);
+  return widget && isRecord(value) ? { ...widget, ...readPlacement(value) } : widget;
+};
+
+const sanitizeWidgetSettings = (value: unknown): Widget | null => {
   if (!isRecord(value)) {
     return null;
   }

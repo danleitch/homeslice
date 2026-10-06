@@ -2,12 +2,10 @@ import {
   forwardRef,
   type CSSProperties,
   type HTMLAttributes,
-  type PointerEvent,
   type ReactNode,
   type JSX
 } from 'react';
 import { GripVertical, Settings2, X } from 'lucide-react';
-import type { DraggableSyntheticListeners } from '@dnd-kit/core';
 import { presetTitle } from '../lib/benchlm';
 import { WIDGET_LABELS, type Widget } from '../lib/model';
 import { noDrag } from '../components/no-drag';
@@ -18,63 +16,24 @@ type WidgetFrameProps = Omit<HTMLAttributes<HTMLElement>, 'children'> & {
   children: ReactNode;
   /** Something to show beside the title, like when the data was fetched. */
   aside?: ReactNode;
-  overlay?: boolean;
-  placeholder?: boolean;
-  handleRef?: (element: HTMLElement | null) => void;
-  handleListeners?: DraggableSyntheticListeners;
   onConfigure?: (widget: Widget) => void;
   onRemove?: (widget: Widget) => void;
-  onResizeStart?: (event: PointerEvent<HTMLElement>) => void;
 };
 
-/** The glass every widget sits in, with a header to carry it by. */
+/** The glass every widget sits in, with a header to carry it by. The board sizes and places it. */
 export const WidgetFrame = forwardRef<HTMLElement, WidgetFrameProps>(
-  (
-    {
-      widget,
-      editing,
-      children,
-      aside,
-      overlay = false,
-      placeholder = false,
-      handleRef,
-      handleListeners,
-      onConfigure,
-      onRemove,
-      onResizeStart,
-      className,
-      style,
-      ...rest
-    },
-    ref
-  ) => {
+  ({ widget, editing, children, aside, onConfigure, onRemove, className, ...rest }, ref) => {
     const subtitle = widget.type === 'benchlm' ? presetTitle(widget) : null;
 
     return (
       <section
         ref={ref}
-        className={[
-          'wdg',
-          'glass',
-          `wdg--${widget.type}`,
-          overlay && 'wdg--overlay',
-          placeholder && 'wdg--placeholder',
-          className
-        ]
-          .filter(Boolean)
-          .join(' ')}
-        style={
-          {
-            '--span': widget.width,
-            '--span-md': widget.width <= 6 ? 6 : 12,
-            ...style
-          } as CSSProperties
-        }
+        className={['wdg', 'glass', `wdg--${widget.type}`, className].filter(Boolean).join(' ')}
         aria-label={WIDGET_LABELS[widget.type]}
         data-dash=""
         {...rest}
       >
-        <header className="wdg-head" ref={handleRef} {...handleListeners}>
+        <header className="wdg-head">
           <GripVertical className="grp-grip" size={13} aria-hidden="true" />
           <h2 className="wdg-title">
             {WIDGET_LABELS[widget.type]}
@@ -114,17 +73,6 @@ export const WidgetFrame = forwardRef<HTMLElement, WidgetFrameProps>(
           </span>
         </header>
         <div className="wdg-body">{children}</div>
-        {editing && onResizeStart && (
-          <span
-            className="resize-grip"
-            role="separator"
-            aria-orientation="vertical"
-            aria-label={`Resize ${WIDGET_LABELS[widget.type]}`}
-            title="Drag to resize"
-            {...noDrag}
-            onPointerDown={onResizeStart}
-          />
-        )}
       </section>
     );
   }

@@ -1,9 +1,15 @@
 import { useState, type FormEvent, type JSX } from 'react';
-import { STYLE_CHOICES, WIDTH_OPTIONS } from './layout-options';
+import {
+  FIT_HEIGHT,
+  STYLE_CHOICES,
+  WIDTH_OPTIONS,
+  heightChoices,
+  heightOfChoice
+} from './layout-options';
 import type { BookmarkStyle, Group } from '../lib/model';
 import { Field, Modal, Segmented } from './ui';
 
-export type GroupFields = Pick<Group, 'name' | 'icon' | 'style' | 'width'>;
+export type GroupFields = Pick<Group, 'name' | 'icon' | 'style' | 'width' | 'height'>;
 
 type GroupDialogProps = {
   initial?: Partial<GroupFields>;
@@ -17,6 +23,7 @@ export const GroupDialog = ({ initial, mode, onSave, onClose }: GroupDialogProps
   const [icon, setIcon] = useState(initial?.icon ?? '');
   const [style, setStyle] = useState<BookmarkStyle>(initial?.style ?? 'cards');
   const [width, setWidth] = useState(initial?.width ?? 4);
+  const [height, setHeight] = useState(initial?.height);
   const [error, setError] = useState('');
 
   const submit = (event: FormEvent): void => {
@@ -27,7 +34,7 @@ export const GroupDialog = ({ initial, mode, onSave, onClose }: GroupDialogProps
       return;
     }
 
-    onSave({ name: name.trim(), icon: icon.trim(), style, width });
+    onSave({ name: name.trim(), icon: icon.trim(), style, width, height });
   };
 
   return (
@@ -99,7 +106,19 @@ export const GroupDialog = ({ initial, mode, onSave, onClose }: GroupDialogProps
             }
             onChange={(value) => setWidth(Number(value))}
           />
-          <span className="field-hint">In edit mode you can also drag a group’s right edge.</span>
+          <span className="field-hint">
+            In edit mode you can also drag a group’s edge or corner.
+          </span>
+        </div>
+        <div className="field">
+          <span className="field-label">Height</span>
+          <Segmented
+            label="Height"
+            value={height === undefined ? FIT_HEIGHT : String(height)}
+            options={heightChoices(height)}
+            onChange={(value) => setHeight(heightOfChoice(value))}
+          />
+          <span className="field-hint">Fit is as tall as the bookmarks in it.</span>
         </div>
       </form>
     </Modal>

@@ -28,8 +28,10 @@ export const YAML_HEADER = `# Your dashboard: bookmarks, widgets and settings.
 #   si-github (Simple Icons), mdi-home (Material Design Icons),
 #   sh-jellyfin (selfh.st icons), plex.png (dashboard-icons),
 #   an emoji like 🚀, or the address of any image.
-# Each of the three pages has its own widgets and groups, in order.
-# Widths are columns of a 12-column board, from 3 to 12.
+# Each of the three pages has its own widgets and groups.
+# Widths are columns of a 12-column board, from 3 to 12. A height is rows of 4
+# pixels; leave it out and the card is as tall as what is in it. Once you drag a
+# card, the board writes where it sits as column and row, counting from 0.
 #
 # An Agenda widget keeps its Google Calendar addresses here, encrypted with a
 # key that stays in the browser that saved them: they can't be read from this
@@ -52,8 +54,12 @@ const groupToYaml = (group: Group): Record<string, unknown> => ({
   name: group.name,
   ...(group.icon ? { icon: group.icon } : {}),
   width: group.width,
+  ...(group.height !== undefined ? { height: group.height } : {}),
   style: group.style,
   ...(group.collapsed ? { collapsed: true } : {}),
+  ...(group.column !== undefined && group.row !== undefined
+    ? { column: group.column, row: group.row }
+    : {}),
   bookmarks: group.bookmarks.map(bookmarkToYaml)
 });
 

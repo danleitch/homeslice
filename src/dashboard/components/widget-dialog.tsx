@@ -28,7 +28,7 @@ import {
   type WidgetType
 } from '../lib/model';
 import { WIDGET_ICONS } from '../widgets/widget-icons';
-import { WIDTH_OPTIONS } from './layout-options';
+import { FIT_HEIGHT, WIDTH_OPTIONS, heightChoices, heightOfChoice } from './layout-options';
 import { Field, Modal, Segmented, Switch } from './ui';
 
 export const WidgetPicker = ({
@@ -791,6 +791,17 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
             }
             onChange={(value) => patch({ width: Number(value) })}
           />
+        </div>
+
+        <div className="field">
+          <span className="field-label">Height</span>
+          <Segmented
+            label="Height"
+            value={draft.height === undefined ? FIT_HEIGHT : String(draft.height)}
+            options={heightChoices(draft.height)}
+            onChange={(value) => patch({ height: heightOfChoice(value) })}
+          />
+          <span className="field-hint">Fit is as tall as what the widget shows.</span>
         </div>
       </form>
     </Modal>
