@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   addBookmark,
   addGroup,
+  addWidget,
   arrayMove,
   deleteGroup,
   fitCard,
@@ -488,5 +489,42 @@ describe('where the cards sit', () => {
       expect(next.groups[3]).not.toHaveProperty('column');
       expect(next.groups[3]).not.toHaveProperty('row');
     });
+  });
+});
+
+describe('addWidget', () => {
+  it('adds a new widget of the type at the end, as new ones start', () => {
+    const { config, widget } = addWidget(board(), 'hackernews');
+
+    expect(config.widgets).toHaveLength(2);
+    expect(config.widgets[1]).toBe(widget);
+    expect(widget).toEqual(expect.objectContaining({ type: 'hackernews', count: 6 }));
+  });
+
+  it('adds one with the settings it is given, as they are', () => {
+    const settings = { ...createWidget('hackernews'), count: 11, width: 6 };
+    const { config, widget } = addWidget(board(), 'hackernews', settings);
+
+    expect(widget).toMatchObject({ type: 'hackernews', count: 11, width: 6 });
+    expect(config.widgets[config.widgets.length - 1]).toBe(widget);
+  });
+
+  it('gives it an id of its own, so one set of settings added twice is two widgets', () => {
+    const settings = createWidget('clock');
+    const first = addWidget(board(), 'clock', settings);
+    const second = addWidget(first.config, 'clock', settings);
+
+    expect(first.widget.id).not.toBe(settings.id);
+    expect(second.widget.id).not.toBe(first.widget.id);
+    expect(new Set(second.config.widgets.map((widget) => widget.id)).size).toBe(3);
+  });
+
+  it('leaves the settings it was given, and the board it was given, as they were', () => {
+    const settings = createWidget('clock');
+    const before = board();
+    addWidget(before, 'clock', settings);
+
+    expect(settings.id).toBe(settings.id);
+    expect(before.widgets).toHaveLength(1);
   });
 });

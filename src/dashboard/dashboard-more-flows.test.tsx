@@ -199,7 +199,7 @@ describe('Dashboard: more flows', () => {
       render(<App />);
       key({ key: 'e' });
       await userEvent.click(screen.getByRole('button', { name: /Add a widget/ }));
-      await userEvent.click(screen.getByRole('button', { name: /Weather/ }));
+      await userEvent.click(screen.getByRole('button', { name: 'Add Weather' }));
       expect(screen.getByRole('dialog', { name: 'Weather' })).toBeInTheDocument();
 
       await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));

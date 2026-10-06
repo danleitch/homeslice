@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createWidget, type Widget, type WidgetType } from './model';
-import { draftProblem, tidyWidget } from './widget-draft';
+import { draftProblem, forBoard, tidyWidget } from './widget-draft';
 
 type Of<T extends WidgetType> = Extract<Widget, { type: T }>;
 
@@ -157,5 +157,66 @@ describe('tidyWidget', () => {
     const widget = widgetOf('hackernews', { count: 9 });
 
     expect(tidyWidget(widget)).toBe(widget);
+  });
+});
+
+describe('forBoard', () => {
+  it('leaves the example’s tasks and note behind, and keeps how Notes is set', () => {
+    const notes = widgetOf('notes', {
+      mode: 'text',
+      width: 6,
+      items: [{ text: 'sample', done: true }],
+      text: 'sample note'
+    });
+
+    expect(forBoard(notes)).toMatchObject({
+      type: 'notes',
+      mode: 'text',
+      width: 6,
+      items: [],
+      text: ''
+    });
+  });
+
+  it('leaves the example’s calendars behind', () => {
+    const agenda = widgetOf('agenda', {
+      count: 9,
+      calendars: [{ name: 'Personal', description: '', url: 'sample:personal' }]
+    });
+
+    expect(forBoard(agenda)).toMatchObject({ type: 'agenda', count: 9, calendars: [] });
+  });
+
+  it('leaves the example’s token behind', () => {
+    expect(forBoard(widgetOf('prs', { token: 'sample', count: 7 }))).toMatchObject({
+      type: 'prs',
+      token: '',
+      count: 7
+    });
+  });
+
+  it.each([
+    'weather',
+    'markets',
+    'clock',
+    'focus',
+    'calendar',
+    'hackernews',
+    'github',
+    'benchlm',
+    'tv',
+    'movies',
+    'news'
+  ] as const)('hands a %s widget over as it is', (type) => {
+    const widget = createWidget(type);
+
+    expect(forBoard(widget)).toBe(widget);
+  });
+
+  it('does not change the widget it was given', () => {
+    const notes = widgetOf('notes', { items: [{ text: 'a', done: false }] });
+    forBoard(notes);
+
+    expect(notes.items).toHaveLength(1);
   });
 });

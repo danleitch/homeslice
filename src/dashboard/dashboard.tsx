@@ -46,6 +46,7 @@ import { StatusBar } from './components/status-bar';
 import { EditDock, EmptyBoard, TopBar } from './components/top-bar';
 import { ContextMenu, Toasts, type MenuItem } from './components/ui';
 import { WidgetDialog } from './components/widget-dialog';
+import { needsSetup } from './lib/gallery';
 import { WidgetPicker } from './components/widget-gallery';
 import { useDashboard, type ApplyToPage } from './hooks/use-dashboard';
 import { usePage } from './hooks/use-page';
@@ -68,6 +69,7 @@ import {
 } from './lib/edit';
 import {
   PAGE_COUNT,
+  SETUP_FIRST,
   WIDGET_LABELS,
   allGroups,
   createStarterConfig,
@@ -996,28 +998,20 @@ export const Dashboard = ({
             types={enabledWidgetTypes(extensions)}
             clock={config.clock}
             onClose={() => setPickerOpen(false)}
-            onPick={(type) => {
+            onPick={({ type, settings }) => {
               setPickerOpen(false);
               const created: { widget: Widget | null } = { widget: null };
               apply((current) => {
-                const result = addWidget(current, type);
+                const result = addWidget(current, type, settings);
                 created.widget = result.widget;
                 return result.config;
               });
 
-              // Most widgets want a word about what to show before they are useful.
+              // Most widgets want a word about what to show before they are useful. One that was
+              // set up in the gallery has had it, unless what it wants is only its owner's to give.
               if (
                 created.widget &&
-                ![
-                  'calendar',
-                  'agenda',
-                  'hackernews',
-                  'github',
-                  'benchlm',
-                  'tv',
-                  'movies',
-                  'notes'
-                ].includes(type)
+                (settings ? needsSetup(created.widget) : SETUP_FIRST.includes(type))
               ) {
                 setWidgetDialog(created.widget);
               }

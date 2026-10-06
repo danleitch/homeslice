@@ -13,6 +13,7 @@ import {
   createGroup,
   createWidget,
   minSpanOf,
+  newId,
   type BoardPage,
   type Bookmark,
   type PageConfig,
@@ -221,11 +222,17 @@ export const moveGroup = (config: PageConfig, from: number, to: number): PageCon
   return { ...config, groups: arrayMove(groups, from, to) };
 };
 
+/**
+ * Adds a widget at the end: one with the settings a new one starts with, or, when it is given
+ * some, one that has them. A widget given is never kept as it is: it may be added more than once,
+ * and each is its own.
+ */
 export const addWidget = (
   config: PageConfig,
-  type: WidgetType
+  type: WidgetType,
+  settings?: Widget
 ): { config: PageConfig; widget: Widget } => {
-  const widget = createWidget(type);
+  const widget = settings ? ({ ...settings, id: newId('w') } as Widget) : createWidget(type);
   return { config: { ...config, widgets: [...config.widgets, widget] }, widget };
 };
 

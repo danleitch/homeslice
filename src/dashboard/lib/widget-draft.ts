@@ -102,3 +102,20 @@ export const tidyWidget = (draft: Widget): Widget => {
       return draft;
   }
 };
+
+/**
+ * A widget as the gallery hands it to the board. What only the examples have is left behind: the
+ * sample tasks and note, the sample calendars and the sample token are not the visitor's.
+ */
+export const forBoard = (widget: Widget): Widget => {
+  switch (widget.type) {
+    case 'notes':
+      return { ...widget, items: [], text: '' };
+    case 'agenda':
+      return { ...widget, calendars: [] };
+    case 'prs':
+      return { ...widget, token: '' };
+    default:
+      return widget;
+  }
+};

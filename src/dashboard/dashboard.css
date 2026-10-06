@@ -1823,6 +1823,15 @@ body {
   font-size: 0.76rem;
 }
 
+/* A token's pool, on a line of its own: the warning that it is thin must not be cut short. */
+.mkt-liq {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+}
+
 .mkt-liq[data-thin] {
   color: #f3c969;
 }
@@ -2806,8 +2815,34 @@ body {
   break-inside: avoid;
 }
 
+.gallery-card[data-wide] .gallery-stage {
+  width: 100%;
+}
+
 .gallery-stage {
+  width: calc(var(--share, 1) * 100%);
   min-width: 0;
+  max-width: 100%;
+}
+
+/* From half the board up, an example has the gallery to itself, as wide as it will be. */
+.gallery-card[data-wide] {
+  column-span: all;
+  width: calc(var(--share, 1) * 100%);
+}
+
+.gallery-options {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.gallery-options .form,
+.gallery-options .field {
+  margin: 0;
 }
 
 /* The widget as the board draws it, on the modal's own dark rather than on a wallpaper. */
@@ -2856,6 +2891,14 @@ body {
 
 .gallery-add {
   flex: none;
+}
+
+@media (max-width: 720px) {
+  /* A share of a phone's width is no width at all: examples fill the card there. */
+  .gallery-stage,
+  .gallery-card[data-wide] {
+    width: 100%;
+  }
 }
 
 @media (max-width: 560px) {

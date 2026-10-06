@@ -177,6 +177,13 @@ export const WIDGET_TYPES: readonly WidgetType[] = [
   'news'
 ];
 
+/**
+ * The widgets that can't show anything useful until they are told something (a place, some
+ * symbols, the zones, a token), so the dialog of their settings opens when one is added. The
+ * others begin showing at once, and are set up afterwards if at all.
+ */
+export const SETUP_FIRST: readonly WidgetType[] = ['weather', 'markets', 'clock', 'focus', 'prs'];
+
 export const WIDGET_LABELS: Readonly<Record<WidgetType, string>> = {
   weather: 'Weather',
   markets: 'Markets',

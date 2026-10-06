@@ -86,19 +86,16 @@ export const MarketsWidget = ({ widget }: { widget: MarketsWidgetConfig }): JSX.
           >
             <span className="mkt-id">
               <span className="mkt-symbol">{quote.symbol}</span>
-              <span className="mkt-name">
-                {quote.name}
-                {quote.liquidity !== undefined && (
-                  <span
-                    className="mkt-liq"
-                    data-thin={quote.liquidity < THIN_LIQUIDITY ? '' : undefined}
-                    title="The money in the pool this price comes from. In a small pool, a few trades move the price a long way."
-                  >
-                    {quote.name ? ' · ' : ''}
-                    {compactUsd(quote.liquidity)} liquidity
-                  </span>
-                )}
-              </span>
+              <span className="mkt-name">{quote.name}</span>
+              {quote.liquidity !== undefined && (
+                <span
+                  className="mkt-liq"
+                  data-thin={quote.liquidity < THIN_LIQUIDITY ? '' : undefined}
+                  title="The money in the pool this price comes from. In a small pool, a few trades move the price a long way."
+                >
+                  {compactUsd(quote.liquidity)} liquidity
+                </span>
+              )}
             </span>
             <Sparkline quote={quote} />
             <span className="mkt-values">

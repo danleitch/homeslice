@@ -9,6 +9,7 @@ import type { Story } from './hackernews';
 import type { Trending } from './github';
 import type { Title } from './tmdb';
 import type { WeatherReport } from './weather';
+import { pickModels, priceKey, type Prices, type Rankings } from './benchlm';
 
 const EVENING = new Date(2026, 9, 6, 18, 0);
 const LATE = new Date(2026, 9, 6, 23, 30);
@@ -33,7 +34,7 @@ describe('sampleWidget', () => {
   });
 
   it('has a place for the weather, so it shows rather than asks', () => {
-    expect(sampleWidget('weather')).toMatchObject({ location: 'Cape Town' });
+    expect(sampleWidget('weather')).toMatchObject({ location: 'Cape Town, South Africa' });
   });
 
   it('has tasks, some done, and a note, for Notes to show', () => {
@@ -191,6 +192,150 @@ describe('sampleReading', () => {
 
     expect(times).toEqual([...times].sort((a, b) => b - a));
     expect(times[0]).toBeLessThanOrEqual(EVENING.getTime() / 1000);
+  });
+
+  describe('following the settings in the key', () => {
+    describe('the weather, by place and units', () => {
+      const at = (key: string) => sampleReading(key, EVENING) as WeatherReport;
+
+      it('is of the place it was asked about, and its country when the place says one', () => {
+        expect(at('weather:oslo:metric').place).toMatchObject({ name: 'Oslo', country: '' });
+        expect(at('weather:portland, oregon, us:metric').place).toMatchObject({
+          name: 'Portland',
+          country: 'Oregon, US'
+        });
+        expect(at('weather:cape town, south africa:metric').place).toMatchObject({
+          name: 'Cape Town',
+          country: 'South Africa'
+        });
+      });
+
+      it('is of Cape Town for a place that is nothing', () => {
+        expect(at('weather::metric').place.name).toBe('Cape Town');
+        expect(at('weather').place.name).toBe('Cape Town');
+      });
+
+      it('is in degrees Celsius and kilometres an hour for metric, and for no units at all', () => {
+        const metric = at('weather:oslo:metric');
+
+        expect(at('weather:oslo')).toEqual(metric);
+        expect(metric.wind).toBe(14);
+      });
+
+      it('is in degrees Fahrenheit and miles an hour for imperial, all through', () => {
+        const metric = at('weather:oslo:metric');
+        const imperial = at('weather:oslo:imperial');
+        const f = (c: number) => Math.round((c * 9) / 5 + 32);
+
+        expect(imperial.temperature).toBe(f(metric.temperature));
+        expect(imperial.apparent).toBe(f(metric.apparent));
+        expect(imperial.high).toBe(f(metric.high));
+        expect(imperial.low).toBe(f(metric.low));
+        expect(imperial.wind).toBe(9);
+        expect(imperial.columns.map((column) => column.temperature)).toEqual(
+          metric.columns.map((column) => f(column.temperature))
+        );
+        expect(imperial.days.map((day) => day.high)).toEqual(metric.days.map((day) => f(day.high)));
+        expect(imperial.columns.map((column) => column.scale)).toEqual(
+          metric.columns.map((column) => column.scale)
+        );
+      });
+    });
+
+    describe('GitHub, by period and language', () => {
+      const repos = (key: string) => (sampleReading(key, EVENING) as Trending).repos;
+
+      it('has every language for “all”, and only the one asked for otherwise', () => {
+        expect(
+          new Set(repos('github:daily:all:15').map((repo) => repo.language)).size
+        ).toBeGreaterThan(5);
+        expect(new Set(repos('github:daily:typescript:15').map((repo) => repo.language))).toEqual(
+          new Set(['TypeScript'])
+        );
+      });
+
+      it('takes a language by the slug GitHub gives it', () => {
+        expect(repos('github:daily:c-sharp:15')).toEqual([]);
+        expect(repos('github:daily:go:15').every((repo) => repo.language === 'Go')).toBe(true);
+      });
+
+      it('counts after the language, so it has as many of that language as there are, up to the count', () => {
+        expect(repos('github:daily:typescript:2')).toHaveLength(2);
+        expect(repos('github:daily:zig:6')).toHaveLength(1);
+      });
+
+      it('has nothing for a language nobody has written', () => {
+        expect(repos('github:daily:cobol:6')).toEqual([]);
+      });
+
+      it('has more stars gained over a longer period', () => {
+        const day = repos('github:daily:all:1')[0]!.gained;
+
+        expect(repos('github:weekly:all:1')[0]!.gained).toBe(day * 4);
+        expect(repos('github:monthly:all:1')[0]!.gained).toBe(day * 12);
+        expect(repos('github:fortnightly:all:1')[0]!.gained).toBe(day);
+      });
+    });
+
+    describe('the leaderboard, by ranking', () => {
+      const ranked = (key: string) => sampleReading(key, EVENING) as Rankings;
+      const names = (key: string) => ranked(key).models.map((model) => model.name);
+
+      it('has the same models in every ranking', () => {
+        expect([...names('benchlm:coding')].sort()).toEqual([...names('benchlm:overall')].sort());
+      });
+
+      it('puts them in a different order for a different ranking, the same way each time', () => {
+        expect(names('benchlm:coding')).not.toEqual(names('benchlm:overall'));
+        expect(names('benchlm:coding')).toEqual(names('benchlm:coding'));
+        expect(names('benchlm:agentic')).not.toEqual(names('benchlm:coding'));
+      });
+
+      it('numbers them from one, best first, whatever the ranking', () => {
+        for (const surface of ['overall', 'coding', 'agentic', 'knowledge']) {
+          const { models } = ranked(`benchlm:${surface}`);
+
+          expect(models.map((model) => model.rank)).toEqual(
+            models.map((_model, index) => index + 1)
+          );
+          expect(models.map((model) => model.score)).toEqual(
+            [...models.map((model) => model.score)].sort((a, b) => b - a)
+          );
+          expect(models.every((model) => model.score <= 99.9)).toBe(true);
+        }
+      });
+
+      it('has a price for some of them, and not for the rest, as the real list has', () => {
+        const priced = sampleReading('benchlm:prices', EVENING) as Prices;
+        const { models } = ranked('benchlm:overall');
+        const have = models.filter((model) => priced[priceKey(model.name)]);
+
+        expect(have.length).toBeGreaterThan(5);
+        expect(have.length).toBeLessThan(models.length);
+      });
+
+      it('has enough that are cheap for the Budget preset to fill its list', () => {
+        const priced = sampleReading('benchlm:prices', EVENING) as Prices;
+
+        expect(pickModels(ranked('benchlm:coding'), '', 5, 2, priced)).toHaveLength(5);
+      });
+    });
+
+    describe('TV and films, by period', () => {
+      const names = (key: string) =>
+        (sampleReading(key, EVENING) as Title[]).map((title) => title.name);
+
+      it('has the same titles today as this week, a few places along', () => {
+        for (const kind of ['tv', 'movie']) {
+          const week = names(`tmdb:${kind}:week`);
+          const day = names(`tmdb:${kind}:day`);
+
+          expect(day).not.toEqual(week);
+          expect([...day].sort()).toEqual([...week].sort());
+          expect(day[0]).toBe(week[3]);
+        }
+      });
+    });
   });
 
   it('has headlines for any feed, newest first, each a link that goes nowhere real', () => {

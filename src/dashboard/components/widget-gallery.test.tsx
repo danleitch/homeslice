@@ -1,9 +1,9 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FOCUS_KEY } from '../lib/focus';
 import { WIDGET_BLURBS, WIDGET_LABELS, WIDGET_TYPES, type WidgetType } from '../lib/model';
-import { WidgetPicker } from './widget-gallery';
+import { WidgetPicker, type WidgetPick } from './widget-gallery';
 
 const open = (props: Partial<Parameters<typeof WidgetPicker>[0]> = {}) => {
   const onPick = vi.fn();
@@ -93,7 +93,7 @@ describe('WidgetPicker', () => {
           within(card(type)).getByRole('button', { name: `Add ${WIDGET_LABELS[type]}` })
         );
 
-        expect(onPick).toHaveBeenCalledExactlyOnceWith(type);
+        expect(onPick).toHaveBeenCalledExactlyOnceWith({ type });
         expect(onClose).not.toHaveBeenCalled();
       }
     );
@@ -105,6 +105,373 @@ describe('WidgetPicker', () => {
       await userEvent.click(within(card('clock')).getByText('New York'));
 
       expect(onPick).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('customising an example', () => {
+    const customise = async (type: WidgetType): Promise<HTMLElement> => {
+      await userEvent.click(
+        within(card(type)).getByRole('button', { name: `Customise ${WIDGET_LABELS[type]}` })
+      );
+      return screen.getByRole('form', { name: `${WIDGET_LABELS[type]} options` });
+    };
+    const pickOf = (onPick: ReturnType<typeof vi.fn>): WidgetPick =>
+      onPick.mock.lastCall![0] as WidgetPick;
+    const add = (type: WidgetType) =>
+      userEvent.click(
+        within(card(type)).getByRole('button', { name: `Add ${WIDGET_LABELS[type]}` })
+      );
+
+    it('keeps the options closed until they are asked for, and says whether they are open', async () => {
+      open();
+      const button = within(card('weather')).getByRole('button', { name: 'Customise Weather' });
+
+      expect(button).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByRole('form', { name: 'Weather options' })).toBeNull();
+
+      await userEvent.click(button);
+      expect(button).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getByRole('form', { name: 'Weather options' })).toBeInTheDocument();
+
+      await userEvent.click(button);
+      expect(screen.queryByRole('form', { name: 'Weather options' })).toBeNull();
+    });
+
+    it('has the same settings a widget has in its own dialog, for every kind but the private', async () => {
+      open();
+      const form = await customise('weather');
+
+      expect(within(form).getByLabelText(/^Place/)).toHaveValue('Cape Town, South Africa');
+      expect(within(form).getByRole('radiogroup', { name: 'Units' })).toBeInTheDocument();
+      expect(within(form).getByRole('radiogroup', { name: 'Width' })).toBeInTheDocument();
+      expect(within(form).queryByRole('radiogroup', { name: 'Height' })).toBeNull();
+    });
+
+    it('does not ask for a calendar’s address or a token, which the examples have no use for', async () => {
+      open();
+      const agenda = await customise('agenda');
+      const prs = await customise('prs');
+
+      expect(within(agenda).queryByRole('button', { name: /Add calendar/ })).toBeNull();
+      expect(within(prs).queryByLabelText(/GitHub token/)).toBeNull();
+    });
+
+    it('does not submit anything, or leave the page, on Enter', async () => {
+      const { onPick } = open();
+      const form = await customise('weather');
+
+      await userEvent.type(within(form).getByLabelText(/^Place/), '{Enter}');
+
+      expect(onPick).not.toHaveBeenCalled();
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+
+    describe('the example follows the options', () => {
+      it('shows the units that were chosen', async () => {
+        open();
+        const form = await customise('weather');
+        expect(within(card('weather')).getByText('°C')).toBeInTheDocument();
+
+        await userEvent.click(within(form).getByRole('radio', { name: '°F, mph' }));
+
+        expect(within(card('weather')).getByText('°F')).toBeInTheDocument();
+        expect(within(card('weather')).getByTitle('Wind')).toHaveTextContent('mph');
+      });
+
+      it('is of the place that was typed', async () => {
+        open();
+        const form = await customise('weather');
+
+        await userEvent.clear(within(form).getByLabelText(/^Place/));
+        await userEvent.type(within(form).getByLabelText(/^Place/), 'Oslo');
+
+        expect(within(card('weather')).getByText('Oslo')).toBeInTheDocument();
+      });
+
+      it('shows as many headlines as it is set to', async () => {
+        open();
+        const form = await customise('hackernews');
+        expect(card('hackernews').querySelectorAll('.hn-item')).toHaveLength(6);
+
+        fireEvent.change(within(form).getByLabelText(/Stories/), { target: { value: '3' } });
+
+        expect(card('hackernews').querySelectorAll('.hn-item')).toHaveLength(3);
+      });
+
+      it('shows a token typed by its contract address, among the markets', async () => {
+        open();
+        const form = await customise('markets');
+        await userEvent.click(within(form).getByRole('button', { name: /Add symbol/ }));
+        const symbols = within(form).getAllByLabelText('Symbol');
+
+        await userEvent.type(
+          symbols[symbols.length - 1]!,
+          'DemoMint1111111111111111111111111111111pump'
+        );
+
+        expect(within(card('markets')).getByText('DEMO')).toBeInTheDocument();
+        expect(within(card('markets')).getByText(/liquidity/)).toBeInTheDocument();
+      });
+
+      it('reads the Budget preset, whose price limit needs the price list', async () => {
+        open();
+        const form = await customise('benchlm');
+
+        await userEvent.click(within(form).getByRole('radio', { name: 'Budget' }));
+
+        await waitFor(() =>
+          expect(card('benchlm').querySelectorAll('.bench-item')).toHaveLength(5)
+        );
+        expect(within(card('benchlm')).queryByText(/No ranked models cost/)).toBeNull();
+      });
+
+      it('narrows to what a language has, and says so when it has nothing', async () => {
+        open();
+        const form = await customise('github');
+
+        await userEvent.clear(within(form).getByLabelText(/Language/));
+        await userEvent.type(within(form).getByLabelText(/Language/), 'cobol');
+
+        expect(
+          await within(card('github')).findByText('Nothing is trending here right now.')
+        ).toBeInTheDocument();
+      });
+    });
+
+    describe('the width', () => {
+      const share = (type: WidgetType): string => card(type).style.getPropertyValue('--share');
+      const widen = async (type: WidgetType, name: string) =>
+        userEvent.click(within(await customise(type)).getByRole('radio', { name }));
+
+      it('starts at what a new widget is: a column of the gallery, whole', () => {
+        open();
+
+        expect(share('weather')).toBe('1');
+        expect(card('weather')).not.toHaveAttribute('data-wide');
+      });
+
+      it('makes a narrow widget a narrower example', async () => {
+        open();
+        await widen('hackernews', '¼');
+
+        expect(share('hackernews')).toBe('0.75');
+        expect(card('hackernews')).not.toHaveAttribute('data-wide');
+      });
+
+      it('gives a widget of half the board or more the whole gallery, at its share of it', async () => {
+        open();
+        await widen('weather', '½');
+        expect(card('weather')).toHaveAttribute('data-wide');
+        expect(share('weather')).toBe('0.5');
+
+        await userEvent.click(
+          within(screen.getByRole('form', { name: 'Weather options' })).getByRole('radio', {
+            name: 'Full'
+          })
+        );
+        expect(share('weather')).toBe('1');
+      });
+
+      it('shows what the width does: the weather’s days to come appear from half the board', async () => {
+        open();
+        expect(card('weather').querySelector('.wx-days')).toBeNull();
+
+        await widen('weather', '½');
+
+        expect(card('weather').querySelector('.wx-days')).not.toBeNull();
+      });
+
+      it('does not widen the other cards', async () => {
+        open();
+        await widen('weather', '½');
+
+        expect(card('hackernews')).not.toHaveAttribute('data-wide');
+        expect(share('hackernews')).toBe('1');
+      });
+    });
+
+    describe('what Add hands over', () => {
+      it('is just the kind, for an example whose options were never used', async () => {
+        const { onPick } = open();
+
+        await add('weather');
+
+        expect(pickOf(onPick)).toEqual({ type: 'weather' });
+      });
+
+      it('is just the kind, though the options were opened and closed again', async () => {
+        const { onPick } = open();
+        await customise('weather');
+        await userEvent.click(
+          within(card('weather')).getByRole('button', { name: 'Customise Weather' })
+        );
+
+        await add('weather');
+
+        expect(pickOf(onPick)).toEqual({ type: 'weather' });
+      });
+
+      it('is the widget as it was set, once the options are used', async () => {
+        const { onPick } = open();
+        const form = await customise('weather');
+
+        await userEvent.click(within(form).getByRole('radio', { name: '°F, mph' }));
+        await userEvent.click(within(form).getByRole('radio', { name: '½' }));
+        await add('weather');
+
+        expect(pickOf(onPick)).toMatchObject({
+          type: 'weather',
+          settings: {
+            type: 'weather',
+            units: 'imperial',
+            width: 6,
+            location: 'Cape Town, South Africa'
+          }
+        });
+      });
+
+      it('has the settings tidied, as a dialog’s are when it saves', async () => {
+        const { onPick } = open();
+        const form = await customise('weather');
+
+        await userEvent.clear(within(form).getByLabelText(/^Place/));
+        await userEvent.type(within(form).getByLabelText(/^Place/), '  Oslo  ');
+        await add('weather');
+
+        expect(pickOf(onPick).settings).toMatchObject({ location: 'Oslo' });
+      });
+
+      it('leaves behind the example’s own tasks, note, calendars and token', async () => {
+        const { onPick } = open();
+
+        await userEvent.click(
+          within(await customise('notes')).getByRole('radio', { name: 'Note' })
+        );
+        await add('notes');
+        expect(pickOf(onPick).settings).toMatchObject({
+          type: 'notes',
+          mode: 'text',
+          items: [],
+          text: ''
+        });
+
+        await userEvent.click(
+          within(await customise('agenda')).getByRole('radio', { name: 'List only' })
+        );
+        await add('agenda');
+        expect(pickOf(onPick).settings).toMatchObject({
+          type: 'agenda',
+          month: false,
+          calendars: []
+        });
+
+        await userEvent.click(within(await customise('prs')).getByRole('radio', { name: 'Mine' }));
+        await add('prs');
+        expect(pickOf(onPick).settings).toMatchObject({ type: 'prs', show: 'mine', token: '' });
+      });
+
+      it('is one card’s own, not another’s', async () => {
+        const { onPick } = open();
+        fireEvent.change(within(await customise('hackernews')).getByLabelText(/Stories/), {
+          target: { value: '11' }
+        });
+
+        await add('github');
+        expect(pickOf(onPick)).toEqual({ type: 'github' });
+
+        await add('hackernews');
+        expect(pickOf(onPick).settings).toMatchObject({ type: 'hackernews', count: 11 });
+      });
+
+      it('can be handed over again, each time as it was set then', async () => {
+        const { onPick } = open();
+        const form = await customise('tv');
+
+        await add('tv');
+        await userEvent.click(within(form).getByRole('radio', { name: 'Today' }));
+        await add('tv');
+
+        expect(onPick.mock.calls.map((call) => (call[0] as WidgetPick).settings)).toEqual([
+          undefined,
+          expect.objectContaining({ window: 'day' })
+        ]);
+      });
+
+      it('is not touched by using the example itself: a task added to the Notes example stays there', async () => {
+        const { onPick } = open();
+
+        await userEvent.type(
+          within(card('notes')).getByLabelText('Add a task'),
+          'My own task{Enter}'
+        );
+        expect(within(card('notes')).getByText('My own task')).toBeInTheDocument();
+        await add('notes');
+
+        expect(pickOf(onPick)).toEqual({ type: 'notes' });
+      });
+    });
+
+    describe('what cannot be added', () => {
+      it('is a weather widget with no place, which says so and cannot be added', async () => {
+        const { onPick } = open();
+        const form = await customise('weather');
+
+        await userEvent.clear(within(form).getByLabelText(/^Place/));
+
+        expect(within(form).getByRole('alert')).toHaveTextContent('Choose a place.');
+        const button = within(card('weather')).getByRole('button', { name: 'Add Weather' });
+        expect(button).toBeDisabled();
+        await userEvent.click(button);
+        expect(onPick).not.toHaveBeenCalled();
+      });
+
+      it('can be added again once it is mended', async () => {
+        const { onPick } = open();
+        const form = await customise('weather');
+        await userEvent.clear(within(form).getByLabelText(/^Place/));
+
+        await userEvent.type(within(form).getByLabelText(/^Place/), 'Oslo');
+
+        expect(within(form).queryByRole('alert')).toBeNull();
+        await add('weather');
+        expect(pickOf(onPick).settings).toMatchObject({ location: 'Oslo' });
+      });
+
+      it('is a clock with a zone that does not exist, which names it', async () => {
+        open();
+        const form = await customise('clock');
+
+        await userEvent.clear(within(form).getAllByLabelText('Time zone')[0]!);
+        await userEvent.type(within(form).getAllByLabelText('Time zone')[0]!, 'Mars/Olympus');
+
+        expect(within(form).getByRole('alert')).toHaveTextContent('“Mars/Olympus” isn’t a place');
+        expect(
+          within(card('clock')).getByRole('button', { name: 'Add World clock' })
+        ).toBeDisabled();
+      });
+
+      it.each([
+        ['agenda', 'List only', 'Add Agenda'],
+        ['prs', 'Mine', 'Add My PRs']
+      ] as const)(
+        'is not stopped by the %s example’s own calendars or token, which are never added',
+        async (type, option, button) => {
+          open();
+          const form = await customise(type);
+
+          await userEvent.click(within(form).getByRole('radio', { name: option }));
+
+          expect(within(form).queryByRole('alert')).toBeNull();
+          expect(within(card(type)).getByRole('button', { name: button })).toBeEnabled();
+        }
+      );
+
+      it('says nothing of a problem before the options are used', async () => {
+        open();
+        await customise('weather');
+
+        expect(screen.queryByRole('alert')).toBeNull();
+      });
     });
   });
 

@@ -367,6 +367,107 @@ describe('Dashboard flows', () => {
       expect(asked.filter((url) => url.startsWith('/api/calendar'))).toEqual([]);
     });
 
+    describe('the gallery, when an example was customised', () => {
+      const stored = (): string => window.localStorage.getItem(DASHBOARD_STORAGE_KEY) ?? '';
+      const openGallery = async (): Promise<HTMLElement> => {
+        render(<App />);
+        key({ key: 'e' });
+        await userEvent.click(screen.getByRole('button', { name: /Widget/ }));
+        return screen.getByRole('dialog', { name: 'Add a widget' });
+      };
+      const customise = async (gallery: HTMLElement, name: string): Promise<HTMLElement> => {
+        await userEvent.click(within(gallery).getByRole('button', { name: `Customise ${name}` }));
+        return within(gallery).getByRole('form', { name: `${name} options` });
+      };
+
+      it('adds the widget as it was set, with no settings dialog when it has all it needs', async () => {
+        const gallery = await openGallery();
+        const form = await customise(gallery, 'Weather');
+
+        await userEvent.clear(within(form).getByLabelText(/^Place/));
+        await userEvent.type(within(form).getByLabelText(/^Place/), 'Oslo');
+        await userEvent.click(within(form).getByRole('radio', { name: '°F, mph' }));
+        await userEvent.click(within(gallery).getByRole('button', { name: 'Add Weather' }));
+
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        await waitFor(() => expect(stored()).toContain('location: Oslo'));
+        expect(stored()).toContain('units: imperial');
+      });
+
+      it('still asks for a place when only the units were changed, which are not a place of its own', async () => {
+        const gallery = await openGallery();
+        const form = await customise(gallery, 'Weather');
+
+        await userEvent.click(within(form).getByRole('radio', { name: '°F, mph' }));
+        await userEvent.click(within(gallery).getByRole('button', { name: 'Add Weather' }));
+
+        const dialog = screen.getByRole('dialog', { name: 'Weather' });
+        expect(within(dialog).getByRole('radio', { name: '°F, mph' })).toBeChecked();
+      });
+
+      it('carries the width and the settings of a widget that needs nothing from its owner', async () => {
+        const gallery = await openGallery();
+        const form = await customise(gallery, 'Hacker News');
+
+        fireEvent.change(within(form).getByLabelText(/Stories/), { target: { value: '9' } });
+        await userEvent.click(within(form).getByRole('radio', { name: '½' }));
+        await userEvent.click(within(gallery).getByRole('button', { name: 'Add Hacker News' }));
+
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        await waitFor(() => expect(stored()).toMatch(/type: hackernews/));
+        expect(stored()).toMatch(/count: 9/);
+        expect(stored()).toMatch(/width: 6/);
+      });
+
+      it('follows a token by its contract address, kept exactly as it was typed', async () => {
+        const mint = 'DemoMint1111111111111111111111111111111pump';
+        const gallery = await openGallery();
+        const form = await customise(gallery, 'Markets');
+
+        await userEvent.click(within(form).getByRole('button', { name: /Add symbol/ }));
+        const symbols = within(form).getAllByLabelText('Symbol');
+        await userEvent.type(symbols[symbols.length - 1]!, mint);
+        await userEvent.click(within(gallery).getByRole('button', { name: 'Add Markets' }));
+
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        await waitFor(() => expect(stored()).toContain(mint));
+      });
+
+      it('asks for a token for My PRs, which the gallery can’t have, whatever else it was given', async () => {
+        const gallery = await openGallery();
+        const form = await customise(gallery, 'My PRs');
+
+        await userEvent.click(within(form).getByRole('radio', { name: 'Mine' }));
+        await userEvent.click(within(gallery).getByRole('button', { name: 'Add My PRs' }));
+
+        const dialog = screen.getByRole('dialog', { name: 'My PRs' });
+        expect(within(dialog).getByLabelText(/GitHub token/)).toHaveValue('');
+        expect(within(dialog).getByRole('radio', { name: 'Mine' })).toBeChecked();
+      });
+
+      it('leaves the example’s tasks out of a Notes widget, whatever style it was given', async () => {
+        const gallery = await openGallery();
+        const form = await customise(gallery, 'Notes');
+
+        await userEvent.click(within(form).getByRole('radio', { name: 'Note' }));
+        await userEvent.click(within(gallery).getByRole('button', { name: 'Add Notes' }));
+
+        await waitFor(() => expect(stored()).toMatch(/type: notes/));
+        expect(stored()).toMatch(/mode: text/);
+        expect(stored()).not.toContain('Reply to Priya');
+        expect(stored()).not.toContain('Ideas for the weekend');
+      });
+
+      it('adds an example that was not customised as a new widget, asking what it asks', async () => {
+        const gallery = await openGallery();
+
+        await userEvent.click(within(gallery).getByRole('button', { name: 'Add Weather' }));
+
+        const dialog = screen.getByRole('dialog', { name: 'Weather' });
+        expect(within(dialog).getByLabelText(/^Place/)).toHaveValue('London');
+      });
+    });
+
     describe('Notes', () => {
       const stored = (): string => window.localStorage.getItem(DASHBOARD_STORAGE_KEY) ?? '';
 
