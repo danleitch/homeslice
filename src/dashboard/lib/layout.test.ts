@@ -15,6 +15,7 @@ import {
   MAX_ROWS,
   MIN_ROWS,
   MIN_SPAN,
+  NARROW_SPAN,
   ROW_PX,
   pageOf,
   sanitizeConfig
@@ -139,6 +140,62 @@ describe('the layout the grid is given', () => {
       [40, GRID_COLUMNS]
     ])('is %i columns wide as %i, kept within the board', (width, expected) => {
       expect(at(buildLayout([card({ width })], {}), 'group:a').w).toBe(expected);
+    });
+  });
+
+  describe('a card that may be narrower than most', () => {
+    it.each([
+      [1, NARROW_SPAN],
+      [2, 2],
+      [5, 5]
+    ])('is %i columns wide as %i, and may be resized down to two', (width, expected) => {
+      const item = at(buildLayout([card({ width, minWidth: NARROW_SPAN })], {}), 'group:a');
+
+      expect(item.w).toBe(expected);
+      expect(item.minW).toBe(NARROW_SPAN);
+    });
+
+    it('packs two of them, and a third, into one row of the board', () => {
+      const layout = buildLayout(
+        [
+          card({ key: 'widget:a', width: 2, minWidth: 2 }),
+          card({ key: 'widget:b', width: 2, minWidth: 2 }),
+          card({ key: 'widget:c', width: 8 })
+        ],
+        {}
+      );
+
+      expect(layout.map((item) => [item.x, item.y, item.w])).toEqual([
+        [0, 0, 2],
+        [2, 0, 2],
+        [4, 0, 8]
+      ]);
+    });
+
+    it('is held to three columns when nothing says otherwise', () => {
+      expect(at(buildLayout([card({ width: 2 })], {}), 'group:a')).toMatchObject({
+        w: MIN_SPAN,
+        minW: MIN_SPAN
+      });
+    });
+
+    it('is a card’s own limit, taken from the widget’s type', () => {
+      const page = pageOf(
+        sanitizeConfig({
+          widgets: [
+            { type: 'tv', width: 2 },
+            { type: 'movies', width: 2 },
+            { type: 'weather', width: 2 }
+          ]
+        }),
+        0
+      );
+
+      expect(cardsOf(page).map((item) => [item.width, item.minWidth])).toEqual([
+        [2, NARROW_SPAN],
+        [2, NARROW_SPAN],
+        [MIN_SPAN, MIN_SPAN]
+      ]);
     });
   });
 

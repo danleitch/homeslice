@@ -7,7 +7,7 @@ import { GithubTrendingWidget } from './github-widget';
 import { HackerNewsWidget } from './hackernews-widget';
 import { MarketsWidget } from './markets-widget';
 import { CalendarWidget, ClockWidget } from './time-widgets';
-import { PopularTvWidget } from './tv-widget';
+import { PopularMoviesWidget, PopularTvWidget } from './tv-widget';
 import { PullsWidget } from './pulls-widget';
 import { WeatherWidget } from './weather-widget';
 
@@ -44,5 +44,7 @@ export const WidgetView = ({
       return <BenchmarkWidget widget={widget} newTab={newTab} />;
     case 'tv':
       return <PopularTvWidget widget={widget} newTab={newTab} />;
+    case 'movies':
+      return <PopularMoviesWidget widget={widget} newTab={newTab} />;
   }
 };

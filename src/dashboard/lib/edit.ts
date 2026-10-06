@@ -12,6 +12,7 @@ import {
   createBookmark,
   createGroup,
   createWidget,
+  minSpanOf,
   type BoardPage,
   type Bookmark,
   type PageConfig,
@@ -239,7 +240,9 @@ export const updateWidget = (
       ? settled({
           ...widget,
           ...patch,
-          ...(patch.width !== undefined ? { width: clampSpan(patch.width) } : {}),
+          ...(patch.width !== undefined
+            ? { width: clampSpan(patch.width, undefined, minSpanOf(widget.type)) }
+            : {}),
           id: widget.id,
           type: widget.type
         } as Widget)

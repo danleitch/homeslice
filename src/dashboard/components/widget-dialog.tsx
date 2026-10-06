@@ -1,4 +1,4 @@
-import { useId, useMemo, useState, type FormEvent, type JSX } from 'react';
+import { useState, type FormEvent, type JSX } from 'react';
 import { Lock, Plus, X } from 'lucide-react';
 import {
   BENCH_PRESETS,
@@ -22,13 +22,16 @@ import {
   WIDGET_BLURBS,
   WIDGET_LABELS,
   WIDGET_TYPES,
+  minSpanOf,
   type ClockZone,
   type MarketSymbol,
   type Widget,
   type WidgetType
 } from '../lib/model';
 import { WIDGET_ICONS } from '../widgets/widget-icons';
-import { FIT_HEIGHT, WIDTH_OPTIONS, heightChoices, heightOfChoice } from './layout-options';
+import { findPlaces, isPlaceName } from '../lib/places';
+import { FIT_HEIGHT, heightChoices, heightOfChoice, widthChoices } from './layout-options';
+import { PlaceInput } from './place-input';
 import { Field, Modal, Segmented, Switch } from './ui';
 
 export const WidgetPicker = ({
@@ -71,16 +74,6 @@ const BENCH_PRESET_NAMES = Object.keys(BENCH_PRESETS) as BenchPreset[];
 /** Dollars per million tokens; 0 is no limit. */
 const MAX_PRICES = [0, 0.5, 1, 2, 5] as const;
 
-const supportedZones = (): string[] => {
-  try {
-    return (Intl as unknown as { supportedValuesOf: (key: string) => string[] }).supportedValuesOf(
-      'timeZone'
-    );
-  } catch {
-    return ['UTC', 'Europe/London', 'America/New_York', 'Asia/Tokyo'];
-  }
-};
-
 const isZone = (zone: string): boolean => {
   try {
     new Intl.DateTimeFormat('en', { timeZone: zone });
@@ -88,6 +81,29 @@ const isZone = (zone: string): boolean => {
   } catch {
     return false;
   }
+};
+
+/**
+ * What typed text means as a clock's zone. A place's name finds its zone ("Boston" keeps time by
+ * America/New_York, and labels the row Boston unless it has a label of its own); an IANA name
+ * is left as it is. "EST" is a zone to the browser, but one with no daylight saving, so a word
+ * with no slash goes to the place search first.
+ */
+const resolveZone = (zone: ClockZone): ClockZone => {
+  const text = zone.zone.trim();
+
+  if (!text || text.includes('/')) {
+    return zone;
+  }
+
+  const place = findPlaces(text, 1)[0];
+
+  return place
+    ? {
+        zone: place.zone,
+        label: zone.label.trim() && !isPlaceName(zone.label) ? zone.label : place.name
+      }
+    : zone;
 };
 
 type WidgetDialogProps = {
@@ -102,8 +118,6 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
   const [error, setError] = useState('');
   // While a calendar's address is being sealed, which takes a moment.
   const [busy, setBusy] = useState(false);
-  const zoneList = useId();
-  const zones = useMemo(supportedZones, []);
 
   const patch = (changes: Partial<Widget>): void => {
     setDraft((current) => ({ ...current, ...changes }) as Widget);
@@ -118,12 +132,17 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
       return;
     }
 
+    let clockZones: ClockZone[] = [];
+
     if (draft.type === 'clock') {
+      clockZones = draft.zones.map(resolveZone);
       // Blank rows are left out below, so only a zone that was actually typed can be wrong.
-      const bad = draft.zones.find((zone) => zone.zone.trim() && !isZone(zone.zone));
+      const bad = clockZones.find((zone) => zone.zone.trim() && !isZone(zone.zone));
 
       if (bad) {
-        setError(`“${bad.zone}” isn’t a time zone. Try one like Europe/Paris.`);
+        setError(
+          `“${bad.zone}” isn’t a place or a time zone. Try a city, or a name like Europe/Paris.`
+        );
         return;
       }
     }
@@ -159,7 +178,7 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
               .filter((item) => item.symbol)
           }
         : draft.type === 'clock'
-          ? { ...draft, zones: draft.zones.filter((zone) => zone.zone.trim()) }
+          ? { ...draft, zones: clockZones.filter((zone) => zone.zone.trim()) }
           : draft.type === 'weather'
             ? { ...draft, location: draft.location.trim() }
             : draft.type === 'github'
@@ -327,26 +346,33 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
         {draft.type === 'clock' && (
           <div className="field">
             <span className="field-label">Time zones</span>
-            <datalist id={zoneList}>
-              {zones.map((zone) => (
-                <option key={zone} value={zone} />
-              ))}
-            </datalist>
             <ul className="rows-editor">
               {draft.zones.map((zone, index) => (
                 <li key={index}>
-                  <input
-                    type="text"
-                    aria-label="Time zone"
-                    list={zoneList}
+                  <PlaceInput
                     value={zone.zone}
-                    placeholder="Europe/Paris"
-                    spellCheck={false}
-                    data-autofocus={index === 0 ? '' : undefined}
-                    onChange={(event) =>
+                    placeholder="Search a city or time zone"
+                    autoFocus={index === 0}
+                    onChange={(text) =>
                       patch({
                         zones: draft.zones.map((other, position) =>
-                          position === index ? { ...other, zone: event.target.value } : other
+                          position === index ? { ...other, zone: text } : other
+                        )
+                      })
+                    }
+                    onPick={(place) =>
+                      patch({
+                        zones: draft.zones.map((other, position) =>
+                          position === index
+                            ? {
+                                zone: place.zone,
+                                // A label somebody wrote is kept; a place's own name follows the pick.
+                                label:
+                                  other.label.trim() && !isPlaceName(other.label)
+                                    ? other.label
+                                    : place.name
+                              }
+                            : other
                         )
                       })
                     }
@@ -563,7 +589,7 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
           </>
         )}
 
-        {draft.type === 'tv' && (
+        {(draft.type === 'tv' || draft.type === 'movies') && (
           <>
             <div className="field">
               <span className="field-label">Trending</span>
@@ -577,7 +603,7 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
                 onChange={(window) => patch({ window })}
               />
             </div>
-            <Field label={`Shows: ${draft.count}`}>
+            <Field label={`${draft.type === 'tv' ? 'Shows' : 'Films'}: ${draft.count}`}>
               <input
                 type="range"
                 min={3}
@@ -784,11 +810,7 @@ export const WidgetDialog = ({ widget, onSave, onClose }: WidgetDialogProps): JS
           <Segmented
             label="Width"
             value={String(draft.width)}
-            options={
-              WIDTH_OPTIONS.some((option) => option.value === String(draft.width))
-                ? WIDTH_OPTIONS
-                : [...WIDTH_OPTIONS, { value: String(draft.width), label: `${draft.width}/12` }]
-            }
+            options={widthChoices(draft.width, minSpanOf(draft.type))}
             onChange={(value) => patch({ width: Number(value) })}
           />
         </div>

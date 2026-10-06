@@ -82,6 +82,7 @@ const BudgetBoard = ({
       maxPrice={maxPrice}
       unpriced={unpricedCount(rankings, prices)}
       total={rankings.models.length}
+      wanted={count}
       newTab={newTab}
     />
   );
@@ -107,6 +108,7 @@ const Board = ({
   maxPrice,
   unpriced = 0,
   total = 0,
+  wanted = 0,
   newTab
 }: {
   models: PricedModel[];
@@ -116,6 +118,8 @@ const Board = ({
   /** How many of the `total` ranked models have no listed price, when prices are in play. */
   unpriced?: number;
   total?: number;
+  /** How many models the widget is set to show, to say so when a price limit leaves fewer. */
+  wanted?: number;
   newTab: boolean;
 }): JSX.Element => {
   const target = newTab ? '_blank' : undefined;
@@ -158,6 +162,8 @@ const Board = ({
         {asOf && ` · scored ${formatDay(asOf)}`}
         {maxPrice > 0 && ' · $ per million tokens, in / out'}
         {unpriced > 0 && ` · ${unpriced} of ${total} have no listed price`}
+        {wanted > models.length &&
+          ` · only ${models.length} of ${wanted} fit the limit; a higher one shows more`}
       </p>
     </div>
   );

@@ -715,7 +715,7 @@
   background: linear-gradient(90deg, #f59e0b, #fcd34d);
 }
 
-/* --- Popular TV widget -------------------------------------------------------- */
+/* --- Popular TV and Popular Movies widgets ------------------------------------ */
 
 .tv-list {
   display: grid;
@@ -787,6 +787,26 @@
   display: inline-flex;
   align-items: center;
   gap: 3px;
+}
+
+/* Two or three columns wide: the poster and the name are all there is room for, so the name
+   may take a second line instead of being cut off. */
+.tv[data-narrow] .tv-item {
+  gap: 8px;
+}
+
+.tv[data-narrow] .tv-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.tv[data-narrow] .tv-meta {
+  flex-wrap: wrap;
+  gap: 2px 8px;
 }
 
 /* --- The Dreams swatch in Appearance ---------------------------------------- */

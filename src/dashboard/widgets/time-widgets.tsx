@@ -1,5 +1,6 @@
 import type { JSX } from 'react';
-import { formatTime } from '../lib/time';
+import { Moon, Sun } from 'lucide-react';
+import { formatTime, offsetMinutes } from '../lib/time';
 import { useNow } from '../hooks/use-now';
 import type {
   CalendarWidget as CalendarWidgetConfig,
@@ -7,32 +8,6 @@ import type {
   HourFormat
 } from '../lib/model';
 import { WidgetState } from './widget-frame';
-
-/** Minutes a zone is ahead of UTC at a moment. */
-const offsetMinutes = (date: Date, timeZone: string): number | null => {
-  try {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone,
-      hourCycle: 'h23',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).formatToParts(date);
-    const get = (type: string): number => Number(parts.find((part) => part.type === type)?.value);
-    const asUtc = Date.UTC(
-      get('year'),
-      get('month') - 1,
-      get('day'),
-      get('hour') % 24,
-      get('minute')
-    );
-    return Math.round((asUtc - date.getTime()) / 60_000);
-  } catch {
-    return null;
-  }
-};
 
 const relativeOffset = (date: Date, timeZone: string): string => {
   const there = offsetMinutes(date, timeZone);
@@ -73,6 +48,17 @@ const isDaytime = (date: Date, timeZone: string): boolean => {
   }
 };
 
+/** A sun by day, a moon by night: bigger and plainer than a dot, so it reads at a glance. */
+const Sky = ({ day }: { day: boolean }): JSX.Element => (
+  <span
+    className={`clk-sky ${day ? 'clk-sky--day' : 'clk-sky--night'}`}
+    role="img"
+    aria-label={day ? 'Daytime' : 'Night'}
+  >
+    {day ? <Sun size={20} aria-hidden="true" /> : <Moon size={19} aria-hidden="true" />}
+  </span>
+);
+
 export const ClockWidget = ({
   widget,
   clock
@@ -90,10 +76,7 @@ export const ClockWidget = ({
     <ul className="clk-list">
       {widget.zones.map((zone) => (
         <li key={`${zone.zone}:${zone.label}`} className="clk-row">
-          <span
-            className={`clk-dot${isDaytime(now, zone.zone) ? ' clk-dot--day' : ''}`}
-            aria-hidden="true"
-          />
+          <Sky day={isDaytime(now, zone.zone)} />
           <span className="clk-place">
             <span className="clk-label">{zone.label || cityOf(zone.zone)}</span>
             <span className="clk-offset">

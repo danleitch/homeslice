@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CalendarWidget as CalendarConfig, ClockWidget as ClockConfig } from '../lib/model';
 import { CalendarWidget, ClockWidget } from './time-widgets';
@@ -79,6 +79,24 @@ describe('ClockWidget', () => {
     expect(rowOf('Delhi')).toHaveTextContent('+5.5h');
   });
 
+  it('says the same hours ahead or behind late in the minute, with seconds on the clock', () => {
+    vi.setSystemTime(new Date('2026-03-15T14:05:45Z'));
+    render(
+      <ClockWidget
+        widget={clock(
+          ['Asia/Tokyo', 'Tokyo'],
+          ['America/New_York', 'New York'],
+          ['Asia/Kolkata', 'Delhi']
+        )}
+        clock="24h"
+      />
+    );
+
+    expect(rowOf('Tokyo')).toHaveTextContent('+9h');
+    expect(rowOf('New York')).toHaveTextContent('−4h');
+    expect(rowOf('Delhi')).toHaveTextContent('+5.5h');
+  });
+
   it('names the weekday it is there, which can differ from here', () => {
     render(
       <ClockWidget widget={clock(['UTC', 'Home'], ['Pacific/Auckland', 'Auckland'])} clock="24h" />
@@ -88,18 +106,19 @@ describe('ClockWidget', () => {
     expect(rowOf('Auckland')).toHaveTextContent('Mon');
   });
 
-  it('marks the zones where it is daytime', () => {
-    const { container } = render(
+  it('shows a sun where it is daytime and a moon where it is night', () => {
+    render(
       <ClockWidget
         widget={clock(['America/New_York', 'New York'], ['Asia/Tokyo', 'Tokyo'])}
         clock="24h"
       />
     );
-    const dotOf = (name: string): Element => rowOf(name).querySelector('.clk-dot')!;
+    const skyOf = (name: string): HTMLElement => within(rowOf(name)).getByRole('img');
 
-    expect(dotOf('New York')).toHaveClass('clk-dot--day');
-    expect(dotOf('Tokyo')).not.toHaveClass('clk-dot--day');
-    expect(container.querySelectorAll('.clk-dot[aria-hidden="true"]')).toHaveLength(2);
+    expect(skyOf('New York')).toHaveAccessibleName('Daytime');
+    expect(skyOf('New York')).toHaveClass('clk-sky--day');
+    expect(skyOf('Tokyo')).toHaveAccessibleName('Night');
+    expect(skyOf('Tokyo')).toHaveClass('clk-sky--night');
   });
 
   it('shows dashes, and no offset, for a zone that does not exist', () => {

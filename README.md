@@ -41,7 +41,10 @@ and you're free to spin up your own the same way (see
   bars across the day with daylight and rain marked. Markets with a month of
   trend for stocks, indices, FX and crypto. A world clock, this month's
   calendar, the top of Hacker News, GitHub Trending, the strongest AI models
-  from BenchLM, and the TV everyone is watching from TMDB.
+  from BenchLM, and the TV shows and films everyone is watching from TMDB. The
+  world clock finds a place by name (type "Boston" and it keeps New York's time),
+  and shows a sun or a moon beside each one. Popular TV and Popular Movies can be
+  narrowed to two columns, a sixth of the board; the other widgets stop at three.
 - **Your Google Calendar.** The [Agenda](#agenda-your-google-calendar) widget
   shows the month with a dot under every day that has something on, and the
   days to come beneath it: what is on now, what is next and in how long, a
@@ -142,11 +145,11 @@ GitHub Trending reads the static JSON that
 [isboyjc/github-trending-api](https://github.com/isboyjc/github-trending-api)
 publishes, straight from the browser.
 
-The **AI Leaderboard** (from [BenchLM](https://benchlm.ai)) and **Popular TV**
-(from [TMDB](https://www.themoviedb.org)) widgets need a key. Keys never go in
+The **AI Leaderboard** (from [BenchLM](https://benchlm.ai)), **Popular TV** and
+**Popular Movies** (from [TMDB](https://www.themoviedb.org)) widgets need a key. Keys never go in
 the page, the YAML or git: they live in a `.env` file on the server (copy
 `.env.example`), and the page asks its own server at `/api/benchlm/rankings`
-and `/api/tmdb/trending-tv`, which adds the key. Nginx keeps each answer for
+`/api/tmdb/trending-tv` and `/api/tmdb/trending-movie`, which add the key. Nginx keeps each answer for
 84 hours, so each service is asked at most about twice a week however many
 people visit, which keeps BenchLM's free 1,000 reads a month in hand. The
 relays pass on only the ranking or the trending window, so a visitor can't
@@ -164,7 +167,11 @@ personal dashboard, not for a commercial one without BenchLM's say-so. The page
 asks `/api/benchlm/pricing` (Nginx keeps it for 84 hours, like the rankings) and
 only does so when a price limit is set. Models are matched to prices by name; a
 model BenchLM lists no price for, or whose name differs, is left out of a
-capped list, and the footer says how many.
+capped list, and the footer says how many. A price limit only has models to choose
+from if the page asks for plenty, since most ranked models have no listed price and few of
+the rest are cheap: it asks BenchLM for the top 200 (stepping down to 100, then 50, if
+BenchLM won't give that many). When the limit leaves fewer models than the widget is set
+to show, the footer says so, and a higher limit shows more.
 
 ### Status alerts
 
@@ -675,7 +682,7 @@ docker build -t blades/homeslice:latest .
 The Dockerfile builds the site with Node 24 and serves it from Nginx. Then run
 it as above.
 
-`--env-file .env` gives the AI Leaderboard and Popular TV widgets their keys;
+`--env-file .env` gives the AI Leaderboard, Popular TV and Popular Movies widgets their keys;
 leave it out and those widgets say they aren't set up.
 
 App will be available at `http://localhost:8080`.

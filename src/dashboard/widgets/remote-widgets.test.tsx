@@ -360,6 +360,31 @@ describe('the widgets that fetch', () => {
       );
     });
 
+    it('says how many fit, when the limit leaves fewer than the widget is set to show', async () => {
+      vi.mocked(fetchRankings).mockResolvedValue(rankings);
+      vi.mocked(fetchPrices).mockResolvedValue(prices);
+      show(budget({ count: 15 }));
+
+      const foot = (await screen.findByText(/per million tokens/)).closest('p')!;
+      expect(foot).toHaveTextContent('only 2 of 15 fit the limit; a higher one shows more');
+    });
+
+    it('does not say so when as many fit as it is set to show, or more', async () => {
+      vi.mocked(fetchRankings).mockResolvedValue(rankings);
+      vi.mocked(fetchPrices).mockResolvedValue(prices);
+      const { unmount } = show(budget({ count: 2 }));
+
+      expect((await screen.findByText(/per million tokens/)).closest('p')).not.toHaveTextContent(
+        'only'
+      );
+      unmount();
+
+      show(budget({ count: 1 }));
+      expect((await screen.findByText(/per million tokens/)).closest('p')).not.toHaveTextContent(
+        'only'
+      );
+    });
+
     it('shimmers while the prices come in', async () => {
       vi.mocked(fetchRankings).mockResolvedValue(rankings);
       vi.mocked(fetchPrices).mockReturnValue(new Promise(() => undefined));
@@ -415,6 +440,7 @@ describe('the widgets that fetch', () => {
       expect(await screen.findByText('Big One')).toBeInTheDocument();
       expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
       expect(fetchPrices).not.toHaveBeenCalled();
+      expect(screen.queryByText(/fit the limit/)).not.toBeInTheDocument();
     });
   });
 

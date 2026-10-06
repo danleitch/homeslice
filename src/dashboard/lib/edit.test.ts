@@ -12,7 +12,15 @@ import {
   updateGroup,
   updateWidget
 } from './edit';
-import { MAX_ROWS, MIN_ROWS, pageOf, sanitizeConfig, type PageConfig } from './model';
+import {
+  MAX_ROWS,
+  MIN_ROWS,
+  createWidget,
+  pageOf,
+  sanitizeConfig,
+  type PageConfig,
+  type WidgetType
+} from './model';
 
 const board = (): PageConfig =>
   pageOf(
@@ -100,6 +108,24 @@ describe('board edits', () => {
 
     expect(updateGroup(config, config.groups[0].id, { width: 99 }).groups[0].width).toBe(12);
     expect(updateWidget(config, config.widgets[0].id, { width: 1 }).widgets[0].width).toBe(3);
+  });
+
+  it('lets Popular TV and Popular Movies narrow to two columns, and no other widget', () => {
+    const config = {
+      ...board(),
+      widgets: ['tv', 'movies', 'weather', 'benchlm'].map((type) =>
+        createWidget(type as WidgetType)
+      )
+    };
+    const widthsAfter = (width: number): number[] =>
+      config.widgets.map(
+        (widget) =>
+          updateWidget(config, widget.id, { width }).widgets.find((w) => w.id === widget.id)!.width
+      );
+
+    expect(widthsAfter(2)).toEqual([2, 2, 3, 3]);
+    expect(widthsAfter(1)).toEqual([2, 2, 3, 3]);
+    expect(widthsAfter(6)).toEqual([6, 6, 6, 6]);
   });
 
   it('never lets a widget change its type through an update', () => {

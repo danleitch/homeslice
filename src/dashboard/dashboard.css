@@ -1756,18 +1756,24 @@ body {
   padding: 10px 0;
 }
 
-.clk-dot {
-  width: 8px;
-  height: 8px;
+.clk-sky {
+  display: grid;
   flex-shrink: 0;
+  place-items: center;
+  width: 30px;
+  height: 30px;
   border-radius: 999px;
-  background: #64748b;
-  box-shadow: 0 0 0 3px rgba(100, 116, 139, 0.2);
 }
 
-.clk-dot--day {
-  background: #fcd34d;
-  box-shadow: 0 0 0 3px rgba(252, 211, 77, 0.18);
+.clk-sky--day {
+  color: #fbbf24;
+  background: radial-gradient(circle, rgba(251, 191, 36, 0.28), rgba(251, 191, 36, 0.06) 70%);
+  filter: drop-shadow(0 0 5px rgba(251, 191, 36, 0.45));
+}
+
+.clk-sky--night {
+  color: #a5b4fc;
+  background: radial-gradient(circle, rgba(165, 180, 252, 0.22), rgba(165, 180, 252, 0.05) 70%);
 }
 
 .clk-place {
@@ -2407,6 +2413,68 @@ body {
   grid-template-columns: 1fr 1.2fr auto;
   gap: 6px;
   align-items: center;
+}
+
+/* The World clock's zone field: type a city, pick it from what is offered under the box. */
+.place-input {
+  position: relative;
+  min-width: 0;
+}
+
+.place-input input {
+  width: 100%;
+}
+
+.place-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 6;
+  width: max(100%, min(340px, 80vw));
+  max-height: 280px;
+  margin: 0;
+  padding: 5px;
+  overflow-y: auto;
+  list-style: none;
+  border-radius: 14px;
+  border: 1px solid var(--line-strong);
+  background: rgba(17, 22, 34, 0.98);
+  box-shadow: 0 18px 40px -12px rgba(0, 0, 0, 0.7);
+}
+
+.place-results .place-result {
+  /* One column: the editor around it lays its own rows out in three. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.place-results .place-result--active {
+  background: var(--accent-wash);
+  color: var(--ink);
+}
+
+.place-name {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 0.88rem;
+  font-weight: 560;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.place-region {
+  color: var(--ink-faint);
+  font-weight: 400;
+}
+
+.place-zone {
+  color: var(--ink-faint);
+  font-size: 0.74rem;
 }
 
 /* A calendar is three fields and a remove button, so it is a small card of its own. */

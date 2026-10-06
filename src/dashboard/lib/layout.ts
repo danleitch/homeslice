@@ -16,6 +16,7 @@ import {
   MIN_ROWS,
   MIN_SPAN,
   ROW_PX,
+  minSpanOf,
   type BoardPage
 } from './model';
 
@@ -27,6 +28,8 @@ export type Card = {
   kind: CardKind;
   id: string;
   width: number;
+  /** The fewest columns it may take; a group's is MIN_SPAN. */
+  minWidth?: number;
   /** Rows, when the card was given a height. */
   height?: number;
   column?: number;
@@ -50,6 +53,7 @@ export const cardsOf = (page: BoardPage): Card[] => [
     kind: 'widget',
     id: widget.id,
     width: widget.width,
+    minWidth: minSpanOf(widget.type),
     height: widget.height,
     column: widget.column,
     row: widget.row,
@@ -89,9 +93,10 @@ export const buildLayout = (
   fit: Readonly<Record<string, number>>
 ): LayoutItem[] => {
   const sized = cards.map((card) => {
-    const w = Math.min(GRID_COLUMNS, Math.max(MIN_SPAN, card.width));
+    const minW = card.minWidth ?? MIN_SPAN;
+    const w = Math.min(GRID_COLUMNS, Math.max(minW, card.width));
     const h = isFixed(card) ? card.height! : (fit[card.key] ?? GUESS_ROWS);
-    return { card, w, h };
+    return { card, w, minW, h };
   });
 
   let floor = 0;
@@ -105,7 +110,7 @@ export const buildLayout = (
   let column = 0;
   let row = floor;
 
-  return sized.map(({ card, w, h }): LayoutItem => {
+  return sized.map(({ card, w, minW, h }): LayoutItem => {
     let x: number;
     let y: number;
 
@@ -129,7 +134,7 @@ export const buildLayout = (
       y,
       w,
       h,
-      minW: MIN_SPAN,
+      minW,
       maxW: GRID_COLUMNS,
       minH: MIN_ROWS,
       maxH: MAX_ROWS,
