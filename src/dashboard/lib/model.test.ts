@@ -4,10 +4,15 @@ import {
   MAX_ROWS,
   MIN_ROWS,
   MIN_SPAN,
+  NARROW_SPAN,
   PAGE_COUNT,
+  WIDGET_BLURBS,
+  WIDGET_LABELS,
+  WIDGET_TYPES,
   countBookmarks,
   createWidget,
   emptyPage,
+  minSpanOf,
   pageOf,
   sanitizeConfig,
   withPage
@@ -350,5 +355,95 @@ describe('where a card sits, and how tall it is', () => {
 
     expect(card).toMatchObject({ height: 60, width: 6 });
     expect(card).not.toHaveProperty('column');
+  });
+});
+
+describe('how narrow a card may be', () => {
+  const widgetsOf = (widgets: unknown[]) => sanitizeConfig({ widgets }).pages[0].widgets;
+  const groupsOf = (groups: unknown[]) => sanitizeConfig({ groups }).pages[0].groups;
+
+  it('is two columns for Popular TV and Popular Movies, and three for everything else', () => {
+    expect(NARROW_SPAN).toBe(2);
+    expect(minSpanOf('tv')).toBe(2);
+    expect(minSpanOf('movies')).toBe(2);
+
+    for (const type of WIDGET_TYPES.filter((type) => type !== 'tv' && type !== 'movies')) {
+      expect(minSpanOf(type), type).toBe(MIN_SPAN);
+    }
+
+    expect(minSpanOf()).toBe(MIN_SPAN);
+    expect(minSpanOf('nonsense')).toBe(MIN_SPAN);
+  });
+
+  it('keeps a Popular TV or Popular Movies card two columns wide, but no narrower', () => {
+    expect(
+      widgetsOf([
+        { type: 'tv', width: 2 },
+        { type: 'tv', width: 1 }
+      ]).map((w) => w.width)
+    ).toEqual([2, 2]);
+    expect(
+      widgetsOf([
+        { type: 'movies', width: 2 },
+        { type: 'movies', width: 0 }
+      ]).map((w) => w.width)
+    ).toEqual([2, 2]);
+  });
+
+  it('still holds every other widget and every group to three columns', () => {
+    expect(
+      widgetsOf([
+        { type: 'weather', width: 2 },
+        { type: 'benchlm', width: 1 }
+      ]).map((w) => w.width)
+    ).toEqual([MIN_SPAN, MIN_SPAN]);
+    expect(groupsOf([{ name: 'A', width: 2, bookmarks: [] }])[0]!.width).toBe(MIN_SPAN);
+  });
+
+  it('lets a two-column card start in the last two columns of the board', () => {
+    const [tv, weather] = widgetsOf([
+      { type: 'tv', width: 2, column: 99, row: 0 },
+      { type: 'weather', width: 3, column: 99, row: 0 }
+    ]);
+
+    expect(tv!.column).toBe(GRID_COLUMNS - NARROW_SPAN);
+    expect(weather!.column).toBe(GRID_COLUMNS - MIN_SPAN);
+  });
+
+  it('keeps a width written as text, as the YAML may', () => {
+    expect(widgetsOf([{ type: 'tv', width: '2' }])[0]!.width).toBe(2);
+  });
+});
+
+describe('Popular Movies', () => {
+  it('is a widget of its own, listed after Popular TV', () => {
+    expect(WIDGET_TYPES.indexOf('movies')).toBe(WIDGET_TYPES.indexOf('tv') + 1);
+    expect(WIDGET_LABELS.movies).toBe('Popular Movies');
+    expect(WIDGET_BLURBS.movies).toMatch(/TMDB/);
+  });
+
+  it('starts as this week’s top five, a third of the board wide', () => {
+    expect(createWidget('movies')).toMatchObject({
+      type: 'movies',
+      width: 4,
+      window: 'week',
+      count: 5
+    });
+  });
+
+  it('keeps its settings, and falls back on a window or number that makes no sense', () => {
+    const [good, bad, low, high] = sanitizeConfig({
+      widgets: [
+        { type: 'movies', window: 'day', count: 8 },
+        { type: 'movies', window: 'year', count: 'lots' },
+        { type: 'movies', count: 1 },
+        { type: 'movies', count: 99 }
+      ]
+    }).pages[0].widgets;
+
+    expect(good).toMatchObject({ type: 'movies', window: 'day', count: 8 });
+    expect(bad).toMatchObject({ window: 'week', count: 5 });
+    expect(low).toMatchObject({ count: 3 });
+    expect(high).toMatchObject({ count: 12 });
   });
 });

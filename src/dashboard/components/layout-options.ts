@@ -1,5 +1,5 @@
 import { LayoutGrid, List, Rows3, type LucideIcon } from 'lucide-react';
-import { ROW_PX, type BookmarkStyle } from '../lib/model';
+import { MIN_SPAN, NARROW_SPAN, ROW_PX, type BookmarkStyle } from '../lib/model';
 
 /** The three ways a group can lay out its bookmarks. */
 export const STYLE_CHOICES: readonly {
@@ -21,6 +21,24 @@ export const WIDTH_OPTIONS = [
   { value: '8', label: '⅔', title: 'Two thirds of the board' },
   { value: '12', label: 'Full', title: 'The whole width' }
 ] as const;
+
+/** What a card that may be as narrow as two columns can also be. */
+const SIXTH = { value: String(NARROW_SPAN), label: '⅙', title: 'A sixth of the board' } as const;
+
+/**
+ * The widths to offer a card: the usual ones, a sixth too if its type may be that narrow, and
+ * the one it has now if that is something dragging made.
+ */
+export const widthChoices = (
+  width: number,
+  minSpan = MIN_SPAN
+): readonly { value: string; label: string; title?: string }[] => {
+  const usual = minSpan <= NARROW_SPAN ? [SIXTH, ...WIDTH_OPTIONS] : WIDTH_OPTIONS;
+
+  return usual.some((option) => option.value === String(width))
+    ? usual
+    : [...usual, { value: String(width), label: `${width}/12` }];
+};
 
 /** The value that leaves a group or widget as tall as what is in it. */
 export const FIT_HEIGHT = 'fit';

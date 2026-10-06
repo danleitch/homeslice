@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CalendarSource } from '../lib/agenda';
@@ -447,30 +447,155 @@ describe('WidgetDialog', () => {
       ).toEqual(['Tokyo', '']);
     });
 
-    it('suggests every zone the browser knows about', () => {
-      open(widgetOf('clock'));
-      const options = [...document.querySelectorAll('datalist option')].map((option) =>
-        option.getAttribute('value')
-      );
+    describe('finding a place', () => {
+      const placeBox = (): HTMLElement => screen.getByLabelText('Time zone');
 
-      expect(options).toContain('Europe/London');
-      expect(options.length).toBeGreaterThan(50);
-    });
+      it('offers places as you type, with the zone and its offset from UTC', async () => {
+        open(widgetOf('clock', { zones: [{ zone: '', label: '' }] }));
 
-    it('suggests a handful of zones in a browser that cannot list them', () => {
-      vi.spyOn(
-        Intl as unknown as { supportedValuesOf: () => string[] },
-        'supportedValuesOf'
-      ).mockImplementation(() => {
-        throw new Error('unsupported');
+        await userEvent.type(placeBox(), 'boston');
+
+        const option = await screen.findByRole('option', { name: /Boston/ });
+        expect(option).toHaveTextContent('Boston, Massachusetts, United States');
+        expect(option).toHaveTextContent(/America\/New_York · UTC[−+]\d/);
       });
-      open(widgetOf('clock'));
 
-      expect(
-        [...document.querySelectorAll('datalist option')].map((option) =>
-          option.getAttribute('value')
-        )
-      ).toEqual(['UTC', 'Europe/London', 'America/New_York', 'Asia/Tokyo']);
+      it('fills in the zone and the label when a place is clicked, and saves them', async () => {
+        const { onSave } = open(widgetOf('clock', { zones: [{ zone: '', label: '' }] }));
+
+        await userEvent.type(placeBox(), 'boston');
+        await userEvent.click(await screen.findByRole('option', { name: /Boston/ }));
+
+        expect(placeBox()).toHaveValue('America/New_York');
+        expect(screen.getByLabelText('Label')).toHaveValue('Boston');
+        expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+
+        await save();
+
+        expect((saved(onSave) as Of<'clock'>).zones).toEqual([
+          { zone: 'America/New_York', label: 'Boston' }
+        ]);
+      });
+
+      it('picks with the keyboard, without saving the dialog', async () => {
+        const { onSave } = open(widgetOf('clock', { zones: [{ zone: '', label: '' }] }));
+
+        await userEvent.type(placeBox(), 'syd');
+        await screen.findByRole('option', { name: /Sydney/ });
+        await userEvent.keyboard('{Enter}');
+
+        expect(placeBox()).toHaveValue('Australia/Sydney');
+        expect(onSave).not.toHaveBeenCalled();
+      });
+
+      it('moves through the places with the arrow keys', async () => {
+        open(widgetOf('clock', { zones: [{ zone: '', label: '' }] }));
+
+        await userEvent.type(placeBox(), 'new');
+        const options = await screen.findAllByRole('option');
+        expect(options.length).toBeGreaterThan(1);
+        expect(options[0]).toHaveAttribute('aria-selected', 'true');
+
+        await userEvent.keyboard('{ArrowDown}');
+        expect(screen.getAllByRole('option')[1]).toHaveAttribute('aria-selected', 'true');
+
+        await userEvent.keyboard('{ArrowUp}{ArrowUp}');
+        const last = screen.getAllByRole('option');
+        expect(last[last.length - 1]).toHaveAttribute('aria-selected', 'true');
+      });
+
+      it('closes the list on Escape and leaves the dialog open', async () => {
+        const { onClose } = open(widgetOf('clock', { zones: [{ zone: '', label: '' }] }));
+
+        await userEvent.type(placeBox(), 'paris');
+        await screen.findByRole('listbox');
+        await userEvent.keyboard('{Escape}');
+
+        expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+        expect(onClose).not.toHaveBeenCalled();
+
+        await userEvent.keyboard('{Escape}');
+        expect(onClose).toHaveBeenCalledTimes(1);
+      });
+
+      it('does not cover a zone that is already chosen until something is typed', async () => {
+        open(widgetOf('clock', { zones: [{ zone: 'Asia/Tokyo', label: 'Tokyo' }] }));
+
+        await userEvent.click(placeBox());
+        expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+
+        await userEvent.type(placeBox(), 'x');
+        await userEvent.clear(placeBox());
+        await userEvent.type(placeBox(), 'osak');
+        expect(await screen.findByRole('option', { name: /Osaka/ })).toBeInTheDocument();
+      });
+
+      it('shows no list when nothing matches', async () => {
+        open(widgetOf('clock', { zones: [{ zone: '', label: '' }] }));
+
+        await userEvent.type(placeBox(), 'zzzzqq');
+
+        expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+      });
+
+      it('keeps a label somebody wrote, and replaces one that was only a place’s name', async () => {
+        open(
+          widgetOf('clock', {
+            zones: [
+              { zone: 'Asia/Tokyo', label: 'Mum’s' },
+              { zone: 'Europe/London', label: 'London' }
+            ]
+          })
+        );
+        const [first, second] = screen.getAllByLabelText('Time zone');
+        const labels = screen.getAllByLabelText('Label');
+
+        await userEvent.clear(first!);
+        await userEvent.type(first!, 'boston');
+        await userEvent.click(await screen.findByRole('option', { name: /Boston/ }));
+        expect(labels[0]).toHaveValue('Mum’s');
+
+        await userEvent.clear(second!);
+        await userEvent.type(second!, 'chicago');
+        await userEvent.click(await screen.findByRole('option', { name: /Chicago/ }));
+        expect(labels[1]).toHaveValue('Chicago');
+      });
+
+      it('still finds places in a browser that cannot list its zones', async () => {
+        vi.spyOn(
+          Intl as unknown as { supportedValuesOf: () => string[] },
+          'supportedValuesOf'
+        ).mockImplementation(() => {
+          throw new Error('unsupported');
+        });
+        open(widgetOf('clock', { zones: [{ zone: '', label: '' }] }));
+
+        await userEvent.type(placeBox(), 'paris');
+
+        expect(await screen.findByRole('option', { name: /Paris/ })).toBeInTheDocument();
+      });
+
+      it('saves a place that was typed but never picked, as that place’s zone', async () => {
+        const { onSave } = open(widgetOf('clock', { zones: [{ zone: '', label: '' }] }));
+
+        await userEvent.type(placeBox(), 'Tokyo');
+        await userEvent.keyboard('{Escape}');
+        await save();
+
+        expect((saved(onSave) as Of<'clock'>).zones).toEqual([
+          { zone: 'Asia/Tokyo', label: 'Tokyo' }
+        ]);
+      });
+
+      it('reads EST as Eastern time, with its daylight saving, not a fixed offset', async () => {
+        const { onSave } = open(widgetOf('clock', { zones: [{ zone: 'est', label: '' }] }));
+
+        await save();
+
+        expect((saved(onSave) as Of<'clock'>).zones[0]).toMatchObject({
+          zone: 'America/New_York'
+        });
+      });
     });
 
     it('changes the label of the zone it was typed in, and no other', async () => {
@@ -549,7 +674,7 @@ describe('WidgetDialog', () => {
       await save();
 
       expect(screen.getByRole('alert')).toHaveTextContent(
-        '“Mars/Olympus_Mons” isn’t a time zone. Try one like Europe/Paris.'
+        '“Mars/Olympus_Mons” isn’t a place or a time zone. Try a city, or a name like Europe/Paris.'
       );
       expect(onSave).not.toHaveBeenCalled();
     });
@@ -566,7 +691,9 @@ describe('WidgetDialog', () => {
 
       await save();
 
-      expect(screen.getByRole('alert')).toHaveTextContent('“Not/Real” isn’t a time zone.');
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        '“Not/Real” isn’t a place or a time zone.'
+      );
       expect(onSave).not.toHaveBeenCalled();
     });
 
@@ -844,6 +971,76 @@ describe('WidgetDialog', () => {
       await save();
 
       expect(saved(onSave)).toMatchObject({ window: 'day', count: 9 });
+    });
+  });
+
+  describe('Popular Movies', () => {
+    it('shows the window and how many films, on a slider from 3 to 12', () => {
+      open(widgetOf('movies', { window: 'day', count: 4 }));
+
+      expect(screen.getByRole('radio', { name: 'Today' })).toBeChecked();
+      const range = slider(/Films: 4/);
+      expect(range).toHaveAttribute('min', '3');
+      expect(range).toHaveAttribute('max', '12');
+    });
+
+    it('saves a different window and number', async () => {
+      const { onSave } = open(widgetOf('movies', { window: 'week', count: 5 }));
+
+      await choose('Trending', 'Today');
+      fireEvent.change(slider(/Films/), { target: { value: '9' } });
+      await save();
+
+      expect(saved(onSave)).toMatchObject({ type: 'movies', window: 'day', count: 9 });
+    });
+
+    it('is called Popular Movies, with its own symbol, and Popular TV still says shows', () => {
+      const { unmount } = render(
+        <WidgetDialog widget={widgetOf('movies')} onSave={vi.fn()} onClose={vi.fn()} />
+      );
+      expect(screen.getByRole('dialog', { name: 'Popular Movies' })).toBeInTheDocument();
+      unmount();
+
+      open(widgetOf('tv'));
+      expect(slider(/Shows: 5/)).toBeInTheDocument();
+      expect(screen.queryByLabelText(/Films/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('width', () => {
+    const widths = (): string[] =>
+      screen
+        .getAllByRole('radio', { name: /^(⅙|¼|⅓|½|⅔|Full|\d+\/12)$/ })
+        .map((option) => option.textContent!);
+
+    it('offers a sixth of the board to Popular TV and Popular Movies', () => {
+      open(widgetOf('tv'));
+      expect(widths()).toEqual(['⅙', '¼', '⅓', '½', '⅔', 'Full']);
+      cleanup();
+
+      open(widgetOf('movies'));
+      expect(widths()).toEqual(['⅙', '¼', '⅓', '½', '⅔', 'Full']);
+    });
+
+    it('does not offer a sixth to a widget that needs more room', () => {
+      open(widgetOf('weather'));
+
+      expect(widths()).toEqual(['¼', '⅓', '½', '⅔', 'Full']);
+    });
+
+    it('saves two columns for a narrow widget', async () => {
+      const { onSave } = open(widgetOf('tv', { width: 4 }));
+
+      await choose('Width', '⅙');
+      await save();
+
+      expect(saved(onSave)).toMatchObject({ width: 2 });
+    });
+
+    it('still shows a width that came from dragging, among the usual ones', () => {
+      open(widgetOf('tv', { width: 5 }));
+
+      expect(widths()).toContain('5/12');
     });
   });
 

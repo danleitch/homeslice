@@ -99,10 +99,23 @@ export type Rankings = {
   asOf: string;
 };
 
-/** The relay fetches this many and the widget picks from them, so its settings never cost a read. */
-export const RELAY_LIMIT = 50;
+/**
+ * How many ranked models the relay is asked for, widest first. The widget picks from them, so
+ * its settings never cost a read. The Budget view needs a wide pool: most ranked models have
+ * no listed price, and few of the rest are cheap, so out of the top 50 only a handful remain.
+ * A size the API refuses is stepped down from, and not asked for again this visit.
+ */
+export const RELAY_LIMITS = [200, 100, 50] as const;
 
 const RELAY = '/api/benchlm/rankings';
+
+/** Where in RELAY_LIMITS to start: the widest size the API has not yet refused. */
+let reach = 0;
+
+/** Starts the next visit's first request at the widest size again; for tests. */
+export const resetReach = (): void => {
+  reach = 0;
+};
 
 type RawItem = {
   rank?: unknown;
@@ -157,7 +170,15 @@ export const fetchRankings = async (
   surface: BenchSurface,
   signal: AbortSignal
 ): Promise<Rankings> => {
-  const response = await fetch(`${RELAY}?surface=${surface}`, { signal });
+  let response = await fetch(`${RELAY}?surface=${surface}&limit=${RELAY_LIMITS[reach]}`, {
+    signal
+  });
+
+  // A size the API won't give is refused outright (a bad request); ask for the next one down.
+  while ((response.status === 400 || response.status === 422) && reach < RELAY_LIMITS.length - 1) {
+    reach += 1;
+    response = await fetch(`${RELAY}?surface=${surface}&limit=${RELAY_LIMITS[reach]}`, { signal });
+  }
 
   if (response.status === 401 || response.status === 403) {
     throw new Error('BenchLM isn’t set up on this server yet: it needs a BENCHLM_TOKEN.');

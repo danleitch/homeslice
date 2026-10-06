@@ -3,6 +3,7 @@ import {
   CalendarDays,
   Clock,
   CloudSun,
+  Film,
   GitPullRequest,
   Newspaper,
   Star,
@@ -26,5 +27,6 @@ export const WIDGET_ICONS: Readonly<Record<WidgetType, LucideIcon>> = {
   github: Star,
   prs: GitPullRequest,
   benchlm: Trophy,
-  tv: Tv
+  tv: Tv,
+  movies: Film
 };

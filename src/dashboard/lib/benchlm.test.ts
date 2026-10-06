@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   BENCH_PRESETS,
   blendedPrice,
@@ -10,6 +10,8 @@ import {
   priceKey,
   priceOf,
   readRankings,
+  RELAY_LIMITS,
+  resetReach,
   type BenchmarkWidget
 } from './benchlm';
 
@@ -32,6 +34,11 @@ const body = {
 };
 
 describe('BenchLM', () => {
+  beforeEach(resetReach);
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('reads the rankings, keeping only models with a score', () => {
     const rankings = readRankings(body);
 
@@ -66,7 +73,7 @@ describe('BenchLM', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
     await fetchRankings('coding', new AbortController().signal);
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/benchlm/rankings?surface=coding');
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/benchlm/rankings?surface=coding&limit=200');
 
     vi.stubGlobal(
       'fetch',
@@ -82,6 +89,77 @@ describe('BenchLM', () => {
       vi.fn(async () => new Response('<html>', { headers: { 'content-type': 'text/html' } }))
     );
     await expect(fetchRankings('overall', new AbortController().signal)).rejects.toThrow(/server/);
+  });
+
+  describe('asking for a wide pool of models', () => {
+    const json = (status = 200): Response =>
+      new Response(status === 200 ? JSON.stringify(body) : '{}', {
+        status,
+        headers: { 'content-type': 'application/json' }
+      });
+    const asked = (fetchMock: { mock: { calls: unknown[][] } }): string[] =>
+      fetchMock.mock.calls.map((call) => String(call[0]).replace('/api/benchlm/rankings', ''));
+
+    it('asks for the widest pool first, so a price limit has models to choose from', () => {
+      expect(RELAY_LIMITS).toEqual([200, 100, 50]);
+    });
+
+    it('steps down to a smaller pool when the API refuses the size, and says nothing', async () => {
+      const fetchMock = vi
+        .fn<(url: string) => Promise<Response>>()
+        .mockResolvedValueOnce(json(400))
+        .mockResolvedValueOnce(json(422))
+        .mockResolvedValueOnce(json());
+      vi.stubGlobal('fetch', fetchMock);
+
+      const rankings = await fetchRankings('coding', new AbortController().signal);
+
+      expect(rankings.models).toHaveLength(3);
+      expect(asked(fetchMock)).toEqual([
+        '?surface=coding&limit=200',
+        '?surface=coding&limit=100',
+        '?surface=coding&limit=50'
+      ]);
+    });
+
+    it('does not ask for a size again that it has been refused this visit', async () => {
+      const fetchMock = vi
+        .fn<(url: string) => Promise<Response>>()
+        .mockResolvedValueOnce(json(400))
+        .mockImplementation(async () => json());
+      vi.stubGlobal('fetch', fetchMock);
+
+      await fetchRankings('coding', new AbortController().signal);
+      await fetchRankings('overall', new AbortController().signal);
+
+      expect(asked(fetchMock)).toEqual([
+        '?surface=coding&limit=200',
+        '?surface=coding&limit=100',
+        '?surface=overall&limit=100'
+      ]);
+    });
+
+    it('gives up with the usual message when even the smallest pool is refused', async () => {
+      const fetchMock = vi.fn(async () => json(400));
+      vi.stubGlobal('fetch', fetchMock);
+
+      await expect(fetchRankings('coding', new AbortController().signal)).rejects.toThrow(
+        'BenchLM didn’t answer.'
+      );
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    });
+
+    it('does not step down for any other failure, which a smaller pool would not cure', async () => {
+      for (const status of [401, 403, 429, 500, 502]) {
+        resetReach();
+        const fetchMock = vi.fn(async () => json(status));
+        vi.stubGlobal('fetch', fetchMock);
+
+        await fetchRankings('coding', new AbortController().signal).catch(() => undefined);
+
+        expect(fetchMock, String(status)).toHaveBeenCalledTimes(1);
+      }
+    });
   });
 
   it('matches a model to its price whatever the punctuation or case', () => {

@@ -65,13 +65,19 @@ const keyedProxies = (env: Record<string, string>): Record<string, ProxyOptions>
     target: 'https://data.benchlm.ai',
     changeOrigin: true,
     rewrite: (path) =>
-      `/v1/rankings/current?surface=${oneOf(path, 'surface', ['overall', 'coding', 'agentic', 'knowledge'])}&limit=50`,
+      `/v1/rankings/current?surface=${oneOf(path, 'surface', ['overall', 'coding', 'agentic', 'knowledge'])}&limit=${oneOf(path, 'limit', ['50', '100', '200'])}`,
     headers: { Authorization: `Bearer ${env.BENCHLM_TOKEN ?? ''}` }
   },
   '/api/tmdb/trending-tv': {
     target: 'https://api.themoviedb.org',
     changeOrigin: true,
     rewrite: (path) => `/3/trending/tv/${oneOf(path, 'window', ['week', 'day'])}?language=en-US`,
+    headers: { Authorization: `Bearer ${env.TMDB_TOKEN ?? ''}` }
+  },
+  '/api/tmdb/trending-movie': {
+    target: 'https://api.themoviedb.org',
+    changeOrigin: true,
+    rewrite: (path) => `/3/trending/movie/${oneOf(path, 'window', ['week', 'day'])}?language=en-US`,
     headers: { Authorization: `Bearer ${env.TMDB_TOKEN ?? ''}` }
   }
 });

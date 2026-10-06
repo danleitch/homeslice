@@ -698,7 +698,7 @@ describe('The side bar and extensions', () => {
     expect(within(card).getByText('Qwen Coder')).toBeInTheDocument();
     expect(within(card).queryByText('Claude Opus 5.5')).not.toBeInTheDocument();
     expect(fetchMock.mock.calls.map(([url]) => url)).toContain(
-      '/api/benchlm/rankings?surface=coding'
+      '/api/benchlm/rankings?surface=coding&limit=200'
     );
     expect(fetchMock.mock.calls.map(([url]) => url)).toContain('/api/benchlm/pricing?offset=0');
   });
@@ -753,6 +753,37 @@ describe('The side bar and extensions', () => {
       'https://www.themoviedb.org/tv/1'
     );
     expect(within(card).getByText('7.9')).toBeInTheDocument();
+  });
+
+  it('lists the films everyone is watching, linked to TMDB as films', async () => {
+    seed({ widgets: [{ type: 'movies', window: 'day', count: 3 }] });
+    const fetchMock = vi.fn<(url: string) => Promise<Response>>(
+      async () =>
+        new Response(
+          JSON.stringify({
+            results: [
+              {
+                id: 7,
+                title: 'The Long Drive',
+                release_date: '2026-09-12',
+                vote_average: 6.5,
+                vote_count: 80
+              }
+            ]
+          }),
+          { headers: { 'content-type': 'application/json' } }
+        )
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    render(<App />);
+
+    const card = screen.getByRole('region', { name: 'Popular Movies' });
+    expect(await within(card).findByRole('link', { name: /The Long Drive/ })).toHaveAttribute(
+      'href',
+      'https://www.themoviedb.org/movie/7'
+    );
+    expect(within(card).getByText('6.5')).toBeInTheDocument();
+    expect(fetchMock.mock.calls[0]![0]).toBe('/api/tmdb/trending-movie?window=day');
   });
 
   it('says when this server has no key for a widget', async () => {

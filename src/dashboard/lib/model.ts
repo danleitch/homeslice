@@ -13,7 +13,7 @@ import { BENCH_SURFACES, type BenchmarkWidget } from './benchlm';
 import { TRENDING_SINCE, languageSlug, type GithubTrendingWidget } from './github';
 import { PULLS_SHOWS, readToken, type PullsWidget } from './pulls';
 import { readStatusIds } from './status-services';
-import { TRENDING_WINDOWS, type PopularTvWidget } from './tmdb';
+import { TRENDING_WINDOWS, type PopularMoviesWidget, type PopularTvWidget } from './tmdb';
 
 export type { AgendaWidget, CalendarSource } from './agenda';
 export type { AppExtension, ExtensionsConfig } from './extensions-config';
@@ -21,7 +21,7 @@ export type { BenchmarkWidget, BenchSurface } from './benchlm';
 export type { FocusWidget } from './focus';
 export type { PullsShow, PullsWidget } from './pulls';
 export type { GithubTrendingWidget, TrendingSince } from './github';
-export type { PopularTvWidget, TrendingWindow } from './tmdb';
+export type { PopularMoviesWidget, PopularTvWidget, TrendingWindow } from './tmdb';
 
 /** How a group lays out its bookmarks. */
 export type BookmarkStyle = 'cards' | 'tiles' | 'list';
@@ -41,6 +41,13 @@ export type Bookmark = {
 /** The board is a 12-column grid; a group or widget spans part of it. */
 export const GRID_COLUMNS = 12;
 export const MIN_SPAN = 3;
+/** The widgets that read well down to two columns, a sixth of the board. */
+export const NARROW_SPAN = 2;
+const NARROW_WIDGETS: readonly string[] = ['tv', 'movies'];
+
+/** The fewest columns a card may take: a group takes MIN_SPAN, a widget by its type. */
+export const minSpanOf = (widgetType?: string): number =>
+  widgetType !== undefined && NARROW_WIDGETS.includes(widgetType) ? NARROW_SPAN : MIN_SPAN;
 export const DEFAULT_GROUP_SPAN = 4;
 
 /** The board's rows are this many pixels tall; a card's `height` counts them. */
@@ -136,6 +143,7 @@ export type Widget = Placement &
     | PullsWidget
     | BenchmarkWidget
     | PopularTvWidget
+    | PopularMoviesWidget
   );
 export type WidgetType = Widget['type'];
 
@@ -150,7 +158,8 @@ export const WIDGET_TYPES: readonly WidgetType[] = [
   'github',
   'prs',
   'benchlm',
-  'tv'
+  'tv',
+  'movies'
 ];
 
 export const WIDGET_LABELS: Readonly<Record<WidgetType, string>> = {
@@ -164,7 +173,8 @@ export const WIDGET_LABELS: Readonly<Record<WidgetType, string>> = {
   github: 'GitHub Trending',
   prs: 'My PRs',
   benchlm: 'AI Leaderboard',
-  tv: 'Popular TV'
+  tv: 'Popular TV',
+  movies: 'Popular Movies'
 };
 
 export const WIDGET_BLURBS: Readonly<Record<WidgetType, string>> = {
@@ -178,7 +188,8 @@ export const WIDGET_BLURBS: Readonly<Record<WidgetType, string>> = {
   github: 'The repositories everyone is starring',
   prs: 'Reviews waiting on you, and your open PRs with their checks',
   benchlm: 'The strongest AI models right now, from BenchLM',
-  tv: 'What everyone is watching, from TMDB'
+  tv: 'What everyone is watching, from TMDB',
+  movies: 'The films everyone is watching, from TMDB'
 };
 
 export type SearchEngine = 'google' | 'duckduckgo' | 'bing' | 'brave' | 'kagi' | 'startpage';
@@ -394,8 +405,8 @@ const clampNumber = (value: unknown, min: number, max: number, fallback: number)
     : fallback;
 };
 
-export const clampSpan = (value: unknown, fallback = DEFAULT_GROUP_SPAN): number =>
-  Math.round(clampNumber(value, MIN_SPAN, GRID_COLUMNS, fallback));
+export const clampSpan = (value: unknown, fallback = DEFAULT_GROUP_SPAN, min = MIN_SPAN): number =>
+  Math.round(clampNumber(value, min, GRID_COLUMNS, fallback));
 
 /** A row far below anything a board reaches, so a wild `row` can't make the page enormous. */
 const MAX_ROW = 10_000;
@@ -412,10 +423,10 @@ const wholeNumber = (value: unknown, min: number, max: number): number | undefin
  * unusable is left out, so the card goes back to fitting its contents and
  * taking the next free place; `column` means nothing without `row`.
  */
-export const readPlacement = (value: Record<string, unknown>): Placement => {
+export const readPlacement = (value: Record<string, unknown>, minSpan = MIN_SPAN): Placement => {
   const rows = wholeNumber(value.height, 0, MAX_ROWS);
   const height = rows ? Math.max(MIN_ROWS, rows) : undefined;
-  const column = wholeNumber(value.column, 0, GRID_COLUMNS - MIN_SPAN);
+  const column = wholeNumber(value.column, 0, GRID_COLUMNS - minSpan);
   const row = wholeNumber(value.row, 0, MAX_ROW);
 
   return {
@@ -504,7 +515,9 @@ const sanitizeZones = (value: unknown): ClockZone[] =>
 
 const sanitizeWidget = (value: unknown): Widget | null => {
   const widget = sanitizeWidgetSettings(value);
-  return widget && isRecord(value) ? { ...widget, ...readPlacement(value) } : widget;
+  return widget && isRecord(value)
+    ? { ...widget, ...readPlacement(value, minSpanOf(widget.type)) }
+    : widget;
 };
 
 const sanitizeWidgetSettings = (value: unknown): Widget | null => {
@@ -513,7 +526,11 @@ const sanitizeWidgetSettings = (value: unknown): Widget | null => {
   }
 
   const id = newId('w');
-  const width = clampSpan(value.width, 4);
+  const width = clampSpan(
+    value.width,
+    4,
+    minSpanOf(typeof value.type === 'string' ? value.type : undefined)
+  );
 
   switch (value.type) {
     case 'weather':
@@ -617,6 +634,14 @@ const sanitizeWidgetSettings = (value: unknown): Widget | null => {
         window: oneOf(value.window, TRENDING_WINDOWS, 'week'),
         count: Math.round(clampNumber(value.count, 3, 12, 5))
       };
+    case 'movies':
+      return {
+        id,
+        type: 'movies',
+        width,
+        window: oneOf(value.window, TRENDING_WINDOWS, 'week'),
+        count: Math.round(clampNumber(value.count, 3, 12, 5))
+      };
     default:
       return null;
   }
@@ -713,6 +738,7 @@ export const createWidget = (type: WidgetType): Widget => {
     case 'benchlm':
       return { id, type, width: 4, surface: 'overall', creator: '', count: 5, maxPrice: 0 };
     case 'tv':
+    case 'movies':
       return { id, type, width: 4, window: 'week', count: 5 };
   }
 };
