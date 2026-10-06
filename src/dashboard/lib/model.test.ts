@@ -230,6 +230,34 @@ describe('sanitizeConfig', () => {
     expect(createWidget('focus')).toMatchObject({ type: 'focus', focus: 25, rest: 5, sound: true });
   });
 
+  describe('a token’s contract address among the market symbols', () => {
+    const MINT = 'DemoMint1111111111111111111111111111111pump';
+    const EVM = '0xAbAbAbAbAbAbAbAbAbAbAbAbAbAbAbAbAbAbAbAb';
+    const symbolsOf = (symbols: unknown) =>
+      (
+        sanitizeConfig({ widgets: [{ type: 'markets', symbols }] }).pages[0].widgets[0] as {
+          symbols: { symbol: string; name: string }[];
+        }
+      ).symbols;
+
+    it('keeps its case, which a Solana address depends on, while symbols are upper-cased', () => {
+      expect(symbolsOf([{ symbol: MINT, name: 'Mine' }, 'btc-usd', EVM])).toEqual([
+        { symbol: MINT, name: 'Mine' },
+        { symbol: 'BTC-USD', name: '' },
+        { symbol: EVM, name: '' }
+      ]);
+    });
+
+    it('keeps all of it, though a symbol is held to twenty-four characters', () => {
+      expect(symbolsOf([MINT])[0]!.symbol).toHaveLength(MINT.length);
+      expect(symbolsOf(['a-'.repeat(20)])[0]!.symbol).toHaveLength(24);
+    });
+
+    it('does not count a long run of nothing as a symbol', () => {
+      expect(symbolsOf(['   ', { symbol: '' }])).toEqual([]);
+    });
+  });
+
   it('keeps a weather widget saved before the sun, UV and air were added as it was', () => {
     const [weather] = sanitizeConfig({ widgets: [{ type: 'weather', location: 'Oslo' }] }).pages[0]
       .widgets;

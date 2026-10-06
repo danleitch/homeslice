@@ -146,7 +146,9 @@ export const WidgetFields = ({
           </button>
         )}
         <span className="field-hint">
-          Yahoo Finance symbols: AAPL, ^GSPC for the S&amp;P 500, BTC-USD, EURUSD=X.
+          Yahoo Finance symbols: AAPL, ^GSPC for the S&amp;P 500, BTC-USD, EURUSD=X. For a token no
+          exchange lists, paste its contract address (a Solana mint, or an 0x address) and it is
+          followed on DexScreener.
         </span>
       </div>
     )}

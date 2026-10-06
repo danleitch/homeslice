@@ -8,6 +8,7 @@
  * the widget's "needs the proxy" note instead of prices.
  */
 import type { MarketSymbol } from './model';
+import { fetchToken, isTokenAddress } from './tokens';
 
 export const MARKETS_PROXY = '/api/markets';
 
@@ -21,6 +22,10 @@ export type Quote = {
   /** Decimal places Yahoo suggests for this instrument. */
   precision: number;
   closes: number[];
+  /** Where the instrument is shown, when that isn't Yahoo Finance: a token's pool. */
+  url?: string;
+  /** For a token, the dollars in the pool its price comes from. */
+  liquidity?: number;
 };
 
 type ChartResponse = {
@@ -89,6 +94,18 @@ export const fetchQuotes = async (
 ): Promise<Quote[]> => {
   const answers = await Promise.all(
     symbols.map(async (request) => {
+      // A token's contract address isn't a Yahoo symbol: it is read from where it trades. One that
+      // can't be read is left out, as an unknown symbol is, rather than failing the others.
+      if (isTokenAddress(request.symbol)) {
+        return fetchToken(request, signal).catch((error: unknown) => {
+          if (signal.aborted) {
+            throw error;
+          }
+
+          return null;
+        });
+      }
+
       const response = await fetch(
         `${MARKETS_PROXY}/${encodeURIComponent(request.symbol)}?range=1mo&interval=1d`,
         { signal }

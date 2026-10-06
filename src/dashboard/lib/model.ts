@@ -13,6 +13,7 @@ import { BENCH_SURFACES, type BenchmarkWidget } from './benchlm';
 import { TRENDING_SINCE, languageSlug, type GithubTrendingWidget } from './github';
 import { PULLS_SHOWS, readToken, type PullsWidget } from './pulls';
 import { readStatusIds } from './status-services';
+import { normalizeSymbol } from './tokens';
 import { TRENDING_WINDOWS, type PopularMoviesWidget, type PopularTvWidget } from './tmdb';
 
 export type { AgendaWidget, CalendarSource } from './agenda';
@@ -496,7 +497,7 @@ const sanitizeSymbols = (value: unknown): MarketSymbol[] =>
   (Array.isArray(value) ? value : [])
     .map((item): MarketSymbol | null => {
       if (typeof item === 'string') {
-        const symbol = item.trim().toUpperCase().slice(0, 24);
+        const symbol = normalizeSymbol(item);
         return symbol ? { symbol, name: '' } : null;
       }
 
@@ -504,7 +505,8 @@ const sanitizeSymbols = (value: unknown): MarketSymbol[] =>
         return null;
       }
 
-      const symbol = text(item.symbol, '', 24).toUpperCase();
+      // A token's contract address is longer than a symbol, and keeps its case.
+      const symbol = normalizeSymbol(text(item.symbol, '', 64));
       return symbol ? { symbol, name: text(item.name, '', 60) } : null;
     })
     .filter((item): item is MarketSymbol => item !== null)

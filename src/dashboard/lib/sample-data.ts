@@ -10,6 +10,8 @@ import type { Trending } from './github';
 import type { Story } from './hackernews';
 import type { Quote } from './markets';
 import { createWidget, type Widget, type WidgetType } from './model';
+import { createRandom, hashString } from '../../lib/seeded-random';
+import { isTokenAddress, priceDigits } from './tokens';
 import type { PullsData } from './pulls';
 import type { Title } from './tmdb';
 import type { WeatherReport } from './weather';
@@ -115,12 +117,75 @@ const quote = (
   closes: closes(price, drift, wobble, phase)
 });
 
-const markets = (): Quote[] => [
-  quote('SPY', 'S&P 500', 612.4, 0.62, 0.035, 0.004, 0.4),
-  quote('NVDA', 'Chipmaker', 148.2, 2.31, 0.09, 0.01, 2.1),
-  quote('BTC-USD', 'Bitcoin', 94210, -1.24, -0.04, 0.012, 4.2),
-  quote('AAPL', 'Apple', 231.8, 0.18, 0.015, 0.006, 1.3)
-];
+/** A few well-known symbols, each with a price and a trend of its own. */
+const KNOWN: Readonly<Record<string, readonly [string, number, number, number, number, number]>> = {
+  SPY: ['S&P 500', 612.4, 0.62, 0.035, 0.004, 0.4],
+  NVDA: ['Chipmaker', 148.2, 2.31, 0.09, 0.01, 2.1],
+  AAPL: ['Apple', 231.8, 0.18, 0.015, 0.006, 1.3],
+  'BTC-USD': ['Bitcoin', 94210, -1.24, -0.04, 0.012, 4.2],
+  'ETH-USD': ['Ethereum', 3380.5, 1.87, 0.06, 0.014, 3.3],
+  'SOL-USD': ['Solana', 187.6, 3.4, 0.11, 0.018, 5.1]
+};
+
+/** A made-up reading for a symbol the gallery knows nothing of: always the same for the same text. */
+const invented = (symbol: string, name: string): Quote => {
+  const random = createRandom(hashString(symbol));
+  const price = Number((20 + random() * 480).toFixed(2));
+
+  return quote(
+    symbol,
+    name || symbol,
+    price,
+    Number(((random() - 0.45) * 5).toFixed(2)),
+    (random() - 0.3) * 0.12,
+    0.004 + random() * 0.012,
+    random() * 6
+  );
+};
+
+/**
+ * A token typed by its contract address, which no exchange lists: tiny prices, and a pool that
+ * is thin enough for the widget to say so.
+ */
+const sampleToken = (address: string, name: string): Quote => {
+  const random = createRandom(hashString(address));
+  const price = 0.00001 + random() * 0.0001;
+
+  return {
+    symbol: address.replace(/^0x/, '').slice(0, 4).toUpperCase(),
+    name: name || 'Sample token',
+    price,
+    change: Number(((random() - 0.4) * 40).toFixed(2)),
+    currency: 'USD',
+    precision: priceDigits(price),
+    closes: closes(price, (random() - 0.3) * 0.5, 0.03 + random() * 0.04, random() * 6),
+    url: 'https://dexscreener.com/',
+    liquidity: Math.round(20_000 + random() * 180_000)
+  };
+};
+
+/** The symbols asked for in "markets:AAPL=Apple,BTC-USD=", with the names that were given. */
+const symbolsOf = (key: string): { symbol: string; name: string }[] =>
+  key
+    .slice(key.indexOf(':') + 1)
+    .split(',')
+    .filter(Boolean)
+    .map((piece) => {
+      const [symbol = '', ...rest] = piece.split('=');
+      return { symbol, name: rest.join('=') };
+    });
+
+const markets = (key: string): Quote[] =>
+  symbolsOf(key).map(({ symbol, name }) => {
+    if (isTokenAddress(symbol)) {
+      return sampleToken(symbol, name);
+    }
+
+    const known = KNOWN[symbol];
+    return known
+      ? quote(symbol, name || known[0], known[1], known[2], known[3], known[4], known[5])
+      : invented(symbol, name);
+  });
 
 /* -------------------------------------------------------------------------- */
 /* Hacker News                                                                */
@@ -570,6 +635,16 @@ export const sampleWidget = (type: WidgetType): Widget => {
   switch (widget.type) {
     case 'weather':
       return { ...widget, location: 'Cape Town' };
+    case 'markets':
+      return {
+        ...widget,
+        symbols: [
+          { symbol: 'SPY', name: 'S&P 500' },
+          { symbol: 'NVDA', name: 'Chipmaker' },
+          { symbol: 'BTC-USD', name: 'Bitcoin' },
+          { symbol: 'AAPL', name: 'Apple' }
+        ]
+      };
     case 'agenda':
       return { ...widget, calendars: SAMPLE_CALENDARS };
     case 'prs':
@@ -589,7 +664,7 @@ export const sampleReading = (key: string, now: Date): unknown => {
     case 'weather':
       return weather(now);
     case 'markets':
-      return markets();
+      return markets(key);
     case 'hackernews':
       return stories(key, now);
     case 'github':

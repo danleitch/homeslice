@@ -1660,6 +1660,10 @@ body {
   font-size: 0.76rem;
 }
 
+.mkt-liq[data-thin] {
+  color: #f3c969;
+}
+
 .mkt-chart {
   width: 100%;
   height: 32px;

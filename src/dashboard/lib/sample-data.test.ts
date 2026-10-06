@@ -13,6 +13,17 @@ const EVENING = new Date(2026, 9, 6, 18, 0);
 const LATE = new Date(2026, 9, 6, 23, 30);
 
 describe('sampleWidget', () => {
+  it('has four markets to show, with their names', () => {
+    expect(sampleWidget('markets')).toMatchObject({
+      symbols: [
+        { symbol: 'SPY', name: 'S&P 500' },
+        { symbol: 'NVDA', name: 'Chipmaker' },
+        { symbol: 'BTC-USD', name: 'Bitcoin' },
+        { symbol: 'AAPL', name: 'Apple' }
+      ]
+    });
+  });
+
   it.each(WIDGET_TYPES)('is a %s widget, with the settings a new one starts with', (type) => {
     const widget = sampleWidget(type);
 
@@ -84,18 +95,79 @@ describe('sampleReading', () => {
     });
   });
 
-  it('has a month of closes for each market', () => {
-    const quotes = sampleReading('markets:SPY=S&P 500', EVENING) as Quote[];
+  describe('the markets', () => {
+    const MINT = 'DemoMint1111111111111111111111111111111pump';
+    const quotesOf = (key: string): Quote[] => sampleReading(key, EVENING) as Quote[];
 
-    expect(quotes.length).toBeGreaterThan(2);
+    it('has a quote for each symbol asked for, in order, with a month of closes', () => {
+      const quotes = quotesOf('markets:SPY=S&P 500,NVDA=,BTC-USD=Bitcoin,AAPL=Apple');
 
-    for (const quote of quotes) {
-      expect(quote.closes).toHaveLength(22);
-      expect(quote.closes.every((close) => close > 0)).toBe(true);
-    }
+      expect(quotes.map((quote) => quote.symbol)).toEqual(['SPY', 'NVDA', 'BTC-USD', 'AAPL']);
 
-    expect(quotes.some((quote) => quote.change > 0)).toBe(true);
-    expect(quotes.some((quote) => quote.change < 0)).toBe(true);
+      for (const quote of quotes) {
+        expect(quote.closes).toHaveLength(22);
+        expect(quote.closes.every((close) => close > 0)).toBe(true);
+      }
+
+      expect(quotes.some((quote) => quote.change > 0)).toBe(true);
+      expect(quotes.some((quote) => quote.change < 0)).toBe(true);
+    });
+
+    it('calls a well-known symbol by its name unless it was given another', () => {
+      const [spy, btc] = quotesOf('markets:SPY=,BTC-USD=My coin');
+
+      expect(spy!.name).toBe('S&P 500');
+      expect(btc!.name).toBe('My coin');
+    });
+
+    it('has the main coins, so a crypto list shows', () => {
+      const quotes = quotesOf('markets:BTC-USD=,ETH-USD=,SOL-USD=');
+
+      expect(quotes.map((quote) => quote.name)).toEqual(['Bitcoin', 'Ethereum', 'Solana']);
+    });
+
+    it('makes up a steady reading for a symbol it has never heard of, named for it', () => {
+      const [first] = quotesOf('markets:ZZZZ=');
+      const [again] = quotesOf('markets:ZZZZ=');
+
+      expect(first).toEqual(again);
+      expect(first!.name).toBe('ZZZZ');
+      expect(first!.price).toBeGreaterThan(0);
+    });
+
+    it('keeps a name with a comma or an equals sign in it whole, to the extent the key allows', () => {
+      const [quote] = quotesOf('markets:AAPL=a=b');
+
+      expect(quote!.name).toBe('a=b');
+    });
+
+    it('reads a token typed by its address as one: a tiny price, a pool, and its own link', () => {
+      const [token] = quotesOf(`markets:${MINT}=`);
+
+      expect(token).toMatchObject({ symbol: 'DEMO', name: 'Sample token', currency: 'USD' });
+      expect(token!.price).toBeLessThan(0.001);
+      expect(token!.precision).toBeGreaterThan(5);
+      expect(token!.liquidity).toBeGreaterThan(0);
+      expect(token!.url).toBe('https://dexscreener.com/');
+      expect(token!.closes).toHaveLength(22);
+    });
+
+    it('names a token the visitor named, and takes an 0x address’s ticker from after the 0x', () => {
+      const [token] = quotesOf('markets:0xAbAbAbAbAbAbAbAbAbAbAbAbAbAbAbAbAbAbAbAb=My coin');
+
+      expect(token).toMatchObject({ symbol: 'ABAB', name: 'My coin' });
+    });
+
+    it('shows a token among the others, which keep to Yahoo’s ways', () => {
+      const quotes = quotesOf(`markets:BTC-USD=,${MINT}=`);
+
+      expect(quotes[0]!.liquidity).toBeUndefined();
+      expect(quotes[1]!.liquidity).toBeDefined();
+    });
+
+    it('has nothing for no symbols', () => {
+      expect(quotesOf('markets:')).toEqual([]);
+    });
   });
 
   it('has as many stories as the key asks for, and no more than there are', () => {

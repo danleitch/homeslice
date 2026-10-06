@@ -10,6 +10,7 @@ import { languageSlug } from './github';
 import type { ClockZone, Widget } from './model';
 import { findPlaces, isPlaceName } from './places';
 import { isToken, readToken } from './pulls';
+import { normalizeSymbol } from './tokens';
 
 const isZone = (zone: string): boolean => {
   try {
@@ -84,7 +85,7 @@ export const tidyWidget = (draft: Widget): Widget => {
       return {
         ...draft,
         symbols: draft.symbols
-          .map((item) => ({ symbol: item.symbol.trim().toUpperCase(), name: item.name.trim() }))
+          .map((item) => ({ symbol: normalizeSymbol(item.symbol), name: item.name.trim() }))
           .filter((item) => item.symbol)
       };
     case 'clock':

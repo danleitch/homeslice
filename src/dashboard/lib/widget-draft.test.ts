@@ -97,6 +97,15 @@ describe('tidyWidget', () => {
     expect(tidy.symbols).toEqual([{ symbol: 'AAPL', name: 'Apple' }]);
   });
 
+  it('keeps a token’s contract address as typed, whatever its case', () => {
+    const mint = 'DemoMint1111111111111111111111111111111pump';
+    const tidy = tidyWidget(
+      widgetOf('markets', { symbols: [{ symbol: `  ${mint} `, name: ' My coin ' }] })
+    ) as Of<'markets'>;
+
+    expect(tidy.symbols).toEqual([{ symbol: mint, name: 'My coin' }]);
+  });
+
   it('gives a clock the zones places stand for, and drops blank rows', () => {
     const tidy = tidyWidget(
       widgetOf('clock', {
