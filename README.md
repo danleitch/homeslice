@@ -712,7 +712,7 @@ stand-ins for the canvas and for three.js.
 
 `npm run coverage` fails if line, statement or function coverage drops below
 99%, or branch coverage below 93%, so new code arrives with its tests. At the
-last count the suite ran about 2,000 tests at roughly 99.8% line coverage;
+last count the suite ran about 3,100 tests at roughly 99.8% line coverage;
 the few lines left are defensive guards that can't be reached. The suite runs
 in UTC, so it gives the same answers on any machine.
 
