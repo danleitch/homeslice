@@ -10,6 +10,7 @@ import {
   WIDGET_LABELS,
   WIDGET_TYPES,
   countBookmarks,
+  createStarterConfig,
   createWidget,
   emptyPage,
   minSpanOf,
@@ -227,6 +228,31 @@ describe('sanitizeConfig', () => {
     expect(text).toMatchObject({ focus: 40, rest: 5 });
     expect(quiet).toMatchObject({ sound: true });
     expect(createWidget('focus')).toMatchObject({ type: 'focus', focus: 25, rest: 5, sound: true });
+  });
+
+  it('keeps a weather widget saved before the sun, UV and air were added as it was', () => {
+    const [weather] = sanitizeConfig({ widgets: [{ type: 'weather', location: 'Oslo' }] }).pages[0]
+      .widgets;
+
+    expect(weather).toMatchObject({ sun: false, uv: false, air: false });
+  });
+
+  it('reads what a weather widget shows, and takes only a plain yes for it', () => {
+    const [weather] = sanitizeConfig({
+      widgets: [{ type: 'weather', location: 'Oslo', sun: true, uv: 'yes', air: true }]
+    }).pages[0].widgets;
+
+    expect(weather).toMatchObject({ sun: true, uv: false, air: true });
+  });
+
+  it('starts a new weather widget showing the sun, the UV and the air', () => {
+    expect(createWidget('weather')).toMatchObject({ sun: true, uv: true, air: true });
+  });
+
+  it('starts the example board’s weather the same way', () => {
+    const [weather] = createStarterConfig().pages[0].widgets;
+
+    expect(weather).toMatchObject({ type: 'weather', sun: true, uv: true, air: true });
   });
 
   it('keeps the glass within its range', () => {

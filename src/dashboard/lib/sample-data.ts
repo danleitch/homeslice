@@ -42,7 +42,14 @@ const weather = (now: Date): WeatherReport => {
     ].join('-');
   };
 
+  // Sunrise and sunset in the place's own time, as the service gives them: Johannesburg is UTC+2.
+  const at = (hour: number, minute: number): number =>
+    Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), hour - 2, minute);
+
   return {
+    sun: { rise: at(6, 12), set: at(19, 48) },
+    uv: 7,
+    air: 38,
     place: {
       name: 'Cape Town',
       area: 'Western Cape',

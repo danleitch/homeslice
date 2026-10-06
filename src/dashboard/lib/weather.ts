@@ -28,6 +28,12 @@ export type WeatherDay = { date: string; code: number; high: number; low: number
 
 export type WeatherReport = {
   place: Place;
+  /** Today's sunrise and sunset, in milliseconds since 1970. */
+  sun?: { rise: number; set: number };
+  /** The highest UV index today, when it was asked for; null when the service had none. */
+  uv?: number | null;
+  /** The US air quality index now, when it was asked for; null when the service had none. */
+  air?: number | null;
   temperature: number;
   apparent: number;
   code: number;
@@ -67,6 +73,7 @@ type ForecastResponse = {
     time: number[];
     sunrise: number[];
     sunset: number[];
+    uv_index_max?: (number | null)[];
     temperature_2m_max: number[];
     temperature_2m_min: number[];
     weather_code: number[];
@@ -209,8 +216,14 @@ export const buildReport = (place: Place, forecast: ForecastResponse, now: Date)
   const max = Math.max(...raw.map((column) => column.temperature));
   const range = max - min;
 
+  const uvMax = forecast.daily.uv_index_max?.[0];
+
   return {
     place,
+    sun: { rise: forecast.daily.sunrise[0] * 1000, set: forecast.daily.sunset[0] * 1000 },
+    ...(forecast.daily.uv_index_max
+      ? { uv: typeof uvMax === 'number' ? Math.round(uvMax) : null }
+      : {}),
     temperature: Math.round(forecast.current.temperature_2m),
     apparent: Math.round(forecast.current.apparent_temperature),
     code: forecast.current.weather_code,
@@ -233,10 +246,50 @@ export const buildReport = (place: Place, forecast: ForecastResponse, now: Date)
   };
 };
 
+/** What the weather shows beyond its basics, each of which may cost a little more to read. */
+export type WeatherExtras = { uv: boolean; air: boolean };
+
+type AirResponse = { current?: { us_aqi?: number | null } };
+
+/**
+ * The US air quality index at a place now, or null when the service has none or can't say: the
+ * air is a small extra, and never worth losing the weather over.
+ */
+export const fetchAirQuality = async (
+  place: Place,
+  signal: AbortSignal
+): Promise<number | null> => {
+  const query = new URLSearchParams({
+    latitude: String(place.latitude),
+    longitude: String(place.longitude),
+    current: 'us_aqi'
+  });
+
+  try {
+    const response = await fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?${query}`, {
+      signal
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const aqi = ((await response.json()) as AirResponse).current?.us_aqi;
+    return typeof aqi === 'number' && Number.isFinite(aqi) ? Math.round(aqi) : null;
+  } catch (error) {
+    if (signal.aborted) {
+      throw error;
+    }
+
+    return null;
+  }
+};
+
 export const fetchWeather = async (
   location: string,
   units: TemperatureUnits,
-  signal: AbortSignal
+  signal: AbortSignal,
+  extras: WeatherExtras = { uv: false, air: false }
 ): Promise<WeatherReport> => {
   const place = await findPlace(location, signal);
   const query = new URLSearchParams({
@@ -248,18 +301,46 @@ export const fetchWeather = async (
     current:
       'temperature_2m,apparent_temperature,weather_code,is_day,wind_speed_10m,relative_humidity_2m',
     hourly: 'temperature_2m,precipitation_probability',
-    daily: 'sunrise,sunset,temperature_2m_max,temperature_2m_min,weather_code',
+    daily: `sunrise,sunset,temperature_2m_max,temperature_2m_min,weather_code${extras.uv ? ',uv_index_max' : ''}`,
     temperature_unit: units === 'imperial' ? 'fahrenheit' : 'celsius',
     wind_speed_unit: units === 'imperial' ? 'mph' : 'kmh'
   });
-  const response = await fetch(`https://api.open-meteo.com/v1/forecast?${query}`, { signal });
+  const [response, air] = await Promise.all([
+    fetch(`https://api.open-meteo.com/v1/forecast?${query}`, { signal }),
+    extras.air ? fetchAirQuality(place, signal) : Promise.resolve(undefined)
+  ]);
 
   if (!response.ok) {
     throw new Error('The weather service didn’t answer.');
   }
 
-  return buildReport(place, (await response.json()) as ForecastResponse, new Date());
+  const report = buildReport(place, (await response.json()) as ForecastResponse, new Date());
+  return air === undefined ? report : { ...report, air };
 };
+
+/** How strong the sun is, by the UV index, in the words the health services use. */
+export const uvLevel = (
+  index: number
+): { label: string; tone: 'good' | 'fair' | 'poor' | 'bad' } =>
+  index <= 2
+    ? { label: 'Low', tone: 'good' }
+    : index <= 5
+      ? { label: 'Moderate', tone: 'fair' }
+      : index <= 7
+        ? { label: 'High', tone: 'poor' }
+        : { label: index <= 10 ? 'Very high' : 'Extreme', tone: 'bad' };
+
+/** How clean the air is, by the US air quality index. */
+export const airLevel = (
+  index: number
+): { label: string; tone: 'good' | 'fair' | 'poor' | 'bad' } =>
+  index <= 50
+    ? { label: 'Good', tone: 'good' }
+    : index <= 100
+      ? { label: 'Moderate', tone: 'fair' }
+      : index <= 150
+        ? { label: 'Poor for some', tone: 'poor' }
+        : { label: index <= 200 ? 'Poor' : 'Very poor', tone: 'bad' };
 
 export type WeatherKind =
   'clear' | 'partly' | 'cloudy' | 'fog' | 'drizzle' | 'rain' | 'snow' | 'storm';

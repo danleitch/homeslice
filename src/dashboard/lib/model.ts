@@ -95,6 +95,12 @@ export type WeatherWidget = {
   /** A place name, e.g. "Cape Town" or "Portland, Oregon, US". */
   location: string;
   units: TemperatureUnits;
+  /** Show today's sunrise and sunset. A widget saved before these existed doesn't. */
+  sun: boolean;
+  /** Show the day's highest UV index. */
+  uv: boolean;
+  /** Show the air quality, which is one more request. */
+  air: boolean;
 };
 
 export type MarketSymbol = { symbol: string; name: string };
@@ -314,7 +320,16 @@ export const createStarterConfig = (): DashboardConfig => ({
 /** The example's first page; the other pages start empty. */
 export const createStarterPage = (): BoardPage => ({
   widgets: [
-    { id: newId('w'), type: 'weather', width: 4, location: 'London', units: 'metric' },
+    {
+      id: newId('w'),
+      type: 'weather',
+      width: 4,
+      location: 'London',
+      units: 'metric',
+      sun: true,
+      uv: true,
+      air: true
+    },
     {
       id: newId('w'),
       type: 'markets',
@@ -539,7 +554,11 @@ const sanitizeWidgetSettings = (value: unknown): Widget | null => {
         type: 'weather',
         width,
         location: text(value.location, '', 120),
-        units: oneOf(value.units, ['metric', 'imperial'] as const, 'metric')
+        units: oneOf(value.units, ['metric', 'imperial'] as const, 'metric'),
+        // A board saved before these existed keeps its widget as it was.
+        sun: value.sun === true,
+        uv: value.uv === true,
+        air: value.air === true
       };
     case 'markets':
     case 'stocks':
@@ -700,7 +719,16 @@ export const createWidget = (type: WidgetType): Widget => {
 
   switch (type) {
     case 'weather':
-      return { id, type, width: 4, location: 'London', units: 'metric' };
+      return {
+        id,
+        type,
+        width: 4,
+        location: 'London',
+        units: 'metric',
+        sun: true,
+        uv: true,
+        air: true
+      };
     case 'markets':
       return {
         id,

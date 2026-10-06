@@ -60,6 +60,15 @@ describe('sampleReading', () => {
       expect(Math.min(...report.columns.map((column) => column.scale))).toBe(0);
     });
 
+    it('has the sun’s times, the UV and the air, for the widget to show or leave out', () => {
+      expect(report.uv).toBe(7);
+      expect(report.air).toBe(38);
+      // Sunrise at 06:12 where the place keeps time, which is UTC+2.
+      expect(new Date(report.sun!.rise).getUTCHours()).toBe(4);
+      expect(new Date(report.sun!.rise).getUTCMinutes()).toBe(12);
+      expect(report.sun!.set).toBeGreaterThan(report.sun!.rise);
+    });
+
     it('has five days to come, each a date', () => {
       expect(report.days).toHaveLength(5);
       expect(report.days[0]!.date).toBe('2026-10-07');

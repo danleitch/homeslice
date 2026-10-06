@@ -69,6 +69,19 @@ export const WidgetFields = ({
             onChange={(units) => patch({ units })}
           />
         </div>
+        <Switch label="Sunrise and sunset" checked={draft.sun} onChange={(sun) => patch({ sun })} />
+        <Switch
+          label="UV index"
+          hint="The highest it reaches today."
+          checked={draft.uv}
+          onChange={(uv) => patch({ uv })}
+        />
+        <Switch
+          label="Air quality"
+          hint="From Open-Meteo too: the US index, which is one more request."
+          checked={draft.air}
+          onChange={(air) => patch({ air })}
+        />
       </>
     )}
 

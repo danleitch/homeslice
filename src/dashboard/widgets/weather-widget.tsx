@@ -9,15 +9,20 @@ import {
   CloudSnow,
   CloudSun,
   Droplets,
+  Leaf,
   MapPin,
   Moon,
   Sun,
+  SunMedium,
+  Sunrise,
+  Sunset,
   Wind,
   type LucideIcon
 } from 'lucide-react';
 import { useRemote } from '../hooks/use-remote';
 import type { HourFormat, WeatherWidget as WeatherWidgetConfig } from '../lib/model';
-import { describeWeather, fetchWeather, type WeatherKind } from '../lib/weather';
+import { formatTime } from '../lib/time';
+import { airLevel, describeWeather, fetchWeather, uvLevel, type WeatherKind } from '../lib/weather';
 import { WidgetSkeleton, WidgetState } from './widget-frame';
 
 const WEATHER_TTL_MS = 30 * 60 * 1000;
@@ -74,12 +79,15 @@ export const WeatherWidget = ({
   widget: WeatherWidgetConfig;
   clock: HourFormat;
 }): JSX.Element => {
+  const { uv, air } = widget;
   const load = useCallback(
-    (signal: AbortSignal) => fetchWeather(widget.location, widget.units, signal),
-    [widget.location, widget.units]
+    (signal: AbortSignal) => fetchWeather(widget.location, widget.units, signal, { uv, air }),
+    [widget.location, widget.units, uv, air]
   );
+  // The UV and the air are read only when they are shown, and are different readings: the sun's
+  // times come with the forecast anyway, so showing them doesn't change the key.
   const { data, error, refresh } = useRemote(
-    `weather:${widget.location.toLowerCase()}:${widget.units}`,
+    `weather:${widget.location.toLowerCase()}:${widget.units}${uv ? ':uv' : ''}${air ? ':air' : ''}`,
     WEATHER_TTL_MS,
     load
   );
@@ -111,6 +119,9 @@ export const WeatherWidget = ({
   // The first and last columns of daylight round off its glow.
   const dawn = data.columns.findIndex((column) => column.daylight);
   const dusk = data.columns.map((column) => column.daylight).lastIndexOf(true);
+  const uvNow = widget.uv && typeof data.uv === 'number' ? uvLevel(data.uv) : null;
+  const airNow = widget.air && typeof data.air === 'number' ? airLevel(data.air) : null;
+  const sunTimes = widget.sun ? data.sun : undefined;
 
   return (
     <div className="wx">
@@ -169,6 +180,37 @@ export const WeatherWidget = ({
               </span>
             </li>
           ))}
+        </ul>
+      )}
+
+      {(sunTimes || uvNow || airNow) && (
+        <ul className="wx-facts" aria-label="Sun and air">
+          {sunTimes && (
+            <>
+              <li title="Sunrise">
+                <Sunrise size={14} aria-hidden="true" />
+                <span className="visually-hidden">Sunrise </span>
+                {formatTime(new Date(sunTimes.rise), clock, data.place.timezone)}
+              </li>
+              <li title="Sunset">
+                <Sunset size={14} aria-hidden="true" />
+                <span className="visually-hidden">Sunset </span>
+                {formatTime(new Date(sunTimes.set), clock, data.place.timezone)}
+              </li>
+            </>
+          )}
+          {uvNow && (
+            <li data-tone={uvNow.tone} title="The highest UV index today">
+              <SunMedium size={14} aria-hidden="true" />
+              UV {data.uv} <small>{uvNow.label}</small>
+            </li>
+          )}
+          {airNow && (
+            <li data-tone={airNow.tone} title="US air quality index">
+              <Leaf size={14} aria-hidden="true" />
+              Air {data.air} <small>{airNow.label}</small>
+            </li>
+          )}
         </ul>
       )}
 

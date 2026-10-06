@@ -1536,6 +1536,50 @@ body {
   font-weight: 450;
 }
 
+.wx-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wx-facts li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px 3px 7px;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.wx-facts small {
+  color: var(--ink-faint);
+  font-size: inherit;
+}
+
+.wx-facts li[data-tone='good'] small {
+  color: var(--up);
+}
+
+.wx-facts li[data-tone='fair'] small {
+  color: #f3c969;
+}
+
+.wx-facts li[data-tone='poor'] small {
+  color: #ffa86b;
+}
+
+.wx-facts li[data-tone='bad'] small {
+  color: var(--down);
+}
+
 .wx-foot {
   display: flex;
   align-items: center;
