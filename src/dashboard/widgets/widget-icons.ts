@@ -7,6 +7,7 @@ import {
   GitPullRequest,
   ListTodo,
   Newspaper,
+  Rss,
   Star,
   Timer,
   TrendingUp,
@@ -30,5 +31,6 @@ export const WIDGET_ICONS: Readonly<Record<WidgetType, LucideIcon>> = {
   benchlm: Trophy,
   tv: Tv,
   movies: Film,
-  notes: ListTodo
+  notes: ListTodo,
+  news: Rss
 };

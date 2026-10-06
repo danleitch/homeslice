@@ -9,6 +9,7 @@ import type { Prices, Rankings } from './benchlm';
 import type { Trending } from './github';
 import type { Story } from './hackernews';
 import type { Quote } from './markets';
+import type { NewsItem } from './rss';
 import { createWidget, type Widget, type WidgetType } from './model';
 import { createRandom, hashString } from '../../lib/seeded-random';
 import { isTokenAddress, priceDigits } from './tokens';
@@ -347,6 +348,32 @@ const trending = (key: string, now: Date): Trending => {
 };
 
 /* -------------------------------------------------------------------------- */
+/* News                                                                       */
+/* -------------------------------------------------------------------------- */
+
+const HEADLINES: readonly (readonly [string, number])[] = [
+  ['Harbour towns brace for the first storm of the season', 22],
+  ['A quieter way to build software, and why teams are choosing it', 48],
+  ['New telescope images show a galaxy cluster in unprecedented detail', 95],
+  ['City council approves plan for a car-free riverside district', 160],
+  ['What the latest battery research means for the phone in your pocket', 255],
+  ['Local bakery wins national prize for its rye loaf', 340],
+  ['Scientists map the quietest corners of the deep ocean', 480],
+  ['The case for taking a long lunch', 610],
+  ['Rail operators promise faster trains by spring', 780],
+  ['A century of the paperback, in twelve covers', 960],
+  ['Understanding the new rules for small online sellers', 1_200],
+  ['Why the best desk lamps are still the simplest', 1_500]
+];
+
+const news = (key: string, now: Date): NewsItem[] =>
+  HEADLINES.map(([title, minutesAgo], index) => ({
+    title,
+    url: `https://news.example/${key.slice(key.indexOf(':') + 1)}/${index}`,
+    time: Math.round((now.getTime() - minutesAgo * MINUTE) / 1000)
+  }));
+
+/* -------------------------------------------------------------------------- */
 /* My PRs                                                                     */
 /* -------------------------------------------------------------------------- */
 
@@ -683,6 +710,8 @@ export const sampleReading = (key: string, now: Date): unknown => {
       return trending(key, now);
     case 'pulls':
       return pulls(now);
+    case 'news':
+      return news(key, now);
     case 'benchlm':
       return key === 'benchlm:prices' ? prices() : rankings(now);
     case 'tmdb':

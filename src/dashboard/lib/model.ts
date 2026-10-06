@@ -9,6 +9,7 @@
 import { readCalendarSources, type AgendaWidget } from './agenda';
 import { emptyExtensions, sanitizeExtensions, type ExtensionsConfig } from './extensions-config';
 import { FOCUS_LIMITS, type FocusWidget } from './focus';
+import { DEFAULT_FEED, readFeed, type NewsWidget } from './news';
 import { NOTES_MODES, readItems, readNote, type NotesWidget } from './notes';
 import { BENCH_SURFACES, type BenchmarkWidget } from './benchlm';
 import { TRENDING_SINCE, languageSlug, type GithubTrendingWidget } from './github';
@@ -21,6 +22,7 @@ export type { AgendaWidget, CalendarSource } from './agenda';
 export type { AppExtension, ExtensionsConfig } from './extensions-config';
 export type { BenchmarkWidget, BenchSurface } from './benchlm';
 export type { FocusWidget } from './focus';
+export type { NewsWidget } from './news';
 export type { NoteItem, NotesMode, NotesWidget } from './notes';
 export type { PullsShow, PullsWidget } from './pulls';
 export type { GithubTrendingWidget, TrendingSince } from './github';
@@ -154,6 +156,7 @@ export type Widget = Placement &
     | PopularTvWidget
     | PopularMoviesWidget
     | NotesWidget
+    | NewsWidget
   );
 export type WidgetType = Widget['type'];
 
@@ -170,7 +173,8 @@ export const WIDGET_TYPES: readonly WidgetType[] = [
   'benchlm',
   'tv',
   'movies',
-  'notes'
+  'notes',
+  'news'
 ];
 
 export const WIDGET_LABELS: Readonly<Record<WidgetType, string>> = {
@@ -186,7 +190,8 @@ export const WIDGET_LABELS: Readonly<Record<WidgetType, string>> = {
   benchlm: 'AI Leaderboard',
   tv: 'Popular TV',
   movies: 'Popular Movies',
-  notes: 'Notes'
+  notes: 'Notes',
+  news: 'News'
 };
 
 export const WIDGET_BLURBS: Readonly<Record<WidgetType, string>> = {
@@ -202,7 +207,8 @@ export const WIDGET_BLURBS: Readonly<Record<WidgetType, string>> = {
   benchlm: 'The strongest AI models right now, from BenchLM',
   tv: 'What everyone is watching, from TMDB',
   movies: 'The films everyone is watching, from TMDB',
-  notes: 'A to-do list to tick off, or a note to jot things in'
+  notes: 'A to-do list to tick off, or a note to jot things in',
+  news: 'Headlines from a feed you pick: BBC, NPR, Ars Technica and more'
 };
 
 export type SearchEngine = 'google' | 'duckduckgo' | 'bing' | 'brave' | 'kagi' | 'startpage';
@@ -678,6 +684,14 @@ const sanitizeWidgetSettings = (value: unknown): Widget | null => {
         items: readItems(value.items),
         text: readNote(value.text)
       };
+    case 'news':
+      return {
+        id,
+        type: 'news',
+        width,
+        feed: readFeed(value.feed),
+        count: Math.round(clampNumber(value.count, 3, 12, 5))
+      };
     default:
       return null;
   }
@@ -787,6 +801,8 @@ export const createWidget = (type: WidgetType): Widget => {
       return { id, type, width: 4, window: 'week', count: 5 };
     case 'notes':
       return { id, type, width: 4, mode: 'list', items: [], text: '' };
+    case 'news':
+      return { id, type, width: 4, feed: DEFAULT_FEED, count: 5 };
   }
 };
 

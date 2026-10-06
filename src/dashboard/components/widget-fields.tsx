@@ -11,6 +11,7 @@ import { canProtect, isSealed } from '../lib/calendar-secret';
 import { FOCUS_LIMITS } from '../lib/focus';
 import { POPULAR_LANGUAGES, TRENDING_SINCE, languageSlug } from '../lib/github';
 import { minSpanOf, type ClockZone, type MarketSymbol, type Widget } from '../lib/model';
+import { NEWS_FEEDS } from '../lib/news';
 import { isPlaceName } from '../lib/places';
 import type { JSX } from 'react';
 import { FIT_HEIGHT, heightChoices, heightOfChoice, widthChoices } from './layout-options';
@@ -598,6 +599,33 @@ export const WidgetFields = ({
             onChange={(value) => patch({ month: value === 'month' })}
           />
         </div>
+      </>
+    )}
+
+    {draft.type === 'news' && (
+      <>
+        <Field label="Source" hint="The feed is read through this dashboard’s own relay.">
+          <select
+            value={draft.feed}
+            data-autofocus=""
+            onChange={(event) => patch({ feed: event.target.value })}
+          >
+            {NEWS_FEEDS.map((feed) => (
+              <option key={feed.id} value={feed.id}>
+                {feed.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={`Headlines: ${draft.count}`}>
+          <input
+            type="range"
+            min={3}
+            max={12}
+            value={draft.count}
+            onChange={(event) => patch({ count: Number(event.target.value) })}
+          />
+        </Field>
       </>
     )}
 

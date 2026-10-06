@@ -37,6 +37,42 @@ describe('WidgetFields', () => {
     });
   });
 
+  describe('the News’ source', () => {
+    it('offers every feed there is, with the one it has chosen', () => {
+      show({ ...createWidget('news'), feed: 'ars' } as Widget);
+
+      const select = screen.getByLabelText(/Source/) as HTMLSelectElement;
+
+      expect(select).toHaveValue('ars');
+      expect(select.options.length).toBeGreaterThan(8);
+      expect([...select.options].map((option) => option.textContent)).toContain('NPR News');
+    });
+
+    it('changes the feed', async () => {
+      const patch = vi.fn();
+      render(<WidgetFields draft={createWidget('news')} patch={patch} error="" />);
+
+      await userEvent.selectOptions(screen.getByLabelText(/Source/), 'npr');
+
+      expect(patch).toHaveBeenCalledExactlyOnceWith({ feed: 'npr' });
+    });
+
+    it('has the number of headlines, from three to twelve', () => {
+      show(createWidget('news'));
+
+      const slider = screen.getByLabelText(/Headlines: 5/);
+
+      expect(slider).toHaveAttribute('min', '3');
+      expect(slider).toHaveAttribute('max', '12');
+    });
+
+    it('is there in the gallery too', () => {
+      show(createWidget('news'), 'gallery');
+
+      expect(screen.getByLabelText(/Source/)).toBeInTheDocument();
+    });
+  });
+
   describe('the Notes’ style', () => {
     it('offers a to-do list or a note, with the one it has chosen', () => {
       show({ ...createWidget('notes'), mode: 'text' } as Widget);

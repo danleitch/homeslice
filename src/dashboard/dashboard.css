@@ -1609,6 +1609,47 @@ body {
   flex-shrink: 0;
 }
 
+/* News. */
+.nw-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nw-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 2px;
+}
+
+.nw-item + .nw-item {
+  border-top: 1px solid var(--line);
+}
+
+.nw-title {
+  min-width: 0;
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-weight: 520;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+
+.nw-title:hover {
+  color: var(--accent);
+}
+
+.nw-time {
+  flex: none;
+  color: var(--ink-faint);
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Notes. */
 .nt {
   display: grid;

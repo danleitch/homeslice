@@ -6,6 +6,7 @@ import { FocusWidget } from './focus-widget';
 import { GithubTrendingWidget } from './github-widget';
 import { HackerNewsWidget } from './hackernews-widget';
 import { MarketsWidget } from './markets-widget';
+import { NewsWidget } from './news-widget';
 import { NotesWidget } from './notes-widget';
 import { CalendarWidget, ClockWidget } from './time-widgets';
 import { PopularMoviesWidget, PopularTvWidget } from './tv-widget';
@@ -57,5 +58,7 @@ export const WidgetView = ({
       return <PopularMoviesWidget widget={widget} newTab={newTab} />;
     case 'notes':
       return <NotesWidget widget={widget} onChange={onChange} />;
+    case 'news':
+      return <NewsWidget widget={widget} newTab={newTab} />;
   }
 };

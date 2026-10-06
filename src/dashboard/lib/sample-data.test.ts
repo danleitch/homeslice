@@ -4,6 +4,7 @@ import type { AgendaData } from './agenda';
 import { WIDGET_TYPES } from './model';
 import { createSampleSource, sampleReading, sampleWidget } from './sample-data';
 import type { Quote } from './markets';
+import type { NewsItem } from './rss';
 import type { Story } from './hackernews';
 import type { Trending } from './github';
 import type { Title } from './tmdb';
@@ -189,6 +190,16 @@ describe('sampleReading', () => {
     const times = stories.map((story) => story.time);
 
     expect(times).toEqual([...times].sort((a, b) => b - a));
+    expect(times[0]).toBeLessThanOrEqual(EVENING.getTime() / 1000);
+  });
+
+  it('has headlines for any feed, newest first, each a link that goes nowhere real', () => {
+    const items = sampleReading('news:ars', EVENING) as NewsItem[];
+    const times = items.map((item) => item.time);
+
+    expect(items.length).toBeGreaterThanOrEqual(12);
+    expect(times).toEqual([...times].sort((a, b) => b - a));
+    expect(items.every((item) => item.url.startsWith('https://news.example/ars/'))).toBe(true);
     expect(times[0]).toBeLessThanOrEqual(EVENING.getTime() / 1000);
   });
 

@@ -230,6 +230,35 @@ describe('sanitizeConfig', () => {
     expect(createWidget('focus')).toMatchObject({ type: 'focus', focus: 25, rest: 5, sound: true });
   });
 
+  describe('a News widget', () => {
+    const newsOf = (widget: unknown) =>
+      sanitizeConfig({ widgets: [{ type: 'news', ...(widget as object) }] }).pages[0]
+        .widgets[0] as { feed: string; count: number; width: number };
+
+    it('starts on the default feed, with five headlines', () => {
+      expect(createWidget('news')).toMatchObject({ type: 'news', feed: 'bbc', count: 5 });
+    });
+
+    it('is read from what was saved', () => {
+      expect(newsOf({ feed: 'ars', count: 8, width: 6 })).toMatchObject({
+        feed: 'ars',
+        count: 8,
+        width: 6
+      });
+    });
+
+    it('falls back to the default feed for one that is not offered, so no address can be asked for', () => {
+      expect(newsOf({ feed: 'https://evil.example/feed' }).feed).toBe('bbc');
+      expect(newsOf({ feed: '../../x' }).feed).toBe('bbc');
+    });
+
+    it('keeps the number of headlines to what the widget can show', () => {
+      expect(newsOf({ count: 99 }).count).toBe(12);
+      expect(newsOf({ count: 0 }).count).toBe(3);
+      expect(newsOf({ count: 'many' }).count).toBe(5);
+    });
+  });
+
   describe('a Notes widget', () => {
     const notesOf = (widget: unknown) =>
       sanitizeConfig({ widgets: [{ type: 'notes', ...(widget as object) }] }).pages[0]
