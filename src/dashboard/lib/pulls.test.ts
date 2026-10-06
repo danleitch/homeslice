@@ -180,6 +180,19 @@ describe('fetchPulls', () => {
     expect(data.mine[0]?.number).toBe(7);
   });
 
+  it('searches for an Enterprise Managed User, whose login has an underscore', async () => {
+    const fetchMock = serve(viewer('sam_acme'), lists([], []));
+
+    const data = await fetchPulls(TOKEN, signal);
+
+    const body = JSON.parse(String(fetchMock.mock.calls[1]![1].body)) as {
+      variables: { review: string; mine: string };
+    };
+    expect(data.login).toBe('sam_acme');
+    expect(body.variables.review).toContain('review-requested:sam_acme ');
+    expect(body.variables.mine).toContain('author:sam_acme ');
+  });
+
   it('never sends the token anywhere but GitHub’s API', async () => {
     const fetchMock = serve(viewer(), lists([], []));
     await fetchPulls(TOKEN, signal);
@@ -321,7 +334,7 @@ describe('fetchPulls', () => {
       await expect(fetchPulls(TOKEN, controller.signal)).rejects.toThrow('Aborted');
     });
 
-    it.each(['', 'sam smith', 'sam is:public', 'a'.repeat(40), 'x"y'])(
+    it.each(['', 'sam smith', 'sam is:public', 'a'.repeat(61), 'a'.repeat(70), 'x"y'])(
       'will not search for a login that is %j',
       async (login) => {
         const fetchMock = serve(viewer(login));
