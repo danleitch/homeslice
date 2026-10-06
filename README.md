@@ -45,6 +45,9 @@ and you're free to spin up your own the same way (see
   world clock finds a place by name (type "Boston" and it keeps New York's time),
   and shows a sun or a moon beside each one. Popular TV and Popular Movies can be
   narrowed to two columns, a sixth of the board; the other widgets stop at three.
+  **Add a widget** opens a gallery you scroll through: every widget running on
+  sample data, in the same size it will have on the board, so you can try one
+  (turn the agenda's month, start the focus timer) before you press Add.
 - **Your Google Calendar.** The [Agenda](#agenda-your-google-calendar) widget
   shows the month with a dot under every day that has something on, and the
   days to come beneath it: what is on now, what is next and in how long, a

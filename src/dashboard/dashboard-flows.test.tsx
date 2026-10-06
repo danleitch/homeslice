@@ -329,12 +329,12 @@ describe('Dashboard flows', () => {
       key({ key: 'e' });
 
       await userEvent.click(screen.getByRole('button', { name: /Widget/ }));
-      await userEvent.click(screen.getByRole('button', { name: /^Calendar/ }));
+      await userEvent.click(screen.getByRole('button', { name: 'Add Calendar' }));
       expect(screen.getByRole('grid', { name: 'This month' })).toBeInTheDocument();
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
       await userEvent.click(screen.getByRole('button', { name: /Widget/ }));
-      await userEvent.click(screen.getByRole('button', { name: /Weather/ }));
+      await userEvent.click(screen.getByRole('button', { name: 'Add Weather' }));
       const dialog = screen.getByRole('dialog', { name: 'Weather' });
       await userEvent.clear(within(dialog).getByLabelText(/^Place/));
       await userEvent.type(within(dialog).getByLabelText(/^Place/), 'Oslo');
@@ -357,7 +357,7 @@ describe('Dashboard flows', () => {
       key({ key: 'e' });
 
       await userEvent.click(screen.getByRole('button', { name: /Widget/ }));
-      await userEvent.click(screen.getByRole('button', { name: /^Agenda/ }));
+      await userEvent.click(screen.getByRole('button', { name: 'Add Agenda' }));
 
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       const agenda = screen.getByRole('region', { name: 'Agenda' });

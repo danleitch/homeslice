@@ -19,55 +19,17 @@ import { FOCUS_LIMITS } from '../lib/focus';
 import { POPULAR_LANGUAGES, TRENDING_SINCE, languageSlug } from '../lib/github';
 import { isToken, readToken } from '../lib/pulls';
 import {
-  WIDGET_BLURBS,
   WIDGET_LABELS,
-  WIDGET_TYPES,
   minSpanOf,
   type ClockZone,
   type MarketSymbol,
-  type Widget,
-  type WidgetType
+  type Widget
 } from '../lib/model';
 import { WIDGET_ICONS } from '../widgets/widget-icons';
 import { findPlaces, isPlaceName } from '../lib/places';
 import { FIT_HEIGHT, heightChoices, heightOfChoice, widthChoices } from './layout-options';
 import { PlaceInput } from './place-input';
 import { Field, Modal, Segmented, Switch } from './ui';
-
-export const WidgetPicker = ({
-  types = WIDGET_TYPES,
-  onPick,
-  onClose
-}: {
-  /** The widgets whose extensions are turned on. */
-  types?: readonly WidgetType[];
-  onPick: (type: WidgetType) => void;
-  onClose: () => void;
-}): JSX.Element => (
-  <Modal title="Add a widget" subtitle="Widgets sit above your groups." onClose={onClose}>
-    <div className="picker">
-      {types.length === 0 && (
-        <p className="field-hint">
-          Every widget is turned off. Turn some back on in Extensions, in the side bar.
-        </p>
-      )}
-      {types.map((type) => {
-        const Icon = WIDGET_ICONS[type];
-        return (
-          <button key={type} type="button" className="picker-option" onClick={() => onPick(type)}>
-            <span className="picker-icon">
-              <Icon size={20} aria-hidden="true" />
-            </span>
-            <span className="picker-text">
-              <span className="picker-label">{WIDGET_LABELS[type]}</span>
-              <span className="picker-blurb">{WIDGET_BLURBS[type]}</span>
-            </span>
-          </button>
-        );
-      })}
-    </div>
-  </Modal>
-);
 
 const BENCH_PRESET_NAMES = Object.keys(BENCH_PRESETS) as BenchPreset[];
 

@@ -11,15 +11,20 @@ import { PopularMoviesWidget, PopularTvWidget } from './tv-widget';
 import { PullsWidget } from './pulls-widget';
 import { WeatherWidget } from './weather-widget';
 
-/** Draws a widget's body from its settings. */
+/**
+ * Draws a widget's body from its settings. A `demo` one is an example: it keeps off the page's
+ * own timer, which only the Focus widget has.
+ */
 export const WidgetView = ({
   widget,
   clock,
-  newTab
+  newTab,
+  demo = false
 }: {
   widget: Widget;
   clock: HourFormat;
   newTab: boolean;
+  demo?: boolean;
 }): JSX.Element => {
   switch (widget.type) {
     case 'weather':
@@ -29,7 +34,7 @@ export const WidgetView = ({
     case 'clock':
       return <ClockWidget widget={widget} clock={clock} />;
     case 'focus':
-      return <FocusWidget widget={widget} />;
+      return <FocusWidget widget={widget} demo={demo} />;
     case 'calendar':
       return <CalendarWidget widget={widget} />;
     case 'agenda':

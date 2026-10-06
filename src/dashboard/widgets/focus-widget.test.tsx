@@ -316,3 +316,86 @@ describe('FocusWidget', () => {
     setTimers.mockRestore();
   });
 });
+
+describe('FocusWidget as an example', () => {
+  const demo = (patch: Partial<FocusConfig> = {}) =>
+    render(<FocusWidget widget={widgetOf(patch)} demo />);
+
+  it('starts with some of the day done, and the full length ahead', () => {
+    demo();
+
+    expect(time()).toBe('25:00');
+    expect(screen.getByText('3 focus sessions today')).toBeInTheDocument();
+  });
+
+  it('ignores the page’s own timer', () => {
+    seed({ phase: 'focus', endsAt: Date.now() + 7 * MIN, done: 8 });
+    demo();
+
+    expect(time()).toBe('25:00');
+    expect(screen.getByText('3 focus sessions today')).toBeInTheDocument();
+  });
+
+  it('counts down when it is started, and pauses, without saving anything', async () => {
+    demo();
+
+    await user().click(screen.getByRole('button', { name: /Start/ }));
+    await pass(61_000);
+
+    expect(time()).toBe('23:59');
+    expect(window.localStorage.getItem(FOCUS_KEY)).toBeNull();
+
+    await user().click(screen.getByRole('button', { name: /Pause/ }));
+    await pass(10_000);
+
+    expect(time()).toBe('23:59');
+    expect(screen.getByRole('button', { name: /Resume/ })).toBeInTheDocument();
+  });
+
+  it('leaves the tab’s title and the chime alone', async () => {
+    demo();
+
+    await user().click(screen.getByRole('button', { name: /Start/ }));
+    await pass(25 * MIN);
+
+    expect(document.title).toBe('Home');
+    expect(prepareChime).not.toHaveBeenCalled();
+    expect(chime).not.toHaveBeenCalled();
+  });
+
+  it('counts a finished stretch and moves to the break, as the real one does', async () => {
+    demo();
+
+    await user().click(screen.getByRole('button', { name: /Start/ }));
+    await pass(25 * MIN);
+
+    expect(screen.getByText('4 focus sessions today')).toBeInTheDocument();
+    expect(time()).toBe('05:00');
+    expect(window.localStorage.getItem(FOCUS_KEY)).toBeNull();
+  });
+
+  it('does not stop the page’s own countdown in the title when it goes away', async () => {
+    seed({ phase: 'focus', endsAt: Date.now() + 7 * MIN });
+    const real = show();
+    await pass(1_000);
+    const shown = document.title;
+    expect(shown).toContain('Focus');
+
+    const example = demo();
+    example.unmount();
+
+    expect(document.title).toBe(shown);
+    real.unmount();
+  });
+
+  it('does not hear of changes made elsewhere', async () => {
+    demo();
+
+    await act(async () => {
+      seed({ phase: 'focus', endsAt: Date.now() + 7 * MIN });
+      window.dispatchEvent(new StorageEvent('storage', { key: FOCUS_KEY }));
+    });
+
+    expect(time()).toBe('25:00');
+  });
+});

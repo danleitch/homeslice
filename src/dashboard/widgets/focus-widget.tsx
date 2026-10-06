@@ -1,9 +1,10 @@
-import { useEffect, useState, type JSX } from 'react';
+import { useEffect, useRef, useState, type JSX } from 'react';
 import { Pause, Play, RotateCcw, SkipForward } from 'lucide-react';
 import {
   ABANDONED_MS,
   chime,
   clock,
+  dayOf,
   finish,
   isDue,
   isRunning,
@@ -33,15 +34,49 @@ const MAX_DOTS = 8;
 
 const NAMES = { focus: 'Focus', rest: 'Break' } as const;
 
-export const FocusWidget = ({ widget }: { widget: FocusWidgetConfig }): JSX.Element => {
-  const { focus, rest, sound } = widget;
+/** What the gallery's Focus widget starts from: a good morning's work behind it. */
+const sampleState = (): FocusState => ({
+  phase: 'focus',
+  endsAt: null,
+  left: null,
+  done: 3,
+  day: dayOf(new Date())
+});
+
+/**
+ * @param demo Runs on a timer of its own, in memory: the gallery's example works when it is
+ * clicked, without touching the timer the page keeps, its title or its chime.
+ */
+export const FocusWidget = ({
+  widget,
+  demo = false
+}: {
+  widget: FocusWidgetConfig;
+  demo?: boolean;
+}): JSX.Element => {
+  const { focus, rest } = widget;
+  const sound = widget.sound && !demo;
   const lengths = lengthsOf({ focus, rest });
-  const [state, setState] = useState<FocusState>(() => readFocus(new Date()));
+  const [state, setState] = useState<FocusState>(() =>
+    demo ? sampleState() : readFocus(new Date())
+  );
+  // The demo's timer as it is now, for the ticker, which must not wait on a render to see it.
+  const sample = useRef(state);
   const [now, setNow] = useState(() => Date.now());
   const running = isRunning(state);
 
+  const read = (at: number): FocusState => (demo ? sample.current : readFocus(new Date(at)));
+  const write = (next: FocusState): void => {
+    if (demo) {
+      sample.current = next;
+      setState(next);
+    } else {
+      writeFocus(next);
+    }
+  };
+
   // Hear of changes made by another Focus widget, or in another tab.
-  useEffect(() => watchFocus(() => setState(readFocus(new Date()))), []);
+  useEffect(() => (demo ? undefined : watchFocus(() => setState(readFocus(new Date())))), [demo]);
 
   // While it runs, look a few times a second, and end the stretch when its moment comes.
   useEffect(() => {
@@ -54,7 +89,7 @@ export const FocusWidget = ({ widget }: { widget: FocusWidgetConfig }): JSX.Elem
       setNow(current);
 
       // Read afresh: another widget or tab may have ended it already.
-      const saved = readFocus(new Date(current));
+      const saved = read(current);
 
       if (!isDue(saved, current)) {
         return;
@@ -62,11 +97,11 @@ export const FocusWidget = ({ widget }: { widget: FocusWidgetConfig }): JSX.Elem
 
       if (current - (saved.endsAt ?? current) > ABANDONED_MS) {
         // Left behind long ago (a tab that slept, a laptop that was shut): nothing to celebrate.
-        writeFocus({ ...saved, endsAt: null, left: null });
+        write({ ...saved, endsAt: null, left: null });
         return;
       }
 
-      writeFocus(finish(saved));
+      write(finish(saved));
 
       if (sound) {
         chime();
@@ -76,24 +111,30 @@ export const FocusWidget = ({ widget }: { widget: FocusWidgetConfig }): JSX.Elem
     tick();
     const timer = window.setInterval(tick, 250);
     return () => window.clearInterval(timer);
-  }, [running, sound]);
+    // `read` and `write` only choose between this widget's timer and the page's, by `demo`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running, sound, demo]);
 
   const left = remaining(state, now, lengths);
 
   // The countdown goes in the tab's title while it runs, so it shows from another tab.
   useEffect(() => {
+    if (demo) {
+      return;
+    }
+
     if (running) {
       showInTitle(`${clock(left)} · ${NAMES[state.phase]}`);
     } else {
       restoreTitle();
     }
-  }, [running, left, state.phase]);
+  }, [demo, running, left, state.phase]);
 
-  useEffect(() => restoreTitle, []);
+  useEffect(() => (demo ? undefined : restoreTitle), [demo]);
 
   const act = (change: (current: FocusState, at: number) => FocusState): void => {
     const at = Date.now();
-    writeFocus(change(readFocus(new Date(at)), at));
+    write(change(read(at), at));
   };
 
   const total = lengths[state.phase];
@@ -132,7 +173,10 @@ export const FocusWidget = ({ widget }: { widget: FocusWidgetConfig }): JSX.Elem
               act((current, at) => pause(current, at));
             } else {
               // Browsers only let a page make sound after a click, so the chime is readied here.
-              prepareChime();
+              if (!demo) {
+                prepareChime();
+              }
+
               act((current, at) => start(current, at, lengths));
             }
           }}

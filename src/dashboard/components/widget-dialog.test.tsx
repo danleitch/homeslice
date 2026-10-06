@@ -4,14 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CalendarSource } from '../lib/agenda';
 import { canProtect, seal } from '../lib/calendar-secret';
 import {
-  WIDGET_BLURBS,
   WIDGET_LABELS,
   WIDGET_TYPES,
   createWidget,
   type Widget,
   type WidgetType
 } from '../lib/model';
-import { WidgetDialog, WidgetPicker } from './widget-dialog';
+import { WidgetDialog } from './widget-dialog';
 
 // Where the page can encrypt is a browser's to say, and jsdom has nowhere to keep a key; the tests
 // say it, and seal in a way they can read. The sealing itself is tested on its own.
@@ -49,55 +48,6 @@ const choose = (group: string, option: string): Promise<void> =>
   userEvent.click(
     within(screen.getByRole('radiogroup', { name: group })).getByRole('radio', { name: option })
   );
-
-describe('WidgetPicker', () => {
-  it('offers every kind of widget, with what it does', () => {
-    render(<WidgetPicker onPick={vi.fn()} onClose={vi.fn()} />);
-
-    expect(screen.getByRole('dialog', { name: 'Add a widget' })).toBeInTheDocument();
-    expect(
-      screen.getAllByRole('button').filter((b) => b.classList.contains('picker-option'))
-    ).toHaveLength(WIDGET_TYPES.length);
-
-    for (const type of WIDGET_TYPES) {
-      expect(screen.getByText(WIDGET_LABELS[type])).toBeInTheDocument();
-      expect(screen.getByText(WIDGET_BLURBS[type])).toBeInTheDocument();
-    }
-  });
-
-  it('hands over the kind that was picked', async () => {
-    const onPick = vi.fn();
-    render(<WidgetPicker onPick={onPick} onClose={vi.fn()} />);
-
-    await userEvent.click(screen.getByRole('button', { name: new RegExp(WIDGET_LABELS.clock) }));
-
-    expect(onPick).toHaveBeenCalledExactlyOnceWith('clock');
-  });
-
-  it('offers only the widgets whose extensions are on', () => {
-    render(<WidgetPicker types={['weather', 'tv']} onPick={vi.fn()} onClose={vi.fn()} />);
-
-    expect(screen.getByText(WIDGET_LABELS.weather)).toBeInTheDocument();
-    expect(screen.getByText(WIDGET_LABELS.tv)).toBeInTheDocument();
-    expect(screen.queryByText(WIDGET_LABELS.clock)).not.toBeInTheDocument();
-  });
-
-  it('says where to turn widgets back on when none are', () => {
-    render(<WidgetPicker types={[]} onPick={vi.fn()} onClose={vi.fn()} />);
-
-    expect(screen.getByText(/Every widget is turned off/)).toBeInTheDocument();
-    expect(screen.getByText(/Extensions, in the side bar/)).toBeInTheDocument();
-  });
-
-  it('closes from its close button', async () => {
-    const onClose = vi.fn();
-    render(<WidgetPicker onPick={vi.fn()} onClose={onClose} />);
-
-    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
-
-    expect(onClose).toHaveBeenCalledTimes(1);
-  });
-});
 
 describe('WidgetDialog', () => {
   describe('every widget', () => {

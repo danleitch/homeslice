@@ -1400,7 +1400,7 @@ body {
 
 .wx-columns {
   display: grid;
-  grid-template-columns: repeat(12, 1fr);
+  grid-template-columns: repeat(12, minmax(0, 1fr));
   align-items: end;
   height: 104px;
   border-radius: 12px;
@@ -2554,55 +2554,107 @@ body {
   pointer-events: none;
 }
 
-.picker {
-  display: grid;
-  gap: 8px;
-  padding-bottom: 14px;
+/* --- Widget gallery ------------------------------------------------------------------- */
+
+/* A tall modal that scrolls inside itself, under a head that stays put. */
+.modal.modal--gallery {
+  display: flex;
+  flex-direction: column;
+  width: min(1120px, 100%);
+  max-height: calc(100dvh - max(6vh, 20px) - 24px);
 }
 
-.picker-option {
+.modal--gallery .modal-head {
+  flex: none;
+  padding-bottom: 12px;
+}
+
+.modal--gallery .modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px 22px 22px;
+  border-top: 1px solid var(--line);
+  scrollbar-gutter: stable;
+}
+
+/* Cards of every height, laid down column by column, like a wall of examples. */
+.gallery {
+  column-width: 320px;
+  column-gap: 18px;
+  margin: 0;
+  padding: 16px 0 0;
+  list-style: none;
+}
+
+.gallery-card {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 30px;
+  break-inside: avoid;
+}
+
+.gallery-stage {
+  min-width: 0;
+}
+
+/* The widget as the board draws it, on the modal's own dark rather than on a wallpaper. */
+.gallery-widget {
+  --glass-tint: 0.5;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  animation: none;
+}
+
+.gallery-caption {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 12px;
-  border-radius: 14px;
-  text-align: left;
-  background: rgba(255, 255, 255, 0.04);
-  box-shadow: inset 0 0 0 1px var(--line);
-  transition:
-    background 0.15s ease,
-    box-shadow 0.15s ease,
-    transform 0.15s var(--ease);
+  gap: 12px;
+  padding: 0 2px;
 }
 
-.picker-option:hover {
-  background: var(--accent-wash);
-  box-shadow: inset 0 0 0 1px rgba(138, 168, 255, 0.4);
-  transform: translateY(-1px);
-}
-
-.picker-icon {
+.gallery-icon {
   display: grid;
+  flex: none;
   place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
   background: linear-gradient(140deg, rgba(91, 134, 255, 0.35), rgba(63, 211, 160, 0.2));
   color: #fff;
 }
 
-.picker-text {
-  display: grid;
-  gap: 2px;
+.gallery-text {
+  flex: 1;
+  min-width: 0;
 }
 
-.picker-label {
+.gallery-name {
+  margin: 0;
+  font-size: 0.95rem;
   font-weight: 620;
 }
 
-.picker-blurb {
+.gallery-blurb {
+  margin: 1px 0 0;
   color: var(--ink-faint);
-  font-size: 0.82rem;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.gallery-add {
+  flex: none;
+}
+
+@media (max-width: 560px) {
+  .modal--gallery .modal-body {
+    padding: 4px 14px 18px;
+  }
+
+  .modal--gallery .modal-head {
+    padding-left: 16px;
+  }
 }
 
 .import-summary {
