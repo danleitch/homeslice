@@ -53,6 +53,10 @@ describe('sampleWidget', () => {
     expect((sampleWidget('prs') as { token: string }).token).not.toBe('');
   });
 
+  it('watches a repository for My PRs, so its light shows', () => {
+    expect(sampleWidget('prs')).toMatchObject({ repo: 'acme/web' });
+  });
+
   it('is a fresh widget each time, so one is never shared', () => {
     expect(sampleWidget('clock').id).not.toBe(sampleWidget('clock').id);
   });
@@ -365,6 +369,17 @@ describe('sampleReading', () => {
     expect(new Set(all.map((pull) => pull.checks))).toEqual(
       new Set(['passing', 'failing', 'pending', 'none'])
     );
+  });
+
+  it('has a passing build on main for the repository the key names', () => {
+    const build = sampleReading(
+      'mainbuild:acme/web:abc',
+      EVENING
+    ) as import('./main-build').MainBuild;
+
+    expect(build).toMatchObject({ repo: 'acme/web', branch: 'main', checks: 'passing' });
+    expect(build.url).toBe('https://github.com/acme/web/commit/3f9c2d1');
+    expect(build.committed).toBeLessThan(EVENING.getTime() / 1000);
   });
 
   it('has ranked models, best first, for any ranking', () => {

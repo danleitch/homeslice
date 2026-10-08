@@ -11,6 +11,7 @@ import {
 import { Check, Plus, SlidersHorizontal } from 'lucide-react';
 import { SampleReadings } from '../hooks/use-remote';
 import { GALLERY_GROUPS, PACKS, type Pack } from '../lib/gallery';
+import { watchesMain } from '../lib/main-build';
 import { createSampleSource, sampleWidget } from '../lib/sample-data';
 import {
   WIDGET_BLURBS,
@@ -21,6 +22,7 @@ import {
   type WidgetType
 } from '../lib/model';
 import { draftProblem, forBoard, tidyWidget } from '../lib/widget-draft';
+import { WidgetLight } from '../widgets/main-status';
 import { WIDGET_ICONS } from '../widgets/widget-icons';
 import { WidgetView } from '../widgets/widget-view';
 import { Modal, Switch } from './ui';
@@ -138,6 +140,12 @@ const GalleryCard = ({
           role="group"
           aria-label={`${label}, an example`}
         >
+          {watchesMain(draft) && (
+            // The corner of the widget that a board gives to its header.
+            <div className="gallery-light">
+              <WidgetLight widget={draft} newTab={false} />
+            </div>
+          )}
           <div className="wdg-body">
             <WidgetView
               widget={draft}

@@ -294,6 +294,17 @@ says so at the top. The page sends it to `api.github.com` and nowhere else
 widget's cache key holds only a fingerprint of it. It looks for new news every
 two minutes. Revoke the token on GitHub if it ever leaks.
 
+**A light for the build on main.** Give the widget a repository under **Watch
+main on** (`owner/name`, or paste its address) and a small light appears in the
+top right of its header. It shows how the checks are going on the **latest push
+to that repository's main branch**: amber and pulsing while GitHub is still
+building it, then green or red once it is done. While it is amber the widget
+looks again every 20 seconds; once it has finished it goes back to the slow
+pace, which is enough to notice the next push. Hover for the commit's message and
+when it was pushed, and click to open the commit and its checks. It uses the same
+token and the same permissions (Commit statuses and Checks), so there is nothing
+more to set up; leave the field empty for no light.
+
 ```yaml
 widgets:
   - type: prs
@@ -301,6 +312,7 @@ widgets:
     token: github_pat_… # read-only; keep this file private
     show: both # or review, or mine
     count: 5 # pull requests per list, 3 to 10
+    repo: danleitch/homeslice # a light for the build on its main branch; empty for none
 ```
 
 ### Focus timer

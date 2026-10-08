@@ -67,6 +67,21 @@ describe('draftProblem', () => {
     expect(draftProblem(widgetOf('prs', { token: '' }))).toBe('');
   });
 
+  it('lets My PRs watch no repository, or one written as owner/name or pasted', () => {
+    expect(draftProblem(widgetOf('prs', { repo: '' }))).toBe('');
+    expect(draftProblem(widgetOf('prs', { repo: '   ' }))).toBe('');
+    expect(draftProblem(widgetOf('prs', { repo: 'danleitch/homeslice' }))).toBe('');
+    expect(draftProblem(widgetOf('prs', { repo: 'https://github.com/acme/web' }))).toBe('');
+  });
+
+  it('turns away a repository that is not one, saying how to write it', () => {
+    const problem = draftProblem(widgetOf('prs', { repo: 'homeslice' }));
+
+    expect(problem).toBe(
+      'That isn’t a repository. Write it as owner/name, like danleitch/homeslice.'
+    );
+  });
+
   it('turns away a calendar address that is not Google’s, and leaves saved ones and blanks', () => {
     const calendar = (url: string) => ({ name: '', description: '', url });
 
@@ -132,6 +147,16 @@ describe('tidyWidget', () => {
     expect((tidyWidget(widgetOf('github', { language: '' })) as Of<'github'>).language).toBe('all');
   });
 
+  it('puts the repository My PRs watches as owner/name, whether it was typed or pasted', () => {
+    expect((tidyWidget(widgetOf('prs', { repo: ' acme/web ' })) as Of<'prs'>).repo).toBe(
+      'acme/web'
+    );
+    expect(
+      (tidyWidget(widgetOf('prs', { repo: 'https://github.com/acme/web.git' })) as Of<'prs'>).repo
+    ).toBe('acme/web');
+    expect((tidyWidget(widgetOf('prs', { repo: '' })) as Of<'prs'>).repo).toBe('');
+  });
+
   it('trims a token', () => {
     const token = 'github_pat_11ABCDEFG0abcdefghijklmnopqrstuvwxyz';
 
@@ -187,10 +212,13 @@ describe('forBoard', () => {
     expect(forBoard(agenda)).toMatchObject({ type: 'agenda', count: 9, calendars: [] });
   });
 
-  it('leaves the example’s token behind', () => {
-    expect(forBoard(widgetOf('prs', { token: 'sample', count: 7 }))).toMatchObject({
+  it('leaves the example’s token and repository behind', () => {
+    expect(
+      forBoard(widgetOf('prs', { token: 'sample', repo: 'acme/web', count: 7 }))
+    ).toMatchObject({
       type: 'prs',
       token: '',
+      repo: '',
       count: 7
     });
   });

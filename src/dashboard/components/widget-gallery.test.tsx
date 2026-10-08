@@ -433,6 +433,7 @@ describe('WidgetPicker', () => {
 
       expect(within(agenda).queryByRole('button', { name: /Add calendar/ })).toBeNull();
       expect(within(prs).queryByLabelText(/GitHub token/)).toBeNull();
+      expect(within(prs).queryByLabelText(/Watch main on/)).toBeNull();
     });
 
     it('does not submit anything, or leave the page, on Enter', async () => {
@@ -646,7 +647,12 @@ describe('WidgetPicker', () => {
 
         await userEvent.click(within(await customise('prs')).getByRole('radio', { name: 'Mine' }));
         await add('prs');
-        expect(pickOf(onPick).settings).toMatchObject({ type: 'prs', show: 'mine', token: '' });
+        expect(pickOf(onPick).settings).toMatchObject({
+          type: 'prs',
+          show: 'mine',
+          token: '',
+          repo: ''
+        });
       });
 
       it('is one card’s own, not another’s', async () => {
@@ -803,6 +809,20 @@ describe('WidgetPicker', () => {
       expect(within(card('benchlm')).getByText('Aurora 4 Ultra')).toBeInTheDocument();
       expect(within(card('tv')).getByText('Harbour Lights')).toBeInTheDocument();
       expect(within(card('movies')).getByText('Afterglow')).toBeInTheDocument();
+    });
+
+    it('show My PRs with a light for the build on main, in the corner, with nowhere to go', () => {
+      open();
+
+      // Without its address it is no longer a link, only a light.
+      const light = within(card('prs')).getByLabelText('acme/web main: checks passing');
+      expect(light).toHaveAttribute('data-state', 'passing');
+      expect(light.closest('.gallery-light')).not.toBeNull();
+      // Its link goes nowhere, like the rest of an example's.
+      expect(light).not.toHaveAttribute('href');
+      expect(within(card('weather')).queryByLabelText(/checks/)).toBeNull();
+      expect(document.querySelectorAll('.gallery-light')).toHaveLength(1);
+      expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it('show the agenda with something happening now', () => {

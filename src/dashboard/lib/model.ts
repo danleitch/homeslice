@@ -13,7 +13,7 @@ import { DEFAULT_FEED, readFeed, type NewsWidget } from './news';
 import { NOTES_MODES, readItems, readNote, type NotesWidget } from './notes';
 import { BENCH_SURFACES, type BenchmarkWidget } from './benchlm';
 import { TRENDING_SINCE, languageSlug, type GithubTrendingWidget } from './github';
-import { PULLS_SHOWS, readToken, type PullsWidget } from './pulls';
+import { PULLS_SHOWS, readRepo, readToken, type PullsWidget } from './pulls';
 import { readStatusIds } from './status-services';
 import { normalizeSymbol } from './tokens';
 import { TRENDING_WINDOWS, type PopularMoviesWidget, type PopularTvWidget } from './tmdb';
@@ -654,7 +654,8 @@ const sanitizeWidgetSettings = (value: unknown): Widget | null => {
         width,
         token: readToken(value.token),
         show: oneOf(value.show, PULLS_SHOWS, 'both'),
-        count: Math.round(clampNumber(value.count, 3, 10, 5))
+        count: Math.round(clampNumber(value.count, 3, 10, 5)),
+        repo: readRepo(value.repo)
       };
     case 'benchlm':
       return {
@@ -800,7 +801,7 @@ export const createWidget = (type: WidgetType): Widget => {
     case 'focus':
       return { id, type, width: 3, focus: 25, rest: 5, sound: true };
     case 'prs':
-      return { id, type, width: 4, token: '', show: 'both', count: 5 };
+      return { id, type, width: 4, token: '', show: 'both', count: 5, repo: '' };
     case 'benchlm':
       return { id, type, width: 4, surface: 'overall', creator: '', count: 5, maxPrice: 0 };
     case 'tv':

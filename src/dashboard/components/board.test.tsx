@@ -13,7 +13,18 @@ import {
   sanitizeConfig,
   type PageConfig
 } from '../lib/model';
+import { fetchMainBuild } from '../lib/main-build';
+import { fetchPulls } from '../lib/pulls';
 import { Board, type BoardActions } from './board';
+
+vi.mock('../lib/main-build', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../lib/main-build')>()),
+  fetchMainBuild: vi.fn()
+}));
+vi.mock('../lib/pulls', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../lib/pulls')>()),
+  fetchPulls: vi.fn()
+}));
 
 // The real DndContext and GridLayout do the work; these only let a test reach what the board gave them.
 const dnd = vi.hoisted(() => ({ props: null as unknown }));
@@ -1692,6 +1703,59 @@ describe('Board', () => {
         expect(disconnect).toHaveBeenCalled();
         vi.unstubAllGlobals();
       });
+    });
+  });
+
+  describe('the light on a My PRs widget', () => {
+    const TOKEN = 'github_pat_11ABCDEFG0abcdefghijklmnopqrstuvwxyz';
+    const lightConfig = (widget: Record<string, unknown>): PageConfig =>
+      pageOf(sanitizeConfig({ widgets: [{ type: 'prs', token: TOKEN, ...widget }] }), 0);
+
+    beforeEach(() => {
+      window.localStorage.clear();
+      vi.mocked(fetchPulls).mockReturnValue(new Promise(() => undefined));
+      vi.mocked(fetchMainBuild).mockResolvedValue({
+        repo: 'acme/web',
+        branch: 'main',
+        checks: 'failing',
+        headline: 'Break the build',
+        url: 'https://github.com/acme/web/commit/abc1234',
+        committed: Date.now() / 1000
+      });
+    });
+
+    it('is in the corner of the header, after the buttons, once it has looked', async () => {
+      setup({ config: lightConfig({ repo: 'acme/web' }) });
+
+      const light = await screen.findByRole('link', { name: 'acme/web main: checks failing' });
+      const header = light.closest('header')!;
+      expect(header.lastElementChild).toBe(light);
+      expect(light).toHaveAttribute('data-state', 'failing');
+      expect(fetchMainBuild).toHaveBeenCalledWith('acme/web', TOKEN, expect.any(AbortSignal));
+    });
+
+    it('is not there without a repository, and asks GitHub nothing', () => {
+      setup({ config: lightConfig({}) });
+
+      expect(document.querySelector('.wdg-light')).toBeNull();
+      expect(fetchMainBuild).not.toHaveBeenCalled();
+    });
+
+    it('is not on a widget that is not My PRs', () => {
+      setup();
+
+      expect(document.querySelector('.wdg-light')).toBeNull();
+    });
+
+    it('does not start a drag when it is pressed', async () => {
+      setup({ config: lightConfig({ repo: 'acme/web' }) });
+
+      const light = await screen.findByRole('link', { name: /checks failing/ });
+      const press = createEvent.mouseDown(light, { bubbles: true });
+      const stop = vi.spyOn(press, 'stopPropagation');
+      fireEvent(light, press);
+
+      expect(stop).toHaveBeenCalled();
     });
   });
 });

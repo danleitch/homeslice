@@ -13,6 +13,7 @@ import { POPULAR_LANGUAGES, TRENDING_SINCE, languageSlug } from '../lib/github';
 import { minSpanOf, type ClockZone, type MarketSymbol, type Widget } from '../lib/model';
 import { NEWS_FEEDS } from '../lib/news';
 import { isPlaceName } from '../lib/places';
+import { isToken, readRepo } from '../lib/pulls';
 import type { JSX } from 'react';
 import { FIT_HEIGHT, heightChoices, heightOfChoice, widthChoices } from './layout-options';
 import { PlaceInput } from './place-input';
@@ -361,7 +362,7 @@ export const WidgetFields = ({
                 want. It is saved in this browser and in the YAML export, so keep both private.
               </>
             }
-            error={error}
+            error={draft.token.trim() && !isToken(draft.token) ? error : ''}
           >
             <input
               type="password"
@@ -397,6 +398,24 @@ export const WidgetFields = ({
             onChange={(event) => patch({ count: Number(event.target.value) })}
           />
         </Field>
+        {scope === 'dialog' && (
+          <Field
+            label="Watch main on"
+            hint="A light in the corner for the latest push to this repository’s main branch: it pulses while GitHub is still checking it, then turns green or red, and opens the commit when clicked. Leave it empty for no light."
+            error={draft.repo.trim() && !readRepo(draft.repo) ? error : ''}
+          >
+            <input
+              type="text"
+              value={draft.repo}
+              maxLength={140}
+              placeholder="owner/name"
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              onChange={(event) => patch({ repo: event.target.value })}
+            />
+          </Field>
+        )}
       </>
     )}
 

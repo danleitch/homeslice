@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchPulls, isToken, readPull, readToken } from './pulls';
+import { fetchPulls, isToken, readPull, readRepo, readToken } from './pulls';
 
 const signal = new AbortController().signal;
 const TOKEN = 'github_pat_11ABCDEFG0abcdefghijklmnopqrstuvwxyz';
@@ -45,6 +45,44 @@ describe('tokens', () => {
     expect(readToken(undefined)).toBe('');
     expect(readToken(42)).toBe('');
     expect(readToken({ token: TOKEN })).toBe('');
+  });
+});
+
+describe('readRepo', () => {
+  it.each([
+    ['danleitch/homeslice', 'danleitch/homeslice'],
+    ['  acme/web.app  ', 'acme/web.app'],
+    ['Acme-Inc/web_2', 'Acme-Inc/web_2'],
+    ['https://github.com/acme/web', 'acme/web'],
+    ['https://github.com/acme/web/', 'acme/web'],
+    ['https://github.com/acme/web.git', 'acme/web'],
+    ['HTTPS://GitHub.com/acme/web', 'acme/web']
+  ])('reads %j as %j', (value, kept) => {
+    expect(readRepo(value)).toBe(kept);
+  });
+
+  it.each([
+    '',
+    'acme',
+    'acme/',
+    '/web',
+    'acme/web/extra',
+    '-acme/web',
+    'acme/we b',
+    'acme/..',
+    'acme/.',
+    `${'a'.repeat(40)}/web`,
+    `acme/${'w'.repeat(101)}`,
+    'https://example.com/acme/web',
+    'acme/web?x=1'
+  ])('turns away %j', (value) => {
+    expect(readRepo(value)).toBe('');
+  });
+
+  it('reads nothing from what is not text', () => {
+    expect(readRepo(undefined)).toBe('');
+    expect(readRepo(42)).toBe('');
+    expect(readRepo(['acme/web'])).toBe('');
   });
 });
 

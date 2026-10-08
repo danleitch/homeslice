@@ -14,6 +14,7 @@ import { SAMPLE_PLACE } from './gallery';
 import { createWidget, type Widget, type WidgetType } from './model';
 import { createRandom, hashString } from '../../lib/seeded-random';
 import { isTokenAddress, priceDigits } from './tokens';
+import type { MainBuild } from './main-build';
 import type { PullsData } from './pulls';
 import type { Title } from './tmdb';
 import type { WeatherReport } from './weather';
@@ -421,6 +422,20 @@ const news = (key: string, now: Date): NewsItem[] =>
 /* My PRs                                                                     */
 /* -------------------------------------------------------------------------- */
 
+/** The latest push to the main branch of "mainbuild:acme/web:…", whose checks have passed. */
+const mainBuild = (key: string, now: Date): MainBuild => {
+  const repo = partsOf(key)[1] ?? 'acme/web';
+
+  return {
+    repo,
+    branch: 'main',
+    checks: 'passing',
+    headline: 'Show the weather for the week ahead (#489)',
+    url: `https://github.com/${repo}/commit/3f9c2d1`,
+    committed: Math.round((now.getTime() - 12 * MINUTE) / 1000)
+  };
+};
+
 const pulls = (now: Date): PullsData => {
   const ago = (minutes: number): number => Math.round((now.getTime() - minutes * MINUTE) / 1000);
   const url = (repo: string, number: number): string => `https://github.com/${repo}/pull/${number}`;
@@ -758,7 +773,7 @@ export const sampleWidget = (type: WidgetType): Widget => {
     case 'agenda':
       return { ...widget, calendars: SAMPLE_CALENDARS };
     case 'prs':
-      return { ...widget, token: 'sample' };
+      return { ...widget, token: 'sample', repo: 'acme/web' };
     case 'notes':
       return {
         ...widget,
@@ -793,6 +808,8 @@ export const sampleReading = (key: string, now: Date): unknown => {
       return trending(key, now);
     case 'pulls':
       return pulls(now);
+    case 'mainbuild':
+      return mainBuild(key, now);
     case 'news':
       return news(key, now);
     case 'benchlm':

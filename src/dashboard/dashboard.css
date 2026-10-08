@@ -2990,6 +2990,12 @@ body {
 }
 
 /* The widget as the board draws it, on the modal's own dark rather than on a wallpaper. */
+.gallery-light {
+  display: flex;
+  justify-content: flex-end;
+  margin: -4px -4px -6px;
+}
+
 .gallery-widget {
   --glass-tint: 0.5;
   -webkit-backdrop-filter: none;

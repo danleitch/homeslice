@@ -201,12 +201,43 @@ describe('sanitizeConfig', () => {
       ]
     }).pages[0].widgets;
 
-    expect(plain).toMatchObject({ type: 'prs', width: 4, token: '', show: 'both', count: 5 });
+    expect(plain).toMatchObject({
+      type: 'prs',
+      width: 4,
+      token: '',
+      show: 'both',
+      count: 5,
+      repo: ''
+    });
     expect(tuned).toMatchObject({ token, show: 'review', count: 8, width: 6 });
     expect(junk).toMatchObject({ token: '', show: 'both' });
     expect(bounded).toMatchObject({ count: 10 });
     expect(low).toMatchObject({ count: 3 });
-    expect(createWidget('prs')).toMatchObject({ type: 'prs', token: '', show: 'both', count: 5 });
+    expect(createWidget('prs')).toMatchObject({
+      type: 'prs',
+      token: '',
+      show: 'both',
+      count: 5,
+      repo: ''
+    });
+  });
+
+  it('reads the repository My PRs watches, keeping only one that can be', () => {
+    const [none, kept, pasted, junk, notText] = sanitizeConfig({
+      widgets: [
+        { type: 'prs' },
+        { type: 'prs', repo: ' danleitch/homeslice ' },
+        { type: 'prs', repo: 'https://github.com/acme/web.git' },
+        { type: 'prs', repo: 'not a repository' },
+        { type: 'prs', repo: 7 }
+      ]
+    }).pages[0].widgets;
+
+    expect(none).toMatchObject({ repo: '' });
+    expect(kept).toMatchObject({ repo: 'danleitch/homeslice' });
+    expect(pasted).toMatchObject({ repo: 'acme/web' });
+    expect(junk).toMatchObject({ repo: '' });
+    expect(notText).toMatchObject({ repo: '' });
   });
 
   it('reads the Focus timer, keeping its lengths in range and its chime on unless turned off', () => {

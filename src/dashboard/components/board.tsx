@@ -65,6 +65,7 @@ import {
   type Widget
 } from '../lib/model';
 import { isLinkDrag, readDroppedLink } from '../lib/urls';
+import { WidgetLight } from '../widgets/main-status';
 import { WidgetFrame } from '../widgets/widget-frame';
 import { WidgetView } from '../widgets/widget-view';
 import { BookmarkCard } from './bookmark-card';
@@ -580,6 +581,7 @@ export const Board = ({
       <WidgetFrame
         widget={widget}
         editing={editing}
+        light={<WidgetLight widget={widget} newTab={config.newTab} />}
         onConfigure={actions.onConfigureWidget}
         onRemove={actions.onRemoveWidget}
       >

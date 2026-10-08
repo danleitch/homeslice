@@ -875,6 +875,56 @@ describe('WidgetDialog', () => {
       expect(saved(onSave)).toMatchObject({ token: '' });
     });
 
+    describe('the repository whose main branch gets a light', () => {
+      const repo = (): HTMLInputElement =>
+        screen.getByLabelText(/Watch main on/) as HTMLInputElement;
+
+      it('is a field for owner/name, empty until one is given, saying what the light does', () => {
+        open(widgetOf('prs'));
+
+        expect(repo()).toHaveValue('');
+        expect(repo()).toHaveAttribute('placeholder', 'owner/name');
+        expect(screen.getByText(/pulses while GitHub is still checking it/)).toBeInTheDocument();
+      });
+
+      it('shows the one it has', () => {
+        open(widgetOf('prs', { repo: 'danleitch/homeslice' }));
+
+        expect(repo()).toHaveValue('danleitch/homeslice');
+      });
+
+      it('saves it, tidied, and keeps the token as it is', async () => {
+        const { onSave } = open(widgetOf('prs', { token: TOKEN }));
+
+        await userEvent.type(repo(), '  https://github.com/danleitch/homeslice.git ');
+        await save();
+
+        expect(saved(onSave)).toMatchObject({ token: TOKEN, repo: 'danleitch/homeslice' });
+      });
+
+      it('saves with none, so the widget has no light', async () => {
+        const { onSave } = open(widgetOf('prs', { repo: 'acme/web' }));
+
+        await userEvent.clear(repo());
+        await save();
+
+        expect(saved(onSave)).toMatchObject({ repo: '' });
+      });
+
+      it('turns away something that is not a repository, and says so beside it, not the token', async () => {
+        const { onSave } = open(widgetOf('prs', { token: TOKEN }));
+
+        await userEvent.type(repo(), 'homeslice');
+        await save();
+
+        expect(onSave).not.toHaveBeenCalled();
+        const alert = screen.getByRole('alert');
+        expect(alert).toHaveTextContent('That isn’t a repository.');
+        expect(repo().closest('label')).toContainElement(alert);
+        expect(field().closest('label')).not.toContainElement(alert);
+      });
+    });
+
     it('turns away something that is not a token, without saving or repeating it', async () => {
       const { onSave } = open(widgetOf('prs'));
 

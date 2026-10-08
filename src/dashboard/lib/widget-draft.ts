@@ -9,7 +9,7 @@ import { isSealed } from './calendar-secret';
 import { languageSlug } from './github';
 import type { ClockZone, Widget } from './model';
 import { findPlaces, isPlaceName } from './places';
-import { isToken, readToken } from './pulls';
+import { isToken, readRepo, readToken } from './pulls';
 import { normalizeSymbol } from './tokens';
 
 const isZone = (zone: string): boolean => {
@@ -63,6 +63,10 @@ export const draftProblem = (draft: Widget): string => {
     return 'That doesn’t look like a GitHub token. It is letters, numbers and underscores, 20 or more of them, like github_pat_… or ghp_…';
   }
 
+  if (draft.type === 'prs' && draft.repo.trim() && !readRepo(draft.repo)) {
+    return 'That isn’t a repository. Write it as owner/name, like danleitch/homeslice.';
+  }
+
   if (draft.type === 'agenda') {
     // Blank rows are left out when it is kept, so only an address that was actually typed can be
     // wrong. An address that was saved is sealed, and can't be wrong; one typed here is checked.
@@ -95,7 +99,7 @@ export const tidyWidget = (draft: Widget): Widget => {
     case 'github':
       return { ...draft, language: languageSlug(draft.language) };
     case 'prs':
-      return { ...draft, token: readToken(draft.token) };
+      return { ...draft, token: readToken(draft.token), repo: readRepo(draft.repo) };
     case 'agenda':
       return { ...draft, calendars: readCalendarSources(draft.calendars) };
     default:
@@ -114,7 +118,7 @@ export const forBoard = (widget: Widget): Widget => {
     case 'agenda':
       return { ...widget, calendars: [] };
     case 'prs':
-      return { ...widget, token: '' };
+      return { ...widget, token: '', repo: '' };
     default:
       return widget;
   }

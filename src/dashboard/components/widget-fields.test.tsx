@@ -99,10 +99,11 @@ describe('WidgetFields', () => {
   });
 
   describe('in the dialog, which has every setting', () => {
-    it('asks for My PRs’ token', () => {
+    it('asks for My PRs’ token, and the repository whose main branch gets a light', () => {
       show(createWidget('prs'));
 
       expect(screen.getByLabelText(/GitHub token/)).toBeInTheDocument();
+      expect(screen.getByLabelText(/Watch main on/)).toBeInTheDocument();
     });
 
     it('lists the Agenda’s calendars', () => {
@@ -123,6 +124,7 @@ describe('WidgetFields', () => {
       show(createWidget('prs'), 'gallery');
 
       expect(screen.queryByLabelText(/GitHub token/)).toBeNull();
+      expect(screen.queryByLabelText(/Watch main on/)).toBeNull();
       expect(screen.getByRole('radiogroup', { name: 'Show' })).toBeInTheDocument();
       expect(screen.getByLabelText(/Pull requests/)).toBeInTheDocument();
     });
