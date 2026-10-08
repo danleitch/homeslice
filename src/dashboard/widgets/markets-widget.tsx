@@ -2,6 +2,7 @@ import { useCallback, useId, type JSX } from 'react';
 import { useRemote } from '../hooks/use-remote';
 import type { MarketsWidget as MarketsWidgetConfig } from '../lib/model';
 import { fetchQuotes, formatPrice, sparkline, type Quote } from '../lib/markets';
+import { THIN_LIQUIDITY, compactUsd } from '../lib/tokens';
 import { WidgetSkeleton, WidgetState } from './widget-frame';
 
 const MARKETS_TTL_MS = 15 * 60 * 1000;
@@ -73,17 +74,28 @@ export const MarketsWidget = ({ widget }: { widget: MarketsWidgetConfig }): JSX.
 
   return (
     <ul className="mkt-list">
-      {data.map((quote) => (
-        <li key={quote.symbol} className="mkt-row">
+      {data.map((quote, index) => (
+        <li key={`${quote.symbol}:${index}`} className="mkt-row">
           <a
             className="mkt-link"
-            href={`https://finance.yahoo.com/quote/${encodeURIComponent(quote.symbol)}`}
+            href={
+              quote.url ?? `https://finance.yahoo.com/quote/${encodeURIComponent(quote.symbol)}`
+            }
             target="_blank"
             rel="noreferrer noopener"
           >
             <span className="mkt-id">
               <span className="mkt-symbol">{quote.symbol}</span>
               <span className="mkt-name">{quote.name}</span>
+              {quote.liquidity !== undefined && (
+                <span
+                  className="mkt-liq"
+                  data-thin={quote.liquidity < THIN_LIQUIDITY ? '' : undefined}
+                  title="The money in the pool this price comes from. In a small pool, a few trades move the price a long way."
+                >
+                  {compactUsd(quote.liquidity)} liquidity
+                </span>
+              )}
             </span>
             <Sparkline quote={quote} />
             <span className="mkt-values">

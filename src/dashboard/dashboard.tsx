@@ -46,6 +46,7 @@ import { StatusBar } from './components/status-bar';
 import { EditDock, EmptyBoard, TopBar } from './components/top-bar';
 import { ContextMenu, Toasts, type MenuItem } from './components/ui';
 import { WidgetDialog } from './components/widget-dialog';
+import { countByType, needsSetup } from './lib/gallery';
 import { WidgetPicker } from './components/widget-gallery';
 import { useDashboard, type ApplyToPage } from './hooks/use-dashboard';
 import { usePage } from './hooks/use-page';
@@ -54,6 +55,7 @@ import {
   addBookmark,
   addGroup,
   addWidget,
+  addWidgets,
   deleteBookmark,
   deleteGroup,
   deleteWidget,
@@ -68,6 +70,7 @@ import {
 } from './lib/edit';
 import {
   PAGE_COUNT,
+  SETUP_FIRST,
   WIDGET_LABELS,
   allGroups,
   createStarterConfig,
@@ -284,6 +287,13 @@ export const Dashboard = ({
         `Deleted “${group.name}”${count ? ` and its ${count} bookmark${count === 1 ? '' : 's'}` : ''}`
       );
     },
+    [apply]
+  );
+
+  // A widget that keeps something in itself (Notes), written through like any other edit but with
+  // no toast to undo it: it happens as often as somebody types.
+  const updateWidgetSelf = useCallback(
+    (widget: Widget) => apply((current) => updateWidget(current, widget.id, widget)),
     [apply]
   );
 
@@ -845,6 +855,7 @@ export const Dashboard = ({
         onAddWidget={() => setPickerOpen(true)}
         onConfigureWidget={setWidgetDialog}
         onRemoveWidget={removeWidget}
+        onUpdateWidget={updateWidgetSelf}
         onDropLink={(groupId, url, title) => {
           let addedId = '';
           apply((current) => {
@@ -987,25 +998,37 @@ export const Dashboard = ({
           <WidgetPicker
             types={enabledWidgetTypes(extensions)}
             clock={config.clock}
+            onBoard={countByType(config.widgets)}
             onClose={() => setPickerOpen(false)}
-            onPick={(type) => {
-              setPickerOpen(false);
+            onPick={({ type, settings, stay }) => {
+              if (!stay) {
+                setPickerOpen(false);
+              }
+
               const created: { widget: Widget | null } = { widget: null };
               apply((current) => {
-                const result = addWidget(current, type);
+                const result = addWidget(current, type, settings);
                 created.widget = result.widget;
                 return result.config;
               });
 
-              // Most widgets want a word about what to show before they are useful.
+              // Most widgets want a word about what to show before they are useful. One that was
+              // set up in the gallery has had it, unless what it wants is only its owner's to
+              // give. With the gallery left open there is no asking: it is set up afterwards.
               if (
+                !stay &&
                 created.widget &&
-                !['calendar', 'agenda', 'hackernews', 'github', 'benchlm', 'tv', 'movies'].includes(
-                  type
-                )
+                (settings ? needsSetup(created.widget) : SETUP_FIRST.includes(type))
               ) {
                 setWidgetDialog(created.widget);
               }
+            }}
+            onPickPack={({ pack, stay }) => {
+              if (!stay) {
+                setPickerOpen(false);
+              }
+
+              apply((current) => addWidgets(current, pack.widgets), `Added ${pack.name}`);
             }}
           />
         )}

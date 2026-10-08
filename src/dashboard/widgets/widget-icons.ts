@@ -5,7 +5,9 @@ import {
   CloudSun,
   Film,
   GitPullRequest,
+  ListTodo,
   Newspaper,
+  Rss,
   Star,
   Timer,
   TrendingUp,
@@ -28,5 +30,7 @@ export const WIDGET_ICONS: Readonly<Record<WidgetType, LucideIcon>> = {
   prs: GitPullRequest,
   benchlm: Trophy,
   tv: Tv,
-  movies: Film
+  movies: Film,
+  notes: ListTodo,
+  news: Rss
 };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildReport, describeWeather, type Place } from './weather';
+import { airLevel, buildReport, describeWeather, uvLevel, type Place } from './weather';
 
 const place: Place = {
   name: 'Reykjavík',
@@ -88,5 +88,66 @@ describe('describeWeather', () => {
     expect(describeWeather(0)).toEqual({ label: 'Clear sky', kind: 'clear' });
     expect(describeWeather(95).kind).toBe('storm');
     expect(describeWeather(1234).label).toBe('Unknown');
+  });
+});
+
+describe('buildReport, beyond the basics', () => {
+  const now = new Date((day + 13.5 * 3600) * 1000);
+
+  it('always has the day’s sunrise and sunset, in milliseconds', () => {
+    expect(buildReport(place, forecast, now).sun).toEqual({
+      rise: (day + 6 * 3600) * 1000,
+      set: (day + 20 * 3600) * 1000
+    });
+  });
+
+  it('has no UV index when none was asked for', () => {
+    expect(buildReport(place, forecast, now)).not.toHaveProperty('uv');
+  });
+
+  it('has today’s highest UV index, to the whole number, when it was asked for', () => {
+    const asked = { ...forecast, daily: { ...forecast.daily, uv_index_max: [7.4, 6, 5, 4, 3, 2] } };
+
+    expect(buildReport(place, asked, now).uv).toBe(7);
+  });
+
+  it('says there is none when the service gave a gap', () => {
+    const gap = { ...forecast, daily: { ...forecast.daily, uv_index_max: [null, 6, 5, 4, 3, 2] } };
+
+    expect(buildReport(place, gap, now).uv).toBeNull();
+  });
+});
+
+describe('uvLevel', () => {
+  it.each([
+    [0, 'Low', 'good'],
+    [2, 'Low', 'good'],
+    [3, 'Moderate', 'fair'],
+    [5, 'Moderate', 'fair'],
+    [6, 'High', 'poor'],
+    [7, 'High', 'poor'],
+    [8, 'Very high', 'bad'],
+    [10, 'Very high', 'bad'],
+    [11, 'Extreme', 'bad'],
+    [14, 'Extreme', 'bad']
+  ])('calls a UV index of %i %s', (index, label, tone) => {
+    expect(uvLevel(index)).toEqual({ label, tone });
+  });
+});
+
+describe('airLevel', () => {
+  it.each([
+    [0, 'Good', 'good'],
+    [50, 'Good', 'good'],
+    [51, 'Moderate', 'fair'],
+    [100, 'Moderate', 'fair'],
+    [101, 'Poor for some', 'poor'],
+    [150, 'Poor for some', 'poor'],
+    [151, 'Poor', 'bad'],
+    [200, 'Poor', 'bad'],
+    [201, 'Very poor', 'bad'],
+    [350, 'Very poor', 'bad']
+  ])('calls an air quality index of %i %s', (index, label, tone) => {
+    expect(airLevel(index)).toEqual({ label, tone });
   });
 });

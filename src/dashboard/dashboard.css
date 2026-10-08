@@ -1536,6 +1536,50 @@ body {
   font-weight: 450;
 }
 
+.wx-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wx-facts li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px 3px 7px;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.wx-facts small {
+  color: var(--ink-faint);
+  font-size: inherit;
+}
+
+.wx-facts li[data-tone='good'] small {
+  color: var(--up);
+}
+
+.wx-facts li[data-tone='fair'] small {
+  color: #f3c969;
+}
+
+.wx-facts li[data-tone='poor'] small {
+  color: #ffa86b;
+}
+
+.wx-facts li[data-tone='bad'] small {
+  color: var(--down);
+}
+
 .wx-foot {
   display: flex;
   align-items: center;
@@ -1563,6 +1607,169 @@ body {
   display: flex;
   gap: 10px;
   flex-shrink: 0;
+}
+
+/* News. */
+.nw-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nw-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 2px;
+}
+
+.nw-item + .nw-item {
+  border-top: 1px solid var(--line);
+}
+
+.nw-title {
+  min-width: 0;
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-weight: 520;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+
+.nw-title:hover {
+  color: var(--accent);
+}
+
+.nw-time {
+  flex: none;
+  color: var(--ink-faint);
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Notes. */
+.nt {
+  display: grid;
+  gap: 8px;
+}
+
+.nt-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nt-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 34px;
+  padding: 7px 2px;
+}
+
+.nt-item + .nt-item {
+  border-top: 1px solid var(--line);
+}
+
+.nt-check {
+  flex: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+  padding: 0;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.nt-check:hover {
+  border-color: var(--accent);
+}
+
+.nt-check:checked {
+  border-color: var(--accent-strong);
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-7'/%3E%3C/svg%3E")
+      center / 12px no-repeat,
+    var(--accent-strong);
+}
+
+.nt-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  cursor: pointer;
+}
+
+.nt-item--done .nt-text {
+  color: var(--ink-faint);
+  text-decoration: line-through;
+}
+
+.nt-tools {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.nt-item:hover .nt-tools,
+.nt-item:focus-within .nt-tools {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .nt-tools {
+    opacity: 1;
+  }
+}
+
+.nt-edit,
+.nt-add input {
+  padding: 0.42rem 0.6rem;
+  font-size: 0.88rem;
+}
+
+.nt-add {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nt-empty {
+  margin: 4px 0 2px;
+  color: var(--ink-faint);
+  font-size: 0.85rem;
+}
+
+.nt-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 0.76rem;
+}
+
+.nt-note {
+  width: 100%;
+  min-height: 150px;
+  padding: 0.6rem 0.7rem;
+  resize: vertical;
+  font-size: 0.9rem;
+  line-height: 1.5;
 }
 
 /* Markets. */
@@ -1614,6 +1821,19 @@ body {
   white-space: nowrap;
   color: var(--ink-faint);
   font-size: 0.76rem;
+}
+
+/* A token's pool, on a line of its own: the warning that it is thin must not be cut short. */
+.mkt-liq {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+}
+
+.mkt-liq[data-thin] {
+  color: #f3c969;
 }
 
 .mkt-chart {
@@ -2580,6 +2800,150 @@ body {
 }
 
 /* Cards of every height, laid down column by column, like a wall of examples. */
+.gallery-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 20px;
+  /* Over the examples as they scroll under it, and out to the dialog's edges. */
+  margin: 0 -22px;
+  padding: 12px 22px;
+  background: rgba(17, 22, 34, 0.94);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+}
+
+.gallery-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.gallery-chip {
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  font-weight: 560;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.gallery-chip:hover {
+  background: var(--surface-hover);
+}
+
+.gallery-chip[aria-pressed='true'] {
+  background: var(--accent-wash);
+  box-shadow: inset 0 0 0 1px rgba(138, 168, 255, 0.45);
+  color: #fff;
+}
+
+.gallery-bar .switch-row {
+  flex: none;
+  gap: 10px;
+}
+
+.gallery-bar .field-label {
+  font-size: 0.82rem;
+  font-weight: 540;
+}
+
+.gallery-section {
+  margin: 20px 0 0;
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.packs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
+  gap: 14px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(91, 134, 255, 0.16), transparent 60%), var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.pack-name {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 640;
+}
+
+.pack-blurb {
+  flex: 1;
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.pack-parts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pack-parts li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px 3px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+}
+
+.pack-add {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+.gallery-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.gallery-onboard {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 8px 1px 6px;
+  border-radius: 999px;
+  background: rgba(63, 211, 160, 0.14);
+  color: var(--up);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
 .gallery {
   column-width: 320px;
   column-gap: 18px;
@@ -2595,11 +2959,43 @@ body {
   break-inside: avoid;
 }
 
+.gallery-card[data-wide] .gallery-stage {
+  width: 100%;
+}
+
 .gallery-stage {
+  width: calc(var(--share, 1) * 100%);
   min-width: 0;
+  max-width: 100%;
+}
+
+/* From half the board up, an example has the gallery to itself, as wide as it will be. */
+.gallery-card[data-wide] {
+  column-span: all;
+  width: calc(var(--share, 1) * 100%);
+}
+
+.gallery-options {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.gallery-options .form,
+.gallery-options .field {
+  margin: 0;
 }
 
 /* The widget as the board draws it, on the modal's own dark rather than on a wallpaper. */
+.gallery-light {
+  display: flex;
+  justify-content: flex-end;
+  margin: -4px -4px -6px;
+}
+
 .gallery-widget {
   --glass-tint: 0.5;
   -webkit-backdrop-filter: none;
@@ -2647,9 +3043,24 @@ body {
   flex: none;
 }
 
+@media (max-width: 720px) {
+  /* A share of a phone's width is no width at all: examples fill the card there. */
+  .gallery-stage,
+  .gallery-card[data-wide] {
+    width: 100%;
+  }
+}
+
 @media (max-width: 560px) {
   .modal--gallery .modal-body {
     padding: 4px 14px 18px;
+  }
+
+  /* On a phone the bar would take a fifth of what is in view, so it scrolls away with the rest. */
+  .gallery-bar {
+    position: static;
+    margin: 0 -14px;
+    padding: 10px 14px;
   }
 
   .modal--gallery .modal-head {

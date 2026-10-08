@@ -10,6 +10,7 @@ import {
   WIDGET_LABELS,
   WIDGET_TYPES,
   countBookmarks,
+  createStarterConfig,
   createWidget,
   emptyPage,
   minSpanOf,
@@ -200,12 +201,43 @@ describe('sanitizeConfig', () => {
       ]
     }).pages[0].widgets;
 
-    expect(plain).toMatchObject({ type: 'prs', width: 4, token: '', show: 'both', count: 5 });
+    expect(plain).toMatchObject({
+      type: 'prs',
+      width: 4,
+      token: '',
+      show: 'both',
+      count: 5,
+      repo: ''
+    });
     expect(tuned).toMatchObject({ token, show: 'review', count: 8, width: 6 });
     expect(junk).toMatchObject({ token: '', show: 'both' });
     expect(bounded).toMatchObject({ count: 10 });
     expect(low).toMatchObject({ count: 3 });
-    expect(createWidget('prs')).toMatchObject({ type: 'prs', token: '', show: 'both', count: 5 });
+    expect(createWidget('prs')).toMatchObject({
+      type: 'prs',
+      token: '',
+      show: 'both',
+      count: 5,
+      repo: ''
+    });
+  });
+
+  it('reads the repository My PRs watches, keeping only one that can be', () => {
+    const [none, kept, pasted, junk, notText] = sanitizeConfig({
+      widgets: [
+        { type: 'prs' },
+        { type: 'prs', repo: ' danleitch/homeslice ' },
+        { type: 'prs', repo: 'https://github.com/acme/web.git' },
+        { type: 'prs', repo: 'not a repository' },
+        { type: 'prs', repo: 7 }
+      ]
+    }).pages[0].widgets;
+
+    expect(none).toMatchObject({ repo: '' });
+    expect(kept).toMatchObject({ repo: 'danleitch/homeslice' });
+    expect(pasted).toMatchObject({ repo: 'acme/web' });
+    expect(junk).toMatchObject({ repo: '' });
+    expect(notText).toMatchObject({ repo: '' });
   });
 
   it('reads the Focus timer, keeping its lengths in range and its chime on unless turned off', () => {
@@ -227,6 +259,130 @@ describe('sanitizeConfig', () => {
     expect(text).toMatchObject({ focus: 40, rest: 5 });
     expect(quiet).toMatchObject({ sound: true });
     expect(createWidget('focus')).toMatchObject({ type: 'focus', focus: 25, rest: 5, sound: true });
+  });
+
+  describe('a News widget', () => {
+    const newsOf = (widget: unknown) =>
+      sanitizeConfig({ widgets: [{ type: 'news', ...(widget as object) }] }).pages[0]
+        .widgets[0] as { feed: string; count: number; width: number };
+
+    it('starts on the default feed, with five headlines', () => {
+      expect(createWidget('news')).toMatchObject({ type: 'news', feed: 'bbc', count: 5 });
+    });
+
+    it('is read from what was saved', () => {
+      expect(newsOf({ feed: 'ars', count: 8, width: 6 })).toMatchObject({
+        feed: 'ars',
+        count: 8,
+        width: 6
+      });
+    });
+
+    it('falls back to the default feed for one that is not offered, so no address can be asked for', () => {
+      expect(newsOf({ feed: 'https://evil.example/feed' }).feed).toBe('bbc');
+      expect(newsOf({ feed: '../../x' }).feed).toBe('bbc');
+    });
+
+    it('keeps the number of headlines to what the widget can show', () => {
+      expect(newsOf({ count: 99 }).count).toBe(12);
+      expect(newsOf({ count: 0 }).count).toBe(3);
+      expect(newsOf({ count: 'many' }).count).toBe(5);
+    });
+  });
+
+  describe('a Notes widget', () => {
+    const notesOf = (widget: unknown) =>
+      sanitizeConfig({ widgets: [{ type: 'notes', ...(widget as object) }] }).pages[0]
+        .widgets[0] as {
+        mode: string;
+        items: { text: string; done: boolean }[];
+        text: string;
+        width: number;
+      };
+
+    it('starts as an empty list', () => {
+      expect(createWidget('notes')).toMatchObject({
+        type: 'notes',
+        mode: 'list',
+        items: [],
+        text: ''
+      });
+    });
+
+    it('is read from what was saved, tasks and note both', () => {
+      expect(
+        notesOf({ mode: 'text', items: [{ text: 'a', done: true }, 'b'], text: 'jot', width: 6 })
+      ).toMatchObject({
+        mode: 'text',
+        items: [
+          { text: 'a', done: true },
+          { text: 'b', done: false }
+        ],
+        text: 'jot',
+        width: 6
+      });
+    });
+
+    it('is a list, with nothing in it, when nothing was said', () => {
+      expect(notesOf({})).toMatchObject({ mode: 'list', items: [], text: '' });
+    });
+
+    it('is a list for a style it has never heard of', () => {
+      expect(notesOf({ mode: 'diary' }).mode).toBe('list');
+    });
+  });
+
+  describe('a token’s contract address among the market symbols', () => {
+    const MINT = 'DemoMint1111111111111111111111111111111pump';
+    const EVM = '0xAbAbAbAbAbAbAbAbAbAbAbAbAbAbAbAbAbAbAbAb';
+    const symbolsOf = (symbols: unknown) =>
+      (
+        sanitizeConfig({ widgets: [{ type: 'markets', symbols }] }).pages[0].widgets[0] as {
+          symbols: { symbol: string; name: string }[];
+        }
+      ).symbols;
+
+    it('keeps its case, which a Solana address depends on, while symbols are upper-cased', () => {
+      expect(symbolsOf([{ symbol: MINT, name: 'Mine' }, 'btc-usd', EVM])).toEqual([
+        { symbol: MINT, name: 'Mine' },
+        { symbol: 'BTC-USD', name: '' },
+        { symbol: EVM, name: '' }
+      ]);
+    });
+
+    it('keeps all of it, though a symbol is held to twenty-four characters', () => {
+      expect(symbolsOf([MINT])[0]!.symbol).toHaveLength(MINT.length);
+      expect(symbolsOf(['a-'.repeat(20)])[0]!.symbol).toHaveLength(24);
+    });
+
+    it('does not count a long run of nothing as a symbol', () => {
+      expect(symbolsOf(['   ', { symbol: '' }])).toEqual([]);
+    });
+  });
+
+  it('keeps a weather widget saved before the sun, UV and air were added as it was', () => {
+    const [weather] = sanitizeConfig({ widgets: [{ type: 'weather', location: 'Oslo' }] }).pages[0]
+      .widgets;
+
+    expect(weather).toMatchObject({ sun: false, uv: false, air: false });
+  });
+
+  it('reads what a weather widget shows, and takes only a plain yes for it', () => {
+    const [weather] = sanitizeConfig({
+      widgets: [{ type: 'weather', location: 'Oslo', sun: true, uv: 'yes', air: true }]
+    }).pages[0].widgets;
+
+    expect(weather).toMatchObject({ sun: true, uv: false, air: true });
+  });
+
+  it('starts a new weather widget showing the sun, the UV and the air', () => {
+    expect(createWidget('weather')).toMatchObject({ sun: true, uv: true, air: true });
+  });
+
+  it('starts the example board’s weather the same way', () => {
+    const [weather] = createStarterConfig().pages[0].widgets;
+
+    expect(weather).toMatchObject({ type: 'weather', sun: true, uv: true, air: true });
   });
 
   it('keeps the glass within its range', () => {

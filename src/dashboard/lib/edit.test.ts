@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   addBookmark,
   addGroup,
+  addWidget,
+  addWidgets,
   arrayMove,
   deleteGroup,
   fitCard,
@@ -19,6 +21,7 @@ import {
   pageOf,
   sanitizeConfig,
   type PageConfig,
+  type Widget,
   type WidgetType
 } from './model';
 
@@ -488,5 +491,74 @@ describe('where the cards sit', () => {
       expect(next.groups[3]).not.toHaveProperty('column');
       expect(next.groups[3]).not.toHaveProperty('row');
     });
+  });
+});
+
+describe('addWidget', () => {
+  it('adds a new widget of the type at the end, as new ones start', () => {
+    const { config, widget } = addWidget(board(), 'hackernews');
+
+    expect(config.widgets).toHaveLength(2);
+    expect(config.widgets[1]).toBe(widget);
+    expect(widget).toEqual(expect.objectContaining({ type: 'hackernews', count: 6 }));
+  });
+
+  it('adds one with the settings it is given, as they are', () => {
+    const settings = { ...createWidget('hackernews'), count: 11, width: 6 };
+    const { config, widget } = addWidget(board(), 'hackernews', settings);
+
+    expect(widget).toMatchObject({ type: 'hackernews', count: 11, width: 6 });
+    expect(config.widgets[config.widgets.length - 1]).toBe(widget);
+  });
+
+  it('gives it an id of its own, so one set of settings added twice is two widgets', () => {
+    const settings = createWidget('clock');
+    const first = addWidget(board(), 'clock', settings);
+    const second = addWidget(first.config, 'clock', settings);
+
+    expect(first.widget.id).not.toBe(settings.id);
+    expect(second.widget.id).not.toBe(first.widget.id);
+    expect(new Set(second.config.widgets.map((widget) => widget.id)).size).toBe(3);
+  });
+
+  it('leaves the settings it was given, and the board it was given, as they were', () => {
+    const settings = createWidget('clock');
+    const before = board();
+    addWidget(before, 'clock', settings);
+
+    expect(settings.id).toBe(settings.id);
+    expect(before.widgets).toHaveLength(1);
+  });
+});
+
+describe('addWidgets', () => {
+  it('adds each at the end, in order', () => {
+    const config = addWidgets(board(), [createWidget('clock'), createWidget('hackernews')]);
+
+    expect(config.widgets.map((widget) => widget.type)).toEqual(['weather', 'clock', 'hackernews']);
+  });
+
+  it('gives each an id of its own, even the same widgets added twice', () => {
+    const widgets = [createWidget('clock')];
+    const twice = addWidgets(addWidgets(board(), widgets), widgets);
+
+    expect(new Set(twice.widgets.map((widget) => widget.id)).size).toBe(3);
+    expect(widgets[0]!.id).not.toBe(twice.widgets[1]!.id);
+  });
+
+  it('keeps each widget’s settings', () => {
+    const config = addWidgets(board(), [
+      { ...createWidget('hackernews'), count: 11, width: 6 } as Widget
+    ]);
+
+    expect(config.widgets[1]).toMatchObject({ type: 'hackernews', count: 11, width: 6 });
+  });
+
+  it('changes nothing for no widgets, and not the board it was given', () => {
+    const before = board();
+
+    expect(addWidgets(before, []).widgets).toEqual(before.widgets);
+    addWidgets(before, [createWidget('clock')]);
+    expect(before.widgets).toHaveLength(1);
   });
 });

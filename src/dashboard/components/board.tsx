@@ -65,6 +65,7 @@ import {
   type Widget
 } from '../lib/model';
 import { isLinkDrag, readDroppedLink } from '../lib/urls';
+import { WidgetLight } from '../widgets/main-status';
 import { WidgetFrame } from '../widgets/widget-frame';
 import { WidgetView } from '../widgets/widget-view';
 import { BookmarkCard } from './bookmark-card';
@@ -115,6 +116,8 @@ export type BoardActions = {
   onAddWidget: () => void;
   onConfigureWidget: (widget: Widget) => void;
   onRemoveWidget: (widget: Widget) => void;
+  /** A widget changed itself, like a task ticked off in Notes. */
+  onUpdateWidget: (widget: Widget) => void;
   /** A link from another tab was dropped on a group. */
   onDropLink: (groupId: string, url: string, title: string) => void;
 };
@@ -578,10 +581,16 @@ export const Board = ({
       <WidgetFrame
         widget={widget}
         editing={editing}
+        light={<WidgetLight widget={widget} newTab={config.newTab} />}
         onConfigure={actions.onConfigureWidget}
         onRemove={actions.onRemoveWidget}
       >
-        <WidgetView widget={widget} clock={config.clock} newTab={config.newTab} />
+        <WidgetView
+          widget={widget}
+          clock={config.clock}
+          newTab={config.newTab}
+          onChange={actions.onUpdateWidget}
+        />
       </WidgetFrame>
     );
   };

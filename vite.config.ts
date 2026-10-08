@@ -1,6 +1,7 @@
 /// <reference types="vitest/config" />
 import { Agent } from 'node:https';
 import { defineConfig, loadEnv, type ProxyOptions } from 'vite';
+import { NEWS_FEEDS } from './src/dashboard/lib/news.ts';
 import { STATUS_SERVICES } from './src/dashboard/lib/status-services.ts';
 import {
   CALENDAR_FEED_PATH,
@@ -148,6 +149,22 @@ const statusProxies: Record<string, ProxyOptions> = Object.fromEntries(
   ])
 );
 
+/**
+ * The News widget's feeds: /api/news/<id> fetches that feed from the one host and path listed
+ * for it, whatever the page asks for.
+ */
+const newsProxies: Record<string, ProxyOptions> = Object.fromEntries(
+  NEWS_FEEDS.map((feed): [string, ProxyOptions] => [
+    `/api/news/${feed.id}`,
+    {
+      target: `https://${feed.host}`,
+      changeOrigin: true,
+      rewrite: () => feed.path,
+      headers: { 'user-agent': 'Mozilla/5.0 (compatible; homeslice-dashboard; feed reader)' }
+    }
+  ])
+);
+
 export default defineConfig(({ mode }) => {
   // Every variable, not only VITE_ ones; none of these are put in the bundle.
   const env = loadEnv(mode, process.cwd(), '');
@@ -156,7 +173,8 @@ export default defineConfig(({ mode }) => {
     ...pricingProxy,
     ...keyedProxies(env),
     ...calendarProxy(),
-    ...statusProxies
+    ...statusProxies,
+    ...newsProxies
   };
 
   return {

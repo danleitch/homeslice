@@ -9,16 +9,21 @@
 import { readCalendarSources, type AgendaWidget } from './agenda';
 import { emptyExtensions, sanitizeExtensions, type ExtensionsConfig } from './extensions-config';
 import { FOCUS_LIMITS, type FocusWidget } from './focus';
+import { DEFAULT_FEED, readFeed, type NewsWidget } from './news';
+import { NOTES_MODES, readItems, readNote, type NotesWidget } from './notes';
 import { BENCH_SURFACES, type BenchmarkWidget } from './benchlm';
 import { TRENDING_SINCE, languageSlug, type GithubTrendingWidget } from './github';
-import { PULLS_SHOWS, readToken, type PullsWidget } from './pulls';
+import { PULLS_SHOWS, readRepo, readToken, type PullsWidget } from './pulls';
 import { readStatusIds } from './status-services';
+import { normalizeSymbol } from './tokens';
 import { TRENDING_WINDOWS, type PopularMoviesWidget, type PopularTvWidget } from './tmdb';
 
 export type { AgendaWidget, CalendarSource } from './agenda';
 export type { AppExtension, ExtensionsConfig } from './extensions-config';
 export type { BenchmarkWidget, BenchSurface } from './benchlm';
 export type { FocusWidget } from './focus';
+export type { NewsWidget } from './news';
+export type { NoteItem, NotesMode, NotesWidget } from './notes';
 export type { PullsShow, PullsWidget } from './pulls';
 export type { GithubTrendingWidget, TrendingSince } from './github';
 export type { PopularMoviesWidget, PopularTvWidget, TrendingWindow } from './tmdb';
@@ -95,6 +100,12 @@ export type WeatherWidget = {
   /** A place name, e.g. "Cape Town" or "Portland, Oregon, US". */
   location: string;
   units: TemperatureUnits;
+  /** Show today's sunrise and sunset. A widget saved before these existed doesn't. */
+  sun: boolean;
+  /** Show the day's highest UV index. */
+  uv: boolean;
+  /** Show the air quality, which is one more request. */
+  air: boolean;
 };
 
 export type MarketSymbol = { symbol: string; name: string };
@@ -144,6 +155,8 @@ export type Widget = Placement &
     | BenchmarkWidget
     | PopularTvWidget
     | PopularMoviesWidget
+    | NotesWidget
+    | NewsWidget
   );
 export type WidgetType = Widget['type'];
 
@@ -159,8 +172,17 @@ export const WIDGET_TYPES: readonly WidgetType[] = [
   'prs',
   'benchlm',
   'tv',
-  'movies'
+  'movies',
+  'notes',
+  'news'
 ];
+
+/**
+ * The widgets that can't show anything useful until they are told something (a place, some
+ * symbols, the zones, a token), so the dialog of their settings opens when one is added. The
+ * others begin showing at once, and are set up afterwards if at all.
+ */
+export const SETUP_FIRST: readonly WidgetType[] = ['weather', 'markets', 'clock', 'focus', 'prs'];
 
 export const WIDGET_LABELS: Readonly<Record<WidgetType, string>> = {
   weather: 'Weather',
@@ -174,7 +196,9 @@ export const WIDGET_LABELS: Readonly<Record<WidgetType, string>> = {
   prs: 'My PRs',
   benchlm: 'AI Leaderboard',
   tv: 'Popular TV',
-  movies: 'Popular Movies'
+  movies: 'Popular Movies',
+  notes: 'Notes',
+  news: 'News'
 };
 
 export const WIDGET_BLURBS: Readonly<Record<WidgetType, string>> = {
@@ -189,7 +213,9 @@ export const WIDGET_BLURBS: Readonly<Record<WidgetType, string>> = {
   prs: 'Reviews waiting on you, and your open PRs with their checks',
   benchlm: 'The strongest AI models right now, from BenchLM',
   tv: 'What everyone is watching, from TMDB',
-  movies: 'The films everyone is watching, from TMDB'
+  movies: 'The films everyone is watching, from TMDB',
+  notes: 'A to-do list to tick off, or a note to jot things in',
+  news: 'Headlines from a feed you pick: BBC, NPR, Ars Technica and more'
 };
 
 export type SearchEngine = 'google' | 'duckduckgo' | 'bing' | 'brave' | 'kagi' | 'startpage';
@@ -314,7 +340,16 @@ export const createStarterConfig = (): DashboardConfig => ({
 /** The example's first page; the other pages start empty. */
 export const createStarterPage = (): BoardPage => ({
   widgets: [
-    { id: newId('w'), type: 'weather', width: 4, location: 'London', units: 'metric' },
+    {
+      id: newId('w'),
+      type: 'weather',
+      width: 4,
+      location: 'London',
+      units: 'metric',
+      sun: true,
+      uv: true,
+      air: true
+    },
     {
       id: newId('w'),
       type: 'markets',
@@ -481,7 +516,7 @@ const sanitizeSymbols = (value: unknown): MarketSymbol[] =>
   (Array.isArray(value) ? value : [])
     .map((item): MarketSymbol | null => {
       if (typeof item === 'string') {
-        const symbol = item.trim().toUpperCase().slice(0, 24);
+        const symbol = normalizeSymbol(item);
         return symbol ? { symbol, name: '' } : null;
       }
 
@@ -489,7 +524,8 @@ const sanitizeSymbols = (value: unknown): MarketSymbol[] =>
         return null;
       }
 
-      const symbol = text(item.symbol, '', 24).toUpperCase();
+      // A token's contract address is longer than a symbol, and keeps its case.
+      const symbol = normalizeSymbol(text(item.symbol, '', 64));
       return symbol ? { symbol, name: text(item.name, '', 60) } : null;
     })
     .filter((item): item is MarketSymbol => item !== null)
@@ -539,7 +575,11 @@ const sanitizeWidgetSettings = (value: unknown): Widget | null => {
         type: 'weather',
         width,
         location: text(value.location, '', 120),
-        units: oneOf(value.units, ['metric', 'imperial'] as const, 'metric')
+        units: oneOf(value.units, ['metric', 'imperial'] as const, 'metric'),
+        // A board saved before these existed keeps its widget as it was.
+        sun: value.sun === true,
+        uv: value.uv === true,
+        air: value.air === true
       };
     case 'markets':
     case 'stocks':
@@ -614,7 +654,8 @@ const sanitizeWidgetSettings = (value: unknown): Widget | null => {
         width,
         token: readToken(value.token),
         show: oneOf(value.show, PULLS_SHOWS, 'both'),
-        count: Math.round(clampNumber(value.count, 3, 10, 5))
+        count: Math.round(clampNumber(value.count, 3, 10, 5)),
+        repo: readRepo(value.repo)
       };
     case 'benchlm':
       return {
@@ -640,6 +681,23 @@ const sanitizeWidgetSettings = (value: unknown): Widget | null => {
         type: 'movies',
         width,
         window: oneOf(value.window, TRENDING_WINDOWS, 'week'),
+        count: Math.round(clampNumber(value.count, 3, 12, 5))
+      };
+    case 'notes':
+      return {
+        id,
+        type: 'notes',
+        width,
+        mode: oneOf(value.mode, NOTES_MODES, 'list'),
+        items: readItems(value.items),
+        text: readNote(value.text)
+      };
+    case 'news':
+      return {
+        id,
+        type: 'news',
+        width,
+        feed: readFeed(value.feed),
         count: Math.round(clampNumber(value.count, 3, 12, 5))
       };
     default:
@@ -700,7 +758,16 @@ export const createWidget = (type: WidgetType): Widget => {
 
   switch (type) {
     case 'weather':
-      return { id, type, width: 4, location: 'London', units: 'metric' };
+      return {
+        id,
+        type,
+        width: 4,
+        location: 'London',
+        units: 'metric',
+        sun: true,
+        uv: true,
+        air: true
+      };
     case 'markets':
       return {
         id,
@@ -734,12 +801,16 @@ export const createWidget = (type: WidgetType): Widget => {
     case 'focus':
       return { id, type, width: 3, focus: 25, rest: 5, sound: true };
     case 'prs':
-      return { id, type, width: 4, token: '', show: 'both', count: 5 };
+      return { id, type, width: 4, token: '', show: 'both', count: 5, repo: '' };
     case 'benchlm':
       return { id, type, width: 4, surface: 'overall', creator: '', count: 5, maxPrice: 0 };
     case 'tv':
     case 'movies':
       return { id, type, width: 4, window: 'week', count: 5 };
+    case 'notes':
+      return { id, type, width: 4, mode: 'list', items: [], text: '' };
+    case 'news':
+      return { id, type, width: 4, feed: DEFAULT_FEED, count: 5 };
   }
 };
 
