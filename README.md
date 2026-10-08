@@ -283,7 +283,11 @@ It needs a GitHub token, entered in the widget's settings:
    [github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new)
    with read access to **Pull requests**, **Commit statuses** and **Checks** on
    the repositories you want. (A classic token with the `repo` scope also works,
-   but it can do far more than this needs.)
+   but it can do far more than this needs.) If the repositories belong to an
+   organisation, it may have to **approve the token** first. Until it does, the
+   token sees none of them and the widget shows nothing, with no error: GitHub
+   leaves out what a token can't see. The token's page on GitHub says "waiting
+   admin approval" while it is pending.
 2. Open the widget's settings (the sliders icon) and paste it under **GitHub
    token**.
 

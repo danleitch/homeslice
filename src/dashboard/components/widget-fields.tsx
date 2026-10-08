@@ -359,7 +359,9 @@ export const WidgetFields = ({
                   read-only token
                 </a>
                 : read access to Pull requests, Commit statuses and Checks on the repositories you
-                want. It is saved in this browser and in the YAML export, so keep both private.
+                want. If they belong to an organisation, it may have to approve the token before it
+                shows anything. It is saved in this browser and in the YAML export, so keep both
+                private.
               </>
             }
             error={draft.token.trim() && !isToken(draft.token) ? error : ''}
