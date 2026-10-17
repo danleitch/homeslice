@@ -9,6 +9,7 @@ Ideas to revisit after launch. Not part of the first build.
 **For now:** don't worry about it. Treat it as a launch-and-watch item.
 
 **If it becomes a problem:**
+
 - Limit to one trial per email address.
 - Later, limit to one trial per payment method or device.
 - Watch for patterns, such as many new accounts from the same device or network.
