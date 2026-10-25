@@ -18,6 +18,8 @@ export type PullsWidget = {
   show: PullsShow;
   /** How many pull requests each list shows. */
   count: number;
+  /** The repository (owner/name) whose main branch the header's light follows; empty for no light. */
+  repo: string;
 };
 
 /** Classic (ghp_…), fine-grained (github_pat_…) and the older 40-character tokens all look like this. */
@@ -28,6 +30,28 @@ export const readToken = (value: unknown): string =>
   typeof value === 'string' && TOKEN.test(value.trim()) ? value.trim() : '';
 
 export const isToken = (value: string): boolean => TOKEN.test(value.trim());
+
+const REPO = /^([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))\/([A-Za-z0-9._-]{1,100})$/;
+
+/**
+ * A repository as it is kept ("owner/name"), or empty when what was given can't be one. A pasted
+ * address (https://github.com/owner/name, with or without .git) is read as the repository it is.
+ */
+export const readRepo = (value: unknown): string => {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  const bare = value
+    .trim()
+    .replace(/^https:\/\/github\.com\//i, '')
+    .replace(/\/+$/, '')
+    .replace(/\.git$/i, '');
+  const match = REPO.exec(bare);
+
+  // "." and ".." are paths, not names.
+  return match && match[2] !== '.' && match[2] !== '..' ? bare : '';
+};
 
 export type Checks = 'passing' | 'failing' | 'pending' | 'none';
 export type ReviewState = 'approved' | 'changes' | 'required' | 'none';
@@ -86,7 +110,7 @@ type GraphQlAnswer = { data?: Record<string, unknown> | null; errors?: GraphQlEr
 const isRateLimited = (response: Response): boolean =>
   response.headers.get('x-ratelimit-remaining') === '0' || response.headers.has('retry-after');
 
-const ask = async (
+export const ask = async (
   token: string,
   query: string,
   variables: Record<string, unknown>,
@@ -157,7 +181,7 @@ const object = (value: unknown): Record<string, unknown> =>
 
 const first = (value: unknown): unknown => (Array.isArray(value) ? value[0] : undefined);
 
-const checksOf = (state: unknown): Checks =>
+export const checksOf = (state: unknown): Checks =>
   state === 'SUCCESS'
     ? 'passing'
     : state === 'FAILURE' || state === 'ERROR'

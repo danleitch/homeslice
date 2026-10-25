@@ -105,7 +105,10 @@ describe('the widgets that fetch', () => {
       expect(screen.getByText('Feels 19° · H 24° L 15°')).toBeInTheDocument();
       expect(screen.getByTitle('Humidity')).toHaveTextContent('63%');
       expect(screen.getByTitle('Wind')).toHaveTextContent('14 km/h');
-      expect(fetchWeather).toHaveBeenCalledWith('Cape Town', 'metric', expect.any(AbortSignal));
+      expect(fetchWeather).toHaveBeenCalledWith('Cape Town', 'metric', expect.any(AbortSignal), {
+        uv: true,
+        air: true
+      });
     });
 
     it('speaks in miles and degrees Fahrenheit for those who ask', async () => {
@@ -113,6 +116,107 @@ describe('the widgets that fetch', () => {
 
       expect(await screen.findByText('°F')).toBeInTheDocument();
       expect(screen.getByTitle('Wind')).toHaveTextContent('14 mph');
+    });
+
+    describe('beyond the basics', () => {
+      const withExtras: WeatherReport = {
+        ...report,
+        // 06:12 and 19:48 at Cape Town, which keeps time two hours ahead of UTC.
+        sun: { rise: Date.UTC(2026, 2, 10, 4, 12), set: Date.UTC(2026, 2, 10, 17, 48) },
+        uv: 7,
+        air: 38
+      };
+      const facts = (): string[] =>
+        [...document.querySelectorAll('.wx-facts li')].map((item) =>
+          item.textContent!.replace(/\s+/g, ' ').trim()
+        );
+
+      beforeEach(() => {
+        vi.mocked(fetchWeather).mockResolvedValue(withExtras);
+      });
+
+      it('shows the sun’s times where the place is, in the hours the board reads in', async () => {
+        show(widgetOf('weather', { sun: true, uv: false, air: false }), '24h');
+        await screen.findByText('Cape Town, South Africa');
+
+        expect(facts()).toEqual(['Sunrise 06:12', 'Sunset 19:48']);
+      });
+
+      it('shows them on a 12-hour clock too', async () => {
+        show(widgetOf('weather', { sun: true, uv: false, air: false }), '12h');
+        await screen.findByText('Cape Town, South Africa');
+
+        expect(facts()).toEqual([
+          expect.stringMatching(/^Sunrise 6:12\s?AM$/i),
+          expect.stringMatching(/^Sunset 7:48\s?PM$/i)
+        ]);
+      });
+
+      it('shows the UV index with what it means, and the air with what it means', async () => {
+        show(widgetOf('weather', { sun: false, uv: true, air: true }));
+        await screen.findByText('Cape Town, South Africa');
+
+        expect(facts()).toEqual(['UV 7 High', 'Air 38 Good']);
+        expect(document.querySelector('.wx-facts li[data-tone="poor"]')).toHaveTextContent('UV 7');
+        expect(document.querySelector('.wx-facts li[data-tone="good"]')).toHaveTextContent(
+          'Air 38'
+        );
+      });
+
+      it('shows all three, in that order', async () => {
+        show(widgetOf('weather', { sun: true, uv: true, air: true }));
+        await screen.findByText('Cape Town, South Africa');
+
+        expect(facts()).toEqual(['Sunrise 06:12', 'Sunset 19:48', 'UV 7 High', 'Air 38 Good']);
+      });
+
+      it('shows none of them for a widget saved before they existed', async () => {
+        show(widgetOf('weather', { sun: false, uv: false, air: false }));
+        await screen.findByText('Cape Town, South Africa');
+
+        expect(document.querySelector('.wx-facts')).toBeNull();
+      });
+
+      it('leaves out what the service did not give, rather than showing a gap', async () => {
+        vi.mocked(fetchWeather).mockResolvedValue({ ...withExtras, uv: null, air: null });
+        show(widgetOf('weather', { sun: true, uv: true, air: true }));
+        await screen.findByText('Cape Town, South Africa');
+
+        expect(facts()).toEqual(['Sunrise 06:12', 'Sunset 19:48']);
+      });
+
+      it('shows nothing extra from a reading made before these existed', async () => {
+        vi.mocked(fetchWeather).mockResolvedValue(report);
+        show(widgetOf('weather', { sun: true, uv: true, air: true }));
+        await screen.findByText('Cape Town, South Africa');
+
+        expect(document.querySelector('.wx-facts')).toBeNull();
+      });
+
+      it.each([
+        [
+          { sun: true, uv: false, air: false },
+          { uv: false, air: false }
+        ],
+        [
+          { sun: false, uv: true, air: false },
+          { uv: true, air: false }
+        ],
+        [
+          { sun: false, uv: false, air: true },
+          { uv: false, air: true }
+        ]
+      ])('asks for only what is shown: %j', async (flags, asked) => {
+        show(widgetOf('weather', { location: 'Cape Town', ...flags }));
+        await screen.findByText('Cape Town, South Africa');
+
+        expect(fetchWeather).toHaveBeenCalledWith(
+          'Cape Town',
+          'metric',
+          expect.any(AbortSignal),
+          asked
+        );
+      });
     });
 
     it('labels the hours on a 24-hour clock', async () => {

@@ -85,6 +85,44 @@ describe('PullsWidget', () => {
     expect(screen.getByText('Signed in as octocat')).toBeInTheDocument();
   });
 
+  describe('when there is nothing to show', () => {
+    const empty = { review: [], reviewTotal: 0, mine: [], mineTotal: 0 };
+    const HINT = /Expecting something here\?/;
+
+    it('says that a token only sees what it has been given, since GitHub says nothing of what it hides', async () => {
+      vi.mocked(fetchPulls).mockResolvedValue(data(empty));
+      show();
+
+      expect(await screen.findByText(HINT)).toHaveTextContent(
+        'an organisation may have to approve it first'
+      );
+      expect(screen.getByText('Nothing is waiting on you.')).toBeInTheDocument();
+    });
+
+    it('says it when only the list that is shown is empty', async () => {
+      vi.mocked(fetchPulls).mockResolvedValue(data({ ...empty, mine: [pull(5)], mineTotal: 1 }));
+      show({ show: 'review' });
+
+      expect(await screen.findByText(HINT)).toBeInTheDocument();
+    });
+
+    it('leaves it out when there is something to show, in either list', async () => {
+      vi.mocked(fetchPulls).mockResolvedValue(data({ ...empty, mine: [pull(5)], mineTotal: 1 }));
+      show();
+
+      await screen.findByText('Pull request 5');
+      expect(screen.queryByText(HINT)).toBeNull();
+    });
+
+    it('leaves it out when the pull requests are only in the other list', async () => {
+      vi.mocked(fetchPulls).mockResolvedValue(data({ ...empty, mine: [pull(5)], mineTotal: 1 }));
+      show({ show: 'mine' });
+
+      await screen.findByText('Pull request 5');
+      expect(screen.queryByText(HINT)).toBeNull();
+    });
+  });
+
   it('links each pull request, with where it is and how long ago it changed', async () => {
     vi.mocked(fetchPulls).mockResolvedValue(data());
     show();

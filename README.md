@@ -38,16 +38,27 @@ and you're free to spin up your own the same way (see
   description or group. Enter opens the top match, an address goes straight
   there, and anything else is searched on the web with the engine you choose.
 - **Widgets.** Weather from Open-Meteo, in the style of glance's widget: twelve
-  bars across the day with daylight and rain marked. Markets with a month of
-  trend for stocks, indices, FX and crypto. A world clock, this month's
-  calendar, the top of Hacker News, GitHub Trending, the strongest AI models
-  from BenchLM, and the TV shows and films everyone is watching from TMDB. The
-  world clock finds a place by name (type "Boston" and it keeps New York's time),
-  and shows a sun or a moon beside each one. Popular TV and Popular Movies can be
-  narrowed to two columns, a sixth of the board; the other widgets stop at three.
-  **Add a widget** opens a gallery you scroll through: every widget running on
-  sample data, in the same size it will have on the board, so you can try one
-  (turn the agenda's month, start the focus timer) before you press Add.
+  bars across the day with daylight and rain marked, and, if you want them,
+  sunrise and sunset, the day's UV index and the air quality. Markets with a
+  month of trend for stocks, indices, FX and crypto, and for a token no
+  exchange lists, which you follow by pasting its contract address (see
+  [Markets and tokens](#markets-and-tokens)). A world clock, this month's
+  calendar, headlines from a feed you pick ([News](#news)), a to-do list or a
+  note ([Notes](#notes)), the top of Hacker News, GitHub Trending, the
+  strongest AI models from BenchLM, and the TV shows and films everyone is
+  watching from TMDB. The world clock finds a place by name (type "Boston" and
+  it keeps New York's time), and shows a sun or a moon beside each one. Popular
+  TV and Popular Movies can be narrowed to two columns, a sixth of the board;
+  the other widgets stop at three.
+- **A gallery to add them from.** **Add a widget** opens a gallery you scroll
+  through: every widget running on sample data, so you can try one (turn the
+  agenda's month, start the focus timer) before you press Add. **Customise**
+  opens the widget's settings on the example, including its width, which shows
+  what the width does (the weather's days to come appear from half the board),
+  and **Add** adds it as you set it. A few widgets go together as **starter
+  packs** (Dev morning, Planner, Catch up, Crypto watch, Movie night), added in
+  one step and taken back with one Undo. The gallery says what is already on the
+  page, narrows by kind, and can be kept open to add several.
 - **Your Google Calendar.** The [Agenda](#agenda-your-google-calendar) widget
   shows the month with a dot under every day that has something on, and the
   days to come beneath it: what is on now, what is next and in how long, a
@@ -148,6 +159,56 @@ GitHub Trending reads the static JSON that
 [isboyjc/github-trending-api](https://github.com/isboyjc/github-trending-api)
 publishes, straight from the browser.
 
+The weather's **air quality** is one more request, to Open-Meteo's air quality
+service, made only when the widget shows it; if it can't be had, the rest of the
+weather still shows. Sunrise and sunset come with the forecast, and the UV index
+is one more field on it.
+
+### Markets and tokens
+
+A symbol in the Markets widget is read from Yahoo Finance, which only knows
+listed instruments. A symbol that is a **token's contract address** (a Solana
+mint, or an `0x` address on an Ethereum-style chain) is read from where it
+trades instead, so a coin no exchange lists can sit beside `BTC-USD` and
+`ETH-USD`: paste the address into a symbol row in the widget's settings. The
+price, the day's change and the pool's liquidity come from
+[DexScreener](https://dexscreener.com), and the trend from
+[GeckoTerminal](https://www.geckoterminal.com)'s daily candles (drawn from the
+changes DexScreener reports when a token is too new to have any). Both are asked
+straight from the browser, with no key, and neither goes through this server. A
+token that can't be read is left out rather than failing the other rows.
+
+A small pool's price can be moved a long way by a few trades, so a pool with
+less than $50,000 in it is marked, and each row says how much liquidity there
+is. Addresses are case-sensitive on Solana, so they are kept exactly as typed.
+This shows prices; it is not advice.
+
+### News
+
+The **News** widget reads a feed you pick from a short list: BBC News, NPR, The
+Guardian, BBC Technology, Ars Technica, The Verge, WIRED, TechCrunch, Lobsters,
+The GitHub Blog, NASA and Quanta (RSS 1.0, RSS 2.0 and Atom are understood). A
+browser can't read a feed straight from its publisher, and a relay that fetched
+any address it was given would be an open door into whatever network this runs
+on, so the page never names an address: it asks `/api/news/<id>`, and the relay
+fetches the one host and path listed for that id. The list is
+`src/dashboard/lib/news.ts`; `nginx.conf` has the same list (a test keeps the two
+together), and the Vite dev and preview servers build theirs from it. Each feed is
+kept for ten minutes. A plain static host without the relay shows a note in the
+widget instead of headlines.
+
+Headlines are shown as plain text, and a link is kept only if it is an
+`http(s)` address, so a feed can't put a script in a link. To offer another
+source, add it to `news.ts` and to the two `map` blocks in `nginx.conf`.
+
+### Notes
+
+The **Notes** widget is a to-do list (add, tick off, reword, remove, clear what
+is done) or a single note. What you write is kept in the widget's own settings,
+so it is saved with the board in this browser, comes out in the YAML export, and
+follows the board into your other tabs. Keep the export private if you write
+anything private in it.
+
 The **AI Leaderboard** (from [BenchLM](https://benchlm.ai)), **Popular TV** and
 **Popular Movies** (from [TMDB](https://www.themoviedb.org)) widgets need a key. Keys never go in
 the page, the YAML or git: they live in a `.env` file on the server (copy
@@ -222,7 +283,11 @@ It needs a GitHub token, entered in the widget's settings:
    [github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new)
    with read access to **Pull requests**, **Commit statuses** and **Checks** on
    the repositories you want. (A classic token with the `repo` scope also works,
-   but it can do far more than this needs.)
+   but it can do far more than this needs.) If the repositories belong to an
+   organisation, it may have to **approve the token** first. Until it does, the
+   token sees none of them and the widget shows nothing, with no error: GitHub
+   leaves out what a token can't see. The token's page on GitHub says "waiting
+   admin approval" while it is pending.
 2. Open the widget's settings (the sliders icon) and paste it under **GitHub
    token**.
 
@@ -233,6 +298,17 @@ says so at the top. The page sends it to `api.github.com` and nowhere else
 widget's cache key holds only a fingerprint of it. It looks for new news every
 two minutes. Revoke the token on GitHub if it ever leaks.
 
+**A light for the build on main.** Give the widget a repository under **Watch
+main on** (`owner/name`, or paste its address) and a small light appears in the
+top right of its header. It shows how the checks are going on the **latest push
+to that repository's main branch**: amber and pulsing while GitHub is still
+building it, then green or red once it is done. While it is amber the widget
+looks again every 20 seconds; once it has finished it goes back to the slow
+pace, which is enough to notice the next push. Hover for the commit's message and
+when it was pushed, and click to open the commit and its checks. It uses the same
+token and the same permissions (Commit statuses and Checks), so there is nothing
+more to set up; leave the field empty for no light.
+
 ```yaml
 widgets:
   - type: prs
@@ -240,6 +316,7 @@ widgets:
     token: github_pat_… # read-only; keep this file private
     show: both # or review, or mine
     count: 5 # pull requests per list, 3 to 10
+    repo: danleitch/homeslice # a light for the build on its main branch; empty for none
 ```
 
 ### Focus timer
@@ -574,8 +651,9 @@ src/
   dashboard/
     dashboard.tsx             # The board: dialogs, menus, shortcuts, paste and drop
     dashboard.css             # Glass, the grid, cards, widgets and dialogs
-    components/               # Board (drag and drop), groups, cards, search, settings
-    widgets/                  # Weather, markets, world clock, calendar, Hacker News
+    components/               # Board (drag and drop), groups, cards, search, settings,
+                              #   and the widget gallery
+    widgets/                  # Weather, markets, clock, calendar, news, notes, and the rest
     hooks/                    # Board state with undo, cached fetches, measuring
     lib/                      # The YAML model, imports, icons, URLs and widget data
   branchify/
@@ -627,8 +705,8 @@ npm run dev
 
 Then open the local URL shown by Vite (typically `http://localhost:5173`). The
 dev server also relays `/api/markets` to Yahoo Finance, so the markets widget
-works locally, and BenchLM, TMDB and your calendars with the keys and
-addresses in `.env` (copy `.env.example`). The dev server doesn't keep their answers the way nginx does;
+works locally, `/api/news/<id>` to the News widget's feeds, and BenchLM, TMDB and
+your calendars with the keys and addresses in `.env` (copy `.env.example`). The dev server doesn't keep their answers the way nginx does;
 the page's own cache asks at most twice a day.
 
 ## Testing & Quality
@@ -650,7 +728,7 @@ stand-ins for the canvas and for three.js.
 
 `npm run coverage` fails if line, statement or function coverage drops below
 99%, or branch coverage below 93%, so new code arrives with its tests. At the
-last count the suite ran about 2,000 tests at roughly 99.8% line coverage;
+last count the suite ran about 3,100 tests at roughly 99.8% line coverage;
 the few lines left are defensive guards that can't be reached. The suite runs
 in UTC, so it gives the same answers on any machine.
 

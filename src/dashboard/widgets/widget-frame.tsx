@@ -16,13 +16,15 @@ type WidgetFrameProps = Omit<HTMLAttributes<HTMLElement>, 'children'> & {
   children: ReactNode;
   /** Something to show beside the title, like when the data was fetched. */
   aside?: ReactNode;
+  /** A light for the corner of the header, after the buttons. */
+  light?: ReactNode;
   onConfigure?: (widget: Widget) => void;
   onRemove?: (widget: Widget) => void;
 };
 
 /** The glass every widget sits in, with a header to carry it by. The board sizes and places it. */
 export const WidgetFrame = forwardRef<HTMLElement, WidgetFrameProps>(
-  ({ widget, editing, children, aside, onConfigure, onRemove, className, ...rest }, ref) => {
+  ({ widget, editing, children, aside, light, onConfigure, onRemove, className, ...rest }, ref) => {
     const subtitle = widget.type === 'benchlm' ? presetTitle(widget) : null;
 
     return (
@@ -71,6 +73,7 @@ export const WidgetFrame = forwardRef<HTMLElement, WidgetFrameProps>(
               </button>
             )}
           </span>
+          {light}
         </header>
         <div className="wdg-body">{children}</div>
       </section>

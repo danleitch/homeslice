@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildReport, fetchWeather, findPlace, type Place } from './weather';
+import { buildReport, fetchAirQuality, fetchWeather, findPlace, type Place } from './weather';
 
 const GEO_CACHE = 'dashboard-geo:';
 const signal = new AbortController().signal;
@@ -382,5 +382,170 @@ describe('buildReport in a place whose time zone the browser does not know', () 
     const report = buildReport(place, forecast, new Date((day + 13 * 3600) * 1000));
 
     expect(report.columns.some((column) => column.rain)).toBe(false);
+  });
+});
+
+describe('fetchWeather, beyond the basics', () => {
+  const place: Place = {
+    name: 'Reykjavík',
+    area: 'Capital Region',
+    country: 'Iceland',
+    latitude: 64.1,
+    longitude: -21.9,
+    timezone: 'Atlantic/Reykjavik'
+  };
+  const day = Date.UTC(2026, 5, 1) / 1000;
+  const hours = Array.from({ length: 24 }, (_unused, hour) => hour);
+  const forecast = {
+    current: {
+      temperature_2m: 14.6,
+      apparent_temperature: 12.2,
+      weather_code: 61,
+      is_day: 1,
+      wind_speed_10m: 18.4,
+      relative_humidity_2m: 81
+    },
+    hourly: {
+      temperature_2m: hours.map((hour) => 4 + 12 - Math.abs(12 - hour)),
+      precipitation_probability: hours.map(() => 10)
+    },
+    daily: {
+      time: Array.from({ length: 6 }, (_unused, index) => day + index * 86400),
+      sunrise: Array.from({ length: 6 }, () => day + 6 * 3600),
+      sunset: Array.from({ length: 6 }, () => day + 20 * 3600),
+      uv_index_max: [5.2, 4, 3, 2, 1, 0],
+      temperature_2m_max: [16, 17, 18, 19, 20, 21],
+      temperature_2m_min: [4, 5, 6, 7, 8, 9],
+      weather_code: [61, 0, 2, 3, 45, 95]
+    }
+  };
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  /** The forecast for the forecast's address, and what the test gives for the air's. */
+  const answers = (air: () => Promise<Response>) => (url: string) =>
+    url.includes('air-quality') ? air() : Promise.resolve(answer(forecast));
+
+  const urls = (): string[] => fetchMock.mock.calls.map((call) => call[0] as string);
+
+  beforeEach(() => {
+    window.localStorage.setItem(`${GEO_CACHE}reykjavik`, JSON.stringify(place));
+    fetchMock = vi.fn(answers(async () => answer({ current: { us_aqi: 41.6 } })));
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('asks for neither the UV nor the air unless it is told to, and has neither', async () => {
+    // The service only includes the UV index when it is asked for.
+    fetchMock.mockResolvedValue(
+      answer({ ...forecast, daily: { ...forecast.daily, uv_index_max: undefined } })
+    );
+    const report = await fetchWeather('Reykjavik', 'metric', signal);
+
+    expect(urls()).toHaveLength(1);
+    expect(new URL(urls()[0]!).searchParams.get('daily')).not.toContain('uv_index_max');
+    expect(report).not.toHaveProperty('uv');
+    expect(report).not.toHaveProperty('air');
+  });
+
+  it('asks the forecast for the UV index when it is told to', async () => {
+    const report = await fetchWeather('Reykjavik', 'metric', signal, { uv: true, air: false });
+
+    expect(urls()).toHaveLength(1);
+    expect(new URL(urls()[0]!).searchParams.get('daily')).toContain('uv_index_max');
+    expect(report.uv).toBe(5);
+  });
+
+  it('asks the air quality service too when it is told to, and reports the index', async () => {
+    const report = await fetchWeather('Reykjavik', 'metric', signal, { uv: false, air: true });
+
+    expect(urls()).toHaveLength(2);
+    expect(urls().find((url) => url.includes('air-quality'))).toContain(
+      'air-quality-api.open-meteo.com/v1/air-quality'
+    );
+    expect(report.air).toBe(42);
+  });
+
+  it('keeps the weather when the air cannot be had', async () => {
+    fetchMock.mockImplementation(answers(() => Promise.reject(new Error('offline'))));
+
+    const report = await fetchWeather('Reykjavik', 'metric', signal, { uv: false, air: true });
+
+    expect(report.temperature).toBe(15);
+    expect(report.air).toBeNull();
+  });
+
+  it('still fails when the forecast does, whatever the air did', async () => {
+    fetchMock.mockImplementation((url: string) =>
+      Promise.resolve(url.includes('air-quality') ? answer({}) : answer({}, false))
+    );
+
+    await expect(
+      fetchWeather('Reykjavik', 'metric', signal, { uv: false, air: true })
+    ).rejects.toThrow('The weather service didn’t answer.');
+  });
+});
+
+describe('fetchAirQuality', () => {
+  const place: Place = {
+    name: 'Reykjavík',
+    area: '',
+    country: 'Iceland',
+    latitude: 64.1,
+    longitude: -21.9,
+    timezone: 'Atlantic/Reykjavik'
+  };
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('asks for the US index at the place’s coordinates, and rounds it', async () => {
+    fetchMock.mockResolvedValue(answer({ current: { us_aqi: 87.4 } }));
+
+    expect(await fetchAirQuality(place, signal)).toBe(87);
+
+    const url = new URL(fetchMock.mock.calls[0]![0] as string);
+    expect(url.host).toBe('air-quality-api.open-meteo.com');
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      latitude: '64.1',
+      longitude: '-21.9',
+      current: 'us_aqi'
+    });
+    expect(fetchMock.mock.calls[0]![1]).toEqual({ signal });
+  });
+
+  it.each([
+    ['an answer that is not ok', answer({}, false)],
+    ['an answer with no index', answer({ current: {} })],
+    ['an answer with nothing in it', answer({})],
+    ['an index that is not a number', answer({ current: { us_aqi: 'high' } })],
+    ['an index that is a gap', answer({ current: { us_aqi: null } })]
+  ])('says there is none for %s', async (_what, response) => {
+    fetchMock.mockResolvedValue(response);
+
+    expect(await fetchAirQuality(place, signal)).toBeNull();
+  });
+
+  it('says there is none when it cannot be reached', async () => {
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+
+    expect(await fetchAirQuality(place, signal)).toBeNull();
+  });
+
+  it('lets the widget leave it behind when the reading is abandoned', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    fetchMock.mockRejectedValue(new DOMException('Aborted', 'AbortError'));
+
+    await expect(fetchAirQuality(place, controller.signal)).rejects.toThrow('Aborted');
   });
 });

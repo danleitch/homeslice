@@ -5,11 +5,16 @@
  * real price, story, score or appointment: the names are made up.
  */
 import type { AgendaData, AgendaEvent, CalendarSource } from './agenda';
-import type { Prices, Rankings } from './benchlm';
-import type { Trending } from './github';
+import { priceKey, type Prices, type Rankings } from './benchlm';
+import { languageSlug, type Trending } from './github';
 import type { Story } from './hackernews';
 import type { Quote } from './markets';
+import type { NewsItem } from './rss';
+import { SAMPLE_PLACE } from './gallery';
 import { createWidget, type Widget, type WidgetType } from './model';
+import { createRandom, hashString } from '../../lib/seeded-random';
+import { isTokenAddress, priceDigits } from './tokens';
+import type { MainBuild } from './main-build';
 import type { PullsData } from './pulls';
 import type { Title } from './tmdb';
 import type { WeatherReport } from './weather';
@@ -24,7 +29,44 @@ const partsOf = (key: string): string[] => key.split(':');
 /* Weather                                                                    */
 /* -------------------------------------------------------------------------- */
 
-const weather = (now: Date): WeatherReport => {
+/** Words with a capital each, and a short word (a country's code) in capitals: "oregon, us". */
+const titleCase = (text: string): string =>
+  text.replace(/[\p{L}][\p{L}'’]*/gu, (word) =>
+    word.length <= 2 ? word.toUpperCase() : word.charAt(0).toUpperCase() + word.slice(1)
+  );
+
+const fahrenheit = (celsius: number): number => Math.round((celsius * 9) / 5 + 32);
+
+/** The day as it would read in the units asked for: the place the sample is of stays put. */
+const inUnits = (report: WeatherReport, units: string): WeatherReport =>
+  units === 'imperial'
+    ? {
+        ...report,
+        temperature: fahrenheit(report.temperature),
+        apparent: fahrenheit(report.apparent),
+        high: fahrenheit(report.high),
+        low: fahrenheit(report.low),
+        wind: Math.round(report.wind * 0.621371),
+        columns: report.columns.map((column) => ({
+          ...column,
+          temperature: fahrenheit(column.temperature)
+        })),
+        days: report.days.map((day) => ({
+          ...day,
+          high: fahrenheit(day.high),
+          low: fahrenheit(day.low)
+        }))
+      }
+    : report;
+
+/** The weather asked for in "weather:cape town, south africa:metric:uv:air". */
+const weather = (key: string, now: Date): WeatherReport => {
+  const [, location = '', units = 'metric'] = partsOf(key);
+  const [name = '', ...area] = location.split(',').map((part) => part.trim());
+  return inUnits(weatherOf(now, titleCase(name) || 'Cape Town', titleCase(area.join(', '))), units);
+};
+
+const weatherOf = (now: Date, name: string, country: string): WeatherReport => {
   const hour = now.getHours();
   // A mild day that peaks mid-afternoon, with showers coming in the evening.
   const temperatures = Array.from({ length: 12 }, (_unused, index) =>
@@ -42,11 +84,18 @@ const weather = (now: Date): WeatherReport => {
     ].join('-');
   };
 
+  // Sunrise and sunset in the place's own time, as the service gives them: Johannesburg is UTC+2.
+  const at = (hour: number, minute: number): number =>
+    Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), hour - 2, minute);
+
   return {
+    sun: { rise: at(6, 12), set: at(19, 48) },
+    uv: 7,
+    air: 38,
     place: {
-      name: 'Cape Town',
-      area: 'Western Cape',
-      country: 'South Africa',
+      name,
+      area: '',
+      country,
       latitude: -33.9258,
       longitude: 18.4232,
       timezone: 'Africa/Johannesburg'
@@ -108,12 +157,75 @@ const quote = (
   closes: closes(price, drift, wobble, phase)
 });
 
-const markets = (): Quote[] => [
-  quote('SPY', 'S&P 500', 612.4, 0.62, 0.035, 0.004, 0.4),
-  quote('NVDA', 'Chipmaker', 148.2, 2.31, 0.09, 0.01, 2.1),
-  quote('BTC-USD', 'Bitcoin', 94210, -1.24, -0.04, 0.012, 4.2),
-  quote('AAPL', 'Apple', 231.8, 0.18, 0.015, 0.006, 1.3)
-];
+/** A few well-known symbols, each with a price and a trend of its own. */
+const KNOWN: Readonly<Record<string, readonly [string, number, number, number, number, number]>> = {
+  SPY: ['S&P 500', 612.4, 0.62, 0.035, 0.004, 0.4],
+  NVDA: ['Chipmaker', 148.2, 2.31, 0.09, 0.01, 2.1],
+  AAPL: ['Apple', 231.8, 0.18, 0.015, 0.006, 1.3],
+  'BTC-USD': ['Bitcoin', 94210, -1.24, -0.04, 0.012, 4.2],
+  'ETH-USD': ['Ethereum', 3380.5, 1.87, 0.06, 0.014, 3.3],
+  'SOL-USD': ['Solana', 187.6, 3.4, 0.11, 0.018, 5.1]
+};
+
+/** A made-up reading for a symbol the gallery knows nothing of: always the same for the same text. */
+const invented = (symbol: string, name: string): Quote => {
+  const random = createRandom(hashString(symbol));
+  const price = Number((20 + random() * 480).toFixed(2));
+
+  return quote(
+    symbol,
+    name || symbol,
+    price,
+    Number(((random() - 0.45) * 5).toFixed(2)),
+    (random() - 0.3) * 0.12,
+    0.004 + random() * 0.012,
+    random() * 6
+  );
+};
+
+/**
+ * A token typed by its contract address, which no exchange lists: tiny prices, and a pool that
+ * is thin enough for the widget to say so.
+ */
+const sampleToken = (address: string, name: string): Quote => {
+  const random = createRandom(hashString(address));
+  const price = 0.00001 + random() * 0.0001;
+
+  return {
+    symbol: address.replace(/^0x/, '').slice(0, 4).toUpperCase(),
+    name: name || 'Sample token',
+    price,
+    change: Number(((random() - 0.4) * 40).toFixed(2)),
+    currency: 'USD',
+    precision: priceDigits(price),
+    closes: closes(price, (random() - 0.3) * 0.5, 0.03 + random() * 0.04, random() * 6),
+    url: 'https://dexscreener.com/',
+    liquidity: Math.round(20_000 + random() * 180_000)
+  };
+};
+
+/** The symbols asked for in "markets:AAPL=Apple,BTC-USD=", with the names that were given. */
+const symbolsOf = (key: string): { symbol: string; name: string }[] =>
+  key
+    .slice(key.indexOf(':') + 1)
+    .split(',')
+    .filter(Boolean)
+    .map((piece) => {
+      const [symbol = '', ...rest] = piece.split('=');
+      return { symbol, name: rest.join('=') };
+    });
+
+const markets = (key: string): Quote[] =>
+  symbolsOf(key).map(({ symbol, name }) => {
+    if (isTokenAddress(symbol)) {
+      return sampleToken(symbol, name);
+    }
+
+    const known = KNOWN[symbol];
+    return known
+      ? quote(symbol, name || known[0], known[1], known[2], known[3], known[4], known[5])
+      : invented(symbol, name);
+  });
 
 /* -------------------------------------------------------------------------- */
 /* Hacker News                                                                */
@@ -254,29 +366,75 @@ const REPOS: readonly (readonly [string, string, string, string, number, number,
   ['larkspur / canvasly', 'Draw diagrams by describing them', 'Dart', '#00B4AB', 1_140, 43, 97]
 ];
 
+/** What a period's stars gained come to, against a day's. */
+const PERIOD_GAIN: Readonly<Record<string, number>> = { daily: 1, weekly: 4, monthly: 12 };
+
+/** The repositories asked for in "github:daily:rust:6": of that language, over that period. */
 const trending = (key: string, now: Date): Trending => {
-  const count = Number(partsOf(key)[3]) || 6;
+  const [, since = 'daily', language = 'all', asked = ''] = partsOf(key);
+  const count = Number(asked) || 6;
+  const gain = PERIOD_GAIN[since] ?? 1;
 
   return {
     publishedAt: now.getTime(),
-    repos: REPOS.slice(0, count).map(
-      ([name, description, language, languageColor, stars, forks, gained]) => ({
+    repos: REPOS.filter(([, , own]) => language === 'all' || languageSlug(own) === language)
+      .slice(0, count)
+      .map(([name, description, own, languageColor, stars, forks, gained]) => ({
         name,
         url: `https://github.com/${name.replace(' / ', '/')}`,
         description,
-        language,
+        language: own,
         languageColor,
         stars,
         forks,
-        gained
-      })
-    )
+        gained: gained * gain
+      }))
   };
 };
 
 /* -------------------------------------------------------------------------- */
+/* News                                                                       */
+/* -------------------------------------------------------------------------- */
+
+const HEADLINES: readonly (readonly [string, number])[] = [
+  ['Harbour towns brace for the first storm of the season', 22],
+  ['A quieter way to build software, and why teams are choosing it', 48],
+  ['New telescope images show a galaxy cluster in unprecedented detail', 95],
+  ['City council approves plan for a car-free riverside district', 160],
+  ['What the latest battery research means for the phone in your pocket', 255],
+  ['Local bakery wins national prize for its rye loaf', 340],
+  ['Scientists map the quietest corners of the deep ocean', 480],
+  ['The case for taking a long lunch', 610],
+  ['Rail operators promise faster trains by spring', 780],
+  ['A century of the paperback, in twelve covers', 960],
+  ['Understanding the new rules for small online sellers', 1_200],
+  ['Why the best desk lamps are still the simplest', 1_500]
+];
+
+const news = (key: string, now: Date): NewsItem[] =>
+  HEADLINES.map(([title, minutesAgo], index) => ({
+    title,
+    url: `https://news.example/${key.slice(key.indexOf(':') + 1)}/${index}`,
+    time: Math.round((now.getTime() - minutesAgo * MINUTE) / 1000)
+  }));
+
+/* -------------------------------------------------------------------------- */
 /* My PRs                                                                     */
 /* -------------------------------------------------------------------------- */
+
+/** The latest push to the main branch of "mainbuild:acme/web:…", whose checks have passed. */
+const mainBuild = (key: string, now: Date): MainBuild => {
+  const repo = partsOf(key)[1] ?? 'acme/web';
+
+  return {
+    repo,
+    branch: 'main',
+    checks: 'passing',
+    headline: 'Show the weather for the week ahead (#489)',
+    url: `https://github.com/${repo}/commit/3f9c2d1`,
+    committed: Math.round((now.getTime() - 12 * MINUTE) / 1000)
+  };
+};
 
 const pulls = (now: Date): PullsData => {
   const ago = (minutes: number): number => Math.round((now.getTime() - minutes * MINUTE) / 1000);
@@ -381,23 +539,54 @@ const MODELS: readonly (readonly [string, string, number])[] = [
   ['Thimble 1B', 'Fernlight', 52.2]
 ];
 
-const rankings = (now: Date): Rankings => ({
-  asOf: [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, '0'),
-    String(now.getDate()).padStart(2, '0')
-  ].join('-'),
-  models: MODELS.map(([name, creator, score], index) => ({
-    rank: index + 1,
-    name,
-    creator,
-    score,
-    low: Number((score - 1.4).toFixed(1)),
-    high: Number((score + 1.4).toFixed(1))
-  }))
-});
+/**
+ * The ranking asked for in "benchlm:coding". Each has the same models, but not in the same order:
+ * a model that is strong at one thing isn't at another, so each ranking nudges the scores its own
+ * way, always the same way for the same ranking.
+ */
+const rankings = (key: string, now: Date): Rankings => {
+  const surface = partsOf(key)[1] ?? 'overall';
+  const nudged = MODELS.map(([name, creator, base]) => {
+    const nudge = surface === 'overall' ? 0 : ((hashString(`${surface}:${name}`) % 41) - 20) / 10;
+    return { name, creator, score: Number(Math.min(99.9, base + nudge).toFixed(1)) };
+  }).sort((a, b) => b.score - a.score);
 
-const prices = (): Prices => ({});
+  return {
+    asOf: [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, '0'),
+      String(now.getDate()).padStart(2, '0')
+    ].join('-'),
+    models: nudged.map(({ name, creator, score }, index) => ({
+      rank: index + 1,
+      name,
+      creator,
+      score,
+      low: Number((score - 1.4).toFixed(1)),
+      high: Number((score + 1.4).toFixed(1))
+    }))
+  };
+};
+
+/** Dollars per million tokens, in then out, for the models that have a price listed. */
+const PRICES: Readonly<Record<string, readonly [number, number]>> = {
+  'Aurora 4 Ultra': [15, 75],
+  'Meridian Pro': [3, 15],
+  'Kestrel 3.5': [0.8, 4],
+  'Orchid Max': [0.5, 2],
+  'Solstice 2': [2, 8],
+  'Basalt Large': [0.3, 1.2],
+  'Tern 70B': [0.2, 0.4],
+  'Lumen Flash': [0.1, 0.4],
+  'Quartz Mini': [0.08, 0.3],
+  'Pebble 8B': [0.05, 0.1]
+};
+
+/** The price list, which not every ranked model is on, as the real one isn't. */
+const prices = (): Prices =>
+  Object.fromEntries(
+    Object.entries(PRICES).map(([name, [input, output]]) => [priceKey(name), { input, output }])
+  );
 
 /* -------------------------------------------------------------------------- */
 /* Popular TV and Popular Movies                                              */
@@ -444,19 +633,27 @@ const FILMS: readonly (readonly [string, string, number, number, string, string]
   ['The Orchard House', '2024', 7.7, 3_020, '#2193b0', '#6dd5ed']
 ];
 
-const titles = (key: string): Title[] => {
-  const films = partsOf(key)[1] === 'movie';
+/** What is trending today isn't what is trending this week, though much of it is: a few places on. */
+const TODAY_SHIFT = 3;
 
-  return (films ? FILMS : SHOWS).map(([name, year, rating, votes, from, to], index) => ({
-    id: (films ? 2_000 : 3_000) + index,
-    name,
-    year,
-    rating,
-    votes,
-    overview: '',
-    poster: poster(from, to, name.replace(/^The /, '').charAt(0)),
-    url: `https://www.themoviedb.org/${films ? 'movie' : 'tv'}/${index}`
-  }));
+const titles = (key: string): Title[] => {
+  const [, kind, window] = partsOf(key);
+  const films = kind === 'movie';
+  const list = films ? FILMS : SHOWS;
+  const shift = window === 'day' ? TODAY_SHIFT : 0;
+
+  return [...list.slice(shift), ...list.slice(0, shift)].map(
+    ([name, year, rating, votes, from, to], index) => ({
+      id: (films ? 2_000 : 3_000) + index,
+      name,
+      year,
+      rating,
+      votes,
+      overview: '',
+      poster: poster(from, to, name.replace(/^The /, '').charAt(0)),
+      url: `https://www.themoviedb.org/${films ? 'movie' : 'tv'}/${index}`
+    })
+  );
 };
 
 /* -------------------------------------------------------------------------- */
@@ -562,11 +759,33 @@ export const sampleWidget = (type: WidgetType): Widget => {
 
   switch (widget.type) {
     case 'weather':
-      return { ...widget, location: 'Cape Town' };
+      return { ...widget, location: SAMPLE_PLACE };
+    case 'markets':
+      return {
+        ...widget,
+        symbols: [
+          { symbol: 'SPY', name: 'S&P 500' },
+          { symbol: 'NVDA', name: 'Chipmaker' },
+          { symbol: 'BTC-USD', name: 'Bitcoin' },
+          { symbol: 'AAPL', name: 'Apple' }
+        ]
+      };
     case 'agenda':
       return { ...widget, calendars: SAMPLE_CALENDARS };
     case 'prs':
-      return { ...widget, token: 'sample' };
+      return { ...widget, token: 'sample', repo: 'acme/web' };
+    case 'notes':
+      return {
+        ...widget,
+        items: [
+          { text: 'Reply to Priya about the design review', done: false },
+          { text: 'Book the dentist', done: true },
+          { text: 'Pick up the parcel', done: false },
+          { text: 'Send the invoice', done: true },
+          { text: 'Water the plants', done: false }
+        ],
+        text: 'Ideas for the weekend\n- a widget for the tides\n- try the new ramen place\n- finally fix the shelf'
+      };
     default:
       return widget;
   }
@@ -580,17 +799,21 @@ export const sampleWidget = (type: WidgetType): Widget => {
 export const sampleReading = (key: string, now: Date): unknown => {
   switch (partsOf(key)[0]) {
     case 'weather':
-      return weather(now);
+      return weather(key, now);
     case 'markets':
-      return markets();
+      return markets(key);
     case 'hackernews':
       return stories(key, now);
     case 'github':
       return trending(key, now);
     case 'pulls':
       return pulls(now);
+    case 'mainbuild':
+      return mainBuild(key, now);
+    case 'news':
+      return news(key, now);
     case 'benchlm':
-      return key === 'benchlm:prices' ? prices() : rankings(now);
+      return key === 'benchlm:prices' ? prices() : rankings(key, now);
     case 'tmdb':
       return titles(key);
     case 'agenda':

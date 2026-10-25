@@ -149,3 +149,75 @@
   color: var(--ink-faint);
   font-size: 0.82rem;
 }
+
+/* The light in the corner of the widget's header: how the latest push to main is doing. A hollow
+   ring is a repository with no checks, a grey dot is one that can't be reached, and amber, which
+   pulses, is one still being checked. */
+.wdg-light {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  cursor: default;
+}
+
+a.wdg-light,
+button.wdg-light {
+  cursor: pointer;
+}
+
+.wdg-light::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #64748b;
+}
+
+.wdg-light:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.wdg-light[data-state='passing']::before {
+  background: #4ade80;
+  box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.18);
+}
+
+.wdg-light[data-state='failing']::before {
+  background: #ff7a7a;
+  box-shadow: 0 0 0 3px rgba(255, 122, 122, 0.2);
+}
+
+.wdg-light[data-state='pending']::before {
+  background: #f5c26b;
+  animation: wdg-light-pulse 1.6s ease-out infinite;
+}
+
+.wdg-light[data-state='none']::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px #64748b;
+}
+
+@keyframes wdg-light-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(245, 194, 107, 0.55);
+  }
+
+  70%,
+  100% {
+    box-shadow: 0 0 0 8px rgba(245, 194, 107, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wdg-light[data-state='pending']::before {
+    animation: none;
+    box-shadow: 0 0 0 3px rgba(245, 194, 107, 0.25);
+  }
+}

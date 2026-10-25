@@ -160,6 +160,11 @@ const PullsBoard = ({
     );
   }
 
+  // What is shown is empty: GitHub leaves out what the token can't see, without an error, so a
+  // token an organisation has yet to approve looks the same as having nothing to do.
+  const nothing =
+    (show === 'mine' || data.reviewTotal === 0) && (show === 'review' || data.mineTotal === 0);
+
   return (
     <div className="prs">
       {show !== 'mine' && (
@@ -185,6 +190,12 @@ const PullsBoard = ({
           newTab={newTab}
           showReview
         />
+      )}
+      {nothing && (
+        <p className="prs-none">
+          Expecting something here? A token only sees the repositories it has been given, and an
+          organisation may have to approve it first. Check the token’s repository access on GitHub.
+        </p>
       )}
       <p className="wdg-foot">Signed in as {data.login}</p>
     </div>
